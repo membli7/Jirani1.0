@@ -1,6 +1,6 @@
 {
   "private": true,
   "scripts": {
-    "start": "npm --prefix .\\chamafork start"
+    "start": "node .\\chamafork \\server.js"
   }
 }

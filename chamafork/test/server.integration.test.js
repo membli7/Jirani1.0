@@ -92,12 +92,16 @@ describe("Jirani Chama server", () => {
   test("creates a chairperson session and serves the dashboard", async () => {
     const setup = await request("/api/setup", {
       method: "POST",
-      body: JSON.stringify({ name: "Test Chair", phone: "0712345678", pin: "123456" }),
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", pin: "123456" }),
     });
     assert.equal(setup.status, 201);
     const setupBody = await json(setup);
     assert.equal(setupBody.user.role, "chairperson");
     assert.match(setupBody.user.phone, /^\+254/);
+    const savedState = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
+    assert.equal(savedState.chamas.length, 1);
+    assert.equal(savedState.chamas[0].name, "Test Chama");
+    assert.equal(savedState.users[0].chamaId, savedState.chamas[0].id);
     cookie = setup.headers.getSetCookie?.()[0]?.split(";")[0] || setup.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie, "setup should establish a session cookie");
 
@@ -240,4 +244,11 @@ describe("Jirani Chama server", () => {
     const dashboard = await request("/api/dashboard");
     assert.equal(dashboard.status, 401);
   });
+});
+
+test("malformed JSON gets a 400 and the server keeps running", async () => {
+  const malformed = await request("/api/loans", { method: "POST", body: "{bad json", write: true });
+  assert.equal(malformed.status, 400);
+  assert.match((await json(malformed)).message, /could not be read/);
+  assert.equal((await request("/api/health")).status, 200);
 });

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Member login | Jirani Chama</title>
+    <link rel="stylesheet" href="/chama.css?v=20261016.4">
+</head>
+<body>
+    <header class="topbar auth-page-topbar">
+        <a class="brand" href="/" aria-label="Jirani Chama home">
+            <span class="brand-mark"><img src="c:\Users\ADMIN\Pictures\Screenshots\Screenshot 2026-10-12 152006.png" alt=""></span>
+            <span>Jirani Chama <small>GROUP TREASURY</small></span>
+        </a>
+        <label class="language-control" for="language-switch" data-i18n="language">Language<select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
+            <option value="en" data-i18n="englishOption">English</option>
+            <option value="sw" data-i18n="swahili">Kiswahili</option>
+        </select></label>
+    <main id="auth-page" class="login-overlay">
+        <div class="login-content">
+            <section class="login-brand">
+                <p class="login-eyebrow">Jirani Chama</p>
+                <h1>Member login</h1>
+                <p class="login-intro">Keep contributions, loans, and group decisions together in one secure place.</p>
+            </section>
+            <section class="auth-page-forms" aria-label="Member login">
+                <form id="login-form" class="login-card">
+            <h2>Welcome back</h2>
+            <p>Sign in with your Kenyan mobile number and PIN.</p>
+            <p class="login-notice" id="login-notice" role="alert" aria-live="assertive" hidden></p>
+            <label class="field" for="login-phone">Phone number<input id="login-phone" name="phone" type="tel" autocomplete="tel" required></label>
+            <label class="field" for="login-pin">PIN
+              <div class="pin-field-wrap">
+                <input id="login-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+                <button type="button" class="toggle-pin-btn" id="toggleLoginPin" aria-label="Show PIN" aria-pressed="false">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <button class="panel-link forgot-pin-link" id="show-forgot-pin" type="button">Forgot PIN?</button>
+            <button class="button-primary" type="submit">Sign in</button>
+            <button class="panel-link" id="show-activate" type="button">Activate invitation</button>
+            <p class="login-footer">Your chama’s records are available to you after sign-in.</p>
+        </form>
+        <form id="activation-form" class="login-card" hidden>
+            <h2>Activate account</h2>
+            <p class="login-notice" id="activation-notice" role="alert" aria-live="assertive" hidden></p>
+            <label class="field" for="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required></label>
+            <label class="field" for="activate-code">Activation code<input id="activate-code" name="code" inputmode="numeric" required></label>
+            <label class="field" for="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
+            <button class="button-primary" type="submit">Activate</button>
+            <button class="panel-link" id="show-login" type="button">Back to sign in</button>
+        </form>
+        <section id="forgot-pin-view" class="login-card recovery-card" hidden>
+            <h2>Forgot PIN?</h2>
+            <p>Enter the email address registered to your account. We’ll send a one-time code.</p>
+            <p class="login-notice" id="forgot-pin-notice" role="alert" aria-live="assertive" hidden></p>
+            <form id="forgot-pin-form">
+                <label class="field" for="forgot-pin-email">Email address<input id="forgot-pin-email" name="email" type="email" autocomplete="email" maxlength="254" required></label>
+                <button class="button-primary" type="submit">Send OTP</button>
+            </form>
+            <button class="panel-link" id="forgot-pin-back" type="button">Back to sign in</button>
+        </section>
+        <section id="reset-pin-view" class="login-card recovery-card" hidden>
+            <h2>Reset your PIN</h2>
+            <p>Enter the six-digit one-time code and choose a new 6–12 digit PIN.</p>
+            <p class="login-notice" id="reset-pin-notice" role="alert" aria-live="assertive" hidden></p>
+            <form id="reset-pin-form">
+                <label class="field" for="reset-pin-otp">6-digit OTP<input id="reset-pin-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required></label>
+                <label class="field" for="reset-pin-new">New PIN<input id="reset-pin-new" name="newPin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
+                <button class="button-primary" type="submit">Reset PIN</button>
+            </form>
+            <button class="panel-link" id="reset-pin-back" type="button">Back to sign in</button>
+               </section>
+                <p class="auth-page-links">Starting a new group? <a href="/register.html">Register a new chama</a></p>
+                <p class="auth-page-links"><a href="/">Back to home</a></p>
+            </section>
+        </div>
+    </main>
+    <script src="/i18n.js?v=20261016.1" defer></script>
+    <script src="/auth-pages.js?v=20261016.2" defer></script>
+</body>
+</html>
