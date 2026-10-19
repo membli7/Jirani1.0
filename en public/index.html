@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Jirani Chama</title><link rel="stylesheet" href="/chama.css">
+    </head>
+<body>
+ <header class="topbar">
+     <div class="brand">
+         <span class="brand-mark" aria-hidden="true">J</span>
+         <span>Jirani Chama <small>GROUP TREASURY</small></span>
+     </div>
+     <div class="top-actions">
+         <label class="language-control" for="language-switch">Language<select id="language-switch" aria-label="Language">
+             <option value="en">English</option>
+             <option value="sw">Kiswahili</option>
+         </select>
+         </label>
+         <span id="connection-status" class="connection-status" role="status" aria-live="polite">Checking server…</span>
+         <span id="identity"></span>
+        <button id="logout" class="mini-btn" type="button" hidden>Sign out</button>
+     </div>
+ </header>
+ <main class="app-shell" id="app" hidden>
+  <p id="notice" class="notice" role="status" aria-live="polite"></p>
+  <button id="retry" class="button-primary retry-button" type="button" hidden>Try again</button>
+  <section class="page-heading">
+    <div>
+     <p class="eyebrow" id="role-label"></p>
+     <h1 id="greeting"></h1>
+     <p class="heading-copy">Your role controls what you can see and do.</p>
+    </div>
+  </section>
+  <section class="summary-grid">
+    <article class="summary-card">
+        <span class="card-label">Chama balance</span>
+        <strong class="card-value skeleton" id="balance">Loading…</strong>
+    </article>
+    <article class="summary-card">
+        <span class="card-label">This month’s contributions</span>
+        <strong class="card-value skeleton" id="contributions">Loading…</strong>
+    </article>
+    <article class="summary-card">
+        <span class="card-label">Outstanding loans</span>
+        <strong class="card-value skeleton" id="outstanding">Loading…</strong>
+    </article>
+  </section>
+  <section class="panel attendance-panel" id="attendance-panel" aria-labelledby="attendance-title">
+    <div class="panel-heading">
+      <div>
+        <h2 id="attendance-title">Meetings · attendance register</h2>
+        <p>Choose a meeting date to record attendance or review meeting history.</p>
+      </div>
+      <span id="attendance-readonly-label" class="status-pill" hidden>View-only for non-Secretary</span>
+    </div>
+    <div class="form-body">
+      <label class="field" for="attendance-date">Meeting date<input id="attendance-date" type="date" required></label>
+      <div id="attendance-editor" hidden>
+        <div class="attendance-quick-actions">
+          <button id="attendance-all-present" class="mini-btn" type="button">Mark all present</button>
+          <button id="attendance-all-absent" class="mini-btn" type="button">Mark all absent</button>
+        </div>
+        <div id="attendance-members" class="attendance-members" role="group" aria-label="Member attendance"></div>
+        <div class="attendance-summary-actions">
+          <strong id="attendance-count" aria-live="polite"></strong>
+          <button id="attendance-save" class="button-primary" type="button">Save register</button>
+        </div>
+      </div>
+      <div id="attendance-view" hidden>
+        <p id="attendance-personal-label" class="form-note" hidden></p>
+        <div id="attendance-view-members" class="attendance-members"></div>
+      </div>
+      <p id="attendance-attribution" class="form-note"></p>
+      <details id="attendance-edit-history" hidden>
+        <summary>Edit history</summary>
+        <div id="attendance-history" class="schedule-body"></div>
+      </details>
+      <div>
+        <h3 class="attendance-history-title">Meeting history</h3>
+        <div id="attendance-registers" class="schedule-body" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+  <section class="panel loan-panel" aria-labelledby="loans-title">
+    <div class="panel-heading">
+      <div>
+        <h2 id="loans-title">Loan requests</h2>
+        <p id="loan-copy"></p>
+      </div>
+      <span class="status-pill">Three-role review</span>
+    </div>
+    <div class="loan-panel-body">
+      <p class="form-note">A loan needs three role decisions; borrowers cannot decide their own requests. If the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. This app records the decision; it does not transfer loan funds.</p>
+      <div id="loans" class="loan-list" aria-live="polite"></div>
+    </div>
+  </section>
+  <div class="main-grid">
+    <div class="column">
+       <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Transactions</h2>
+                <p id="transaction-copy"></p>
+            </div>
+            <button id="export-csv" class="mini-btn" type="button">Export transactions & attendance CSV</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Member</th>
+                        <th>Amount</th>
+                        <th>Method</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions">
+                    <tr>
+                        <td colspan="5" class="skeleton">Loading…</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" id="members-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Members</h2>
+                <p>Member and invitation history</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="members">
+
+                </tbody>
+            </table>
+        </div>
+    </section>
+    </div>
+    <aside class="column">
+    <section class="panel" id="payment-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Record a cash payment</h2>
+                <p>Record cash entries in the ledger. No money is transferred by this app.</p>
+            </div>
+        </div>
+        <form id="payment-form" class="form-body">
+            <label class="field" for="payment-member">Member<select name="memberId" id="payment-member" required></select>
+            </label>
+            <label class="field" for="cash-amount">Amount (KES)<input id="cash-amount" name="amount" type="number" min="1" step="1" required></label>
+            <label class="field" for="cash-reference">Reference number<input id="cash-reference" name="referenceNumber" maxlength="40" pattern="[A-Za-z0-9/._\-]{3,40}" required></label>
+            <label class="field" for="cash-date">Date received<input id="cash-date" name="date" type="date" required></label>
+            <label class="field" for="payment-type">Type<select name="paymentType" id="payment-type">
+                <option>Monthly Contribution</option>
+                <option>Loan Repayment</option>
+                <option>Fine</option>
+            </select>
+        </label>
+        <label class="field" id="repayment-field" for="payment-loan" hidden>Loan<select name="loanId" id="payment-loan"></select>
+        </label>
+        <input type="hidden" name="method" value="Cash">
+        <label class="field" for="cash-note">Cash note<textarea name="note" id="cash-note" minlength="3" maxlength="500" required placeholder="e.g. Cash received at the weekly meeting">
+
+        </textarea>
+        </label>
+        <button class="button-primary" type="submit">Record cash payment</button>
+        </form>
+    </section>
+   <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Request a loan</h2>
+                <p>For your own account</p>
+            </div>
+        </div>
+        <form id="loan-form" class="form-body">
+            <label class="field" for="loan-amount">Amount (KES)<input id="loan-amount" name="amount" type="number" min="1" step="1" required>
+            </label>
+            <label class="field" for="loan-months">Repayment period<select id="loan-months" name="months">
+                <option value="1">1 month</option>
+                <option value="2">2 months</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                </select>
+            </label>
+            <label class="field" for="loan-guarantor-1">Guarantor 1<select id="loan-guarantor-1" name="guarantorIds" required></select>
+            </label>
+            <label class="field" for="loan-guarantor-2">Guarantor 2<select id="loan-guarantor-2" name="guarantorIds" required></select>
+            </label>
+           <button class="button-primary" type="submit">Submit request</button>
+        </form>
+   </section>
+   <section class="panel" id="invite-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Invite a member</h2>
+                <p>The activation code is sent by SMS when configured; otherwise share it privately. The Chairperson proposes officer assignments for confirmation.</p>
+            </div>
+        </div>
+        <form id="invite-form" class="form-body">
+            <label class="field" for="invite-name">Name<input id="invite-name" name="name" required></label>
+            <label class="field" for="invite-phone">Kenyan phone<input id="invite-phone" name="phone" type="tel" placeholder="0712 345 678" required></label>
+            <label class="field" for="invite-role">Requested role<select id="invite-role" name="role">
+                <option value="member">Member</option>
+                <option value="secretary">Secretary</option>
+                <option value="treasurer">Treasurer</option>
+                <option value="chairperson">Chairperson</option>
+                </select>
+            </label>
+            <button class="button-primary" type="submit">Create invitation</button>
+        </form>
+        <div id="invite-result" class="invite-result" role="status" aria-live="polite" hidden>
+            <p id="invite-result-message"></p>
+            <div class="invite-code-row">
+                <output id="invite-code" aria-label="One-time activation code"></output>
+                <button id="copy-invite-code" class="mini-btn" type="button" hidden>Copy code</button>
+            </div>
+        </div>
+    </section>
+    <section class="panel" id="leadership-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Officer assignments</h2>
+                <p>The Chairperson proposes an assignment; a different officer confirms it. The first assignment can be approved by the Chairperson to set up the group.</p>
+            </div>
+        </div>
+        <form id="leadership-form" class="form-body">
+            <label class="field" for="leadership-role">Office<select name="role" id="leadership-role">
+                <option value="chairperson">Chairperson</option>
+                <option value="secretary">Secretary</option>
+                <option value="treasurer">Treasurer</option>
+              </select>
+            </label>
+            <label class="field" for="incoming-user">Incoming official<select name="incomingUserId" id="incoming-user" required></select>
+            </label>
+            <label class="field" for="effective-date">Effective date<input id="effective-date" name="effectiveDate" type="date" required></label>
+            <button class="button-primary" type="submit">Propose assignment</button>
+        </form>
+        <div id="leadership-list" class="schedule-body"></div>
+    </section>
+    <section class="panel" id="audit-panel" aria-labelledby="audit-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="audit-title">Audit log</h2>
+                <p>Payments, loan decisions, and officer changes, newest first. Entries are added when a change happens. The app has no way to edit or delete them. Showing the latest 50.</p>
+            </div>
+        </div>
+        <p id="audit-notice" class="notice" role="status" hidden></p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>What happened</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-list" aria-live="polite"></tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" id="penalty-panel" aria-labelledby="penalty-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="penalty-title">Monthly penalties</h2>
+                <p>After a month's deadline, each active member who paid less than the KES 500 welfare fee gets a KES 200 outstanding penalty. Each member is penalised once per month.</p>
+            </div>
+        </div>
+        <form id="penalty-form" class="form-body">
+            <label class="field" for="penalty-month">Month<input id="penalty-month" name="month" type="month" required></label>
+            <button class="button-primary" type="submit">Assess monthly penalties</button>
+        </form>
+        <p id="penalty-result" class="form-note" role="status"></p>
+    </section>
+    <section class="panel" id="dividend-panel" aria-labelledby="dividend-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="dividend-title">Dividends</h2>
+                <p>Preview each member's pro-rata share of a cycle's interest and penalties, after admin expenses. Nothing is paid out until you commit.</p>
+            </div>
+        </div>
+        <form id="dividend-form" class="form-body">
+            <label class="field" for="dividend-start">Cycle start<input id="dividend-start" name="cycleStartDate" type="date" required></label>
+            <label class="field" for="dividend-end">Cycle end<input id="dividend-end" name="cycleEndDate" type="date" required></label>
+            <label class="field" for="dividend-expenses">Admin expenses (KES)<input id="dividend-expenses" name="adminExpenses" type="number" min="0" step="1" required></label>
+            <button class="button-primary" type="submit">Calculate</button>
+        </form>
+        <div id="dividend-preview" aria-live="polite"></div>
+        <div class="form-body">
+            <button id="dividend-commit" class="button-primary" type="button" hidden>Commit dividends to share capital</button>
+        </div>
+    </section>
+  </aside></div>
+ </main>
+ <section class="login-overlay" id="login" aria-label="Sign in to Jirani Chama">
+    <div class="login-content">
+        <div class="login-brand">
+            <span class="login-brand-mark" aria-hidden="true">J</span>
+            <p class="login-eyebrow">Jirani Chama</p>
+            <h1>Simple, trusted group savings.</h1>
+            <p class="login-intro">Keep contributions, loans, and group decisions together in one secure place.</p>
+        </div>
+        <form id="setup-form" class="login-card" hidden>
+            <h2>Create your chama account</h2>
+            <p>You’ll be the first chairperson. Use your own details and choose a private PIN.</p>
+            <p class="login-notice" id="setup-notice" role="alert" aria-live="assertive" hidden></p>
+            <label class="field" for="setup-name">Your name<input id="setup-name" name="name" autocomplete="name" maxlength="100" required></label>
+            <label class="field" for="setup-phone">Kenyan phone number<input id="setup-phone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required></label>
+            <label class="field" for="setup-pin">Choose a 6–12 digit PIN<input id="setup-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
+            <button class="button-primary" type="submit">Create chairperson account</button>
+            <p class="login-footer">This setup is available only while the chama has no accounts or records.</p>
+        </form>
+        <form id="login-form" class="login-card">
+            <h2>Welcome back</h2>
+            <p>Sign in with your Kenyan mobile number and PIN.</p>
+            <p class="login-notice" id="login-notice" role="alert" aria-live="assertive" hidden></p>
+            <label class="field" for="login-phone">Phone number<input id="login-phone" name="phone" type="tel" autocomplete="tel" required></label>
+            <label class="field" for="login-pin">PIN<input id="login-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+            <button class="button-primary" type="submit">Sign in</button>
+            <button class="panel-link" id="show-activate" type="button">Activate invitation</button>
+            <p class="login-footer">Your chama’s records are available to you after sign-in.</p>
+        </form>
+        <form id="activation-form" class="login-card" hidden>
+            <h2>Activate account</h2>
+            <p class="login-notice" id="activation-notice" role="alert" aria-live="assertive" hidden></p>
+            <label class="field" for="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required></label>
+            <label class="field" for="activate-code">Activation code<input id="activate-code" name="code" inputmode="numeric" required></label>
+            <label class="field" for="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
+            <button class="button-primary" type="submit">Activate</button>
+            <button class="panel-link" id="show-login" type="button">Back to sign in</button>
+        </form>
+    </div>
+</section>
+ <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
+    <form method="dialog" id="cash-confirm-form">
+        <h2 id="cash-confirm-title">Confirm cash payment</h2>
+        <p id="cash-confirm-summary"></p>
+        <div class="dialog-actions">
+            <button value="cancel" class="mini-btn" type="submit">Cancel</button>
+            <button value="confirm" class="button-primary" type="submit">Confirm payment</button>
+        </div>
+    </form>
+</dialog>
+ <dialog id="attendance-overwrite-dialog" aria-labelledby="attendance-overwrite-title">
+    <form method="dialog">
+        <h2 id="attendance-overwrite-title">Update attendance register?</h2>
+        <p>This meeting already has a register. Saving will replace its attendance and record the changes.</p>
+        <div class="dialog-actions">
+            <button value="cancel" class="mini-btn" type="submit">Cancel</button>
+            <button value="confirm" class="button-primary" type="submit">Continue</button>
+        </div>
+    </form>
+ </dialog>
+ <script src="/i18n.js" defer>
+
+ </script>
+ <script src="/write-requests.js" defer>
+
+ </script>
+ <script src="/chama.js" defer>
+
+ </script>
+ </body>
+ </html>

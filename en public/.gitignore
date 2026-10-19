@@ -1,0 +1,6 @@
+node_modules/
+.env
+chama-data.json
+chama-data.json.*.tmp
+cookies.txt
+chamafork.code-workspace
