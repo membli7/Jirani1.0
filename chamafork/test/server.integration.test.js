@@ -97,6 +97,13 @@ describe("Jirani Chama server", () => {
     const registerScript = await request("/register.js");
     assert.equal(registerScript.status, 200);
     assert.match(await registerScript.text(), /fetch\("\/api\/setup"/);
+
+    const loginPage = await request("/member-login.html");
+    assert.equal(loginPage.status, 200);
+    assert.match(await loginPage.text(), /method="post" action="\/api\/login"/);
+    const authPagesScript = await request("/auth-pages.js");
+    assert.equal(authPagesScript.status, 200);
+    assert.match(await authPagesScript.text(), /fetch\("\/api\/login"/);
   });
 
   test("creates a chairperson session and serves the dashboard", async () => {

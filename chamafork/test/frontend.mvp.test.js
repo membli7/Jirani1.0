@@ -12,6 +12,17 @@ const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8")
 const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
 const registerScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8");
+const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
+const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
+
+test("standalone member login posts credentials to the login API", () => {
+  assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
+  assert.match(memberLoginHtml, /src="\/auth-pages\.js\?v=/);
+  assert.match(authPagesScript, /fetch\("\/api\/login",\s*\{\s*method:\s*"POST"/);
+  assert.match(authPagesScript, /credentials:\s*"same-origin"/);
+  assert.match(authPagesScript, /name = "chamaId"/);
+  assert.match(authPagesScript, /window\.location\.assign\("\/"\)/);
+});
 
 test("landing registration opens a complete first-chama setup page", () => {
   assert.match(html, /id="landing-register" href="\/register\.html"/);
