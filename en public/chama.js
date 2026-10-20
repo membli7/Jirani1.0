@@ -734,7 +734,7 @@ $("#invite-form").addEventListener("submit", async event => {
   catch (error) {
     $("#invite-result-message").textContent = error.uncertain
       ? writeRequests.unconfirmedMessage("Invitations")
-      : error.message;
+      : displayMessage(error.message);
     $("#invite-result").classList.add("error"); $("#invite-result").hidden = false;
     notice($("#invite-result-message").textContent, true);
   } finally { setButton(form, false); }
