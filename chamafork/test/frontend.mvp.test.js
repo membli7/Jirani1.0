@@ -57,6 +57,14 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerScript, /registrationNotice\.textContent = error instanceof TypeError/);
 });
 
+test("member invitations send the required email address", () => {
+  const inviteHandler = script.match(/\$\("#invite-form"\)\.addEventListener\("submit", async event => \{[\s\S]*?\n\}\);/)?.[0];
+  assert.ok(inviteHandler, "member invitation form should have a submit handler");
+  assert.match(inviteHandler, /namedItem\("email"\)/);
+  assert.match(inviteHandler, /email:\s*emailField\.value\.trim\(\)/);
+  assert.match(inviteHandler, /if \(!values\.email\)/);
+});
+
 test("registration signs in and opens the dashboard when setup was already completed", async () => {
   let submitHandler;
   let redirect = "";
@@ -91,7 +99,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.8" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261020\.9" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {

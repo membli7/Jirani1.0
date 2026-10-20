@@ -668,11 +668,13 @@ $("#invite-form").addEventListener("submit", async event => {
   try {
     const nameField = form.elements.namedItem("name");
     const phoneField = form.elements.namedItem("phone");
+    const emailField = form.elements.namedItem("email");
     const roleField = form.elements.namedItem("role");
-    if (!nameField || !phoneField || !roleField) throw new Error("The member name, phone, or role field is missing. Hard-refresh the page and try again.");
-    const values = { name: nameField.value.trim(), phone: phoneField.value.trim(), role: roleField.value };
+    if (!nameField || !phoneField || !emailField || !roleField) throw new Error("The member name, phone, email, or role field is missing. Hard-refresh the page and try again.");
+    const values = { name: nameField.value.trim(), phone: phoneField.value.trim(), email: emailField.value.trim(), role: roleField.value };
     if (!values.name) throw new Error("Enter the member's name.");
     if (!values.phone) throw new Error("Enter the member's Kenyan phone number.");
+    if (!values.email) throw new Error("Enter the member's email address.");
     if (!values.role) throw new Error("Choose a member role.");
     const result = await api("/api/invitations", {
       method: "POST",
