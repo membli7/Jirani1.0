@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
-        <link rel="stylesheet" href="/chama.css?v=20261016.5">
+        <link rel="stylesheet" href="/chama.css?v=20261020.3">
     </head>
 <body>
  <header class="topbar">
@@ -116,7 +116,10 @@
         </div>
       </div>
       <a href="#chat-panel" data-panel="chat-panel">Group chat</a>
-      <button id="menu-logout" class="menu-logout" type="button" data-i18n="signOut">Sign out</button>
+      <div class="menu-account">
+        <p id="menu-identity"></p>
+        <button id="menu-logout" class="menu-logout" type="button" data-i18n="signOut">Sign out</button>
+      </div>
   </nav>
   <p id="notice" class="notice" role="status" aria-live="polite"></p>
   <button id="retry" class="button-primary retry-button" type="button" hidden>Try again</button>
@@ -1063,7 +1066,7 @@
  <script src="/write-requests.js?v=20261016.1" defer>
 
  </script>
- <script src="/chama.js?v=20261020.4" defer>
+ <script src="/chama.js?v=20261020.6" defer>
 
  </script>
  <!--==================================================================== DEMO FOOTER: replace demo@example.com with the real contact email before launch ===========================================-->

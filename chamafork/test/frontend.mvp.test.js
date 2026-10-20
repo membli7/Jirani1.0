@@ -9,6 +9,7 @@ const { test } = require("node:test");
 const frontend = path.join(__dirname, "..", "..", "en public");
 const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
+const css = fs.readFileSync(path.join(frontend, "chama.css"), "utf8");
 const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
 const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
@@ -89,7 +90,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.4" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261020\.6" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -132,7 +133,7 @@ test("root app tolerates the absence of standalone authentication forms", async 
   assert.ok(backendSource, "root page should define backend status handling");
   assert.ok(loginSource, "root page should define its signed-out state");
 
-  const nodes = new Map([["#logout", {}], ["#app", {}], ["#login", {}]]);
+  const nodes = new Map([["#logout", {}], ["#app", {}], ["#login", {}], ["#identity", {}], ["#menu-identity", {}]]);
   const context = {
     $: selector => nodes.get(selector) || null,
     fetch: async url => url === "/api/health"
@@ -144,6 +145,7 @@ test("root app tolerates the absence of standalone authentication forms", async 
     clearTimeout() {},
     clearInterval() {},
     setLoginNotice() {},
+    setNavigationOpen() {},
     eventStream: null,
     streamRetryTimer: null,
     activityTimer: null,
@@ -162,6 +164,19 @@ test("root renderer tolerates summary cards absent from the current dashboard ma
   for (const id of ["balance", "contributions", "outstanding"]) {
     assert.doesNotMatch(script, new RegExp(`\\$\\("#${id}"\\)\\.textContent\\s*=`));
   }
+});
+
+test("authenticated dashboard navigation uses an accessible hamburger drawer", () => {
+  assert.match(html, /id="menu-toggle"[\s\S]*?aria-controls="menu-bar"/);
+  assert.match(html, /<nav class="menu-bar" id="menu-bar"[\s\S]*?data-panel="members-panel"/);
+  assert.match(html, /id="menu-identity"/);
+  assert.match(script, /menuToggle\.addEventListener\("click"/);
+  assert.match(script, /menuBar\.addEventListener\("click"/);
+  assert.match(script, /function showAppPage\(panelId\)/);
+  assert.match(script, /showAppPage\(panelLink\.dataset\.panel\)/);
+  assert.match(script, /aria-expanded/);
+  assert.match(css, /\.topbar\.is-authenticated \.topbar-nav/);
+  assert.match(css, /\.menu-bar\.menu-open\s*\{\s*display:\s*flex !important/);
 });
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {

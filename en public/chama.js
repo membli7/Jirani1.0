@@ -17,6 +17,8 @@ let authenticated = false;
 let lastActivity = Date.now();
 let lastActivityPing = 0;
 const idleLimitMs = 15 * 60 * 1000;
+const menuToggle = $("#menu-toggle");
+const menuBar = $("#menu-bar");
 
 async function api(path, { method = "GET", body, write = false, validateResponse, silentForbidden = false } = {}) {
   if (write) {
@@ -79,7 +81,10 @@ function render() {
     lastActivityPing = 0;
     startActivityMonitor();
   }
+  $(".topbar")?.classList.add("is-authenticated");
+  setNavigationOpen(false);
   $("#identity").textContent = `${user.name} (${roleName(user.role)})`;
+  $("#menu-identity").textContent = `${user.name} (${roleName(user.role)})`;
   $("#logout").hidden = false;
   $("#role-label").textContent = `${roleName(user.role)} dashboard`;
   $("#greeting").textContent = `Welcome, ${user.name}`;
@@ -149,6 +154,49 @@ function render() {
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
   renderAttendance(user);
   $("#app").hidden = false; $("#login").hidden = true;
+  updateNavigationVisibility();
+  showAppPage("overview");
+}
+function updateNavigationVisibility() {
+  for (const link of menuBar.querySelectorAll("a[data-panel]")) {
+    const target = link.dataset.panel === "dashboard" ? null : document.getElementById(link.dataset.panel);
+    link.hidden = !!target?.hidden;
+  }
+  for (const dropdown of menuBar.querySelectorAll(".nav-dropdown")) {
+    const links = [...dropdown.querySelectorAll("a[data-panel]")];
+    dropdown.hidden = links.length > 0 && links.every(link => link.hidden);
+  }
+}
+function showAppPage(panelId) {
+  const overview = panelId === "overview" || panelId === "dashboard";
+  const activeIds = overview ? new Set(["attendance-panel", "loans-panel"]) : new Set([panelId]);
+  const sectionIds = ["you-dashboard", "dashboard", "attendance-panel", "loans-panel"];
+  for (const sectionId of sectionIds) {
+    const section = document.getElementById(sectionId);
+    if (section) section.dataset.pageInactive = String(!activeIds.has(sectionId));
+  }
+
+  const mainGrid = $(".main-grid");
+  let showGrid = false;
+  for (const section of mainGrid.querySelectorAll(".panel[id]")) {
+    const active = activeIds.has(section.id) && !section.hidden;
+    section.dataset.pageInactive = String(!active);
+    showGrid ||= active;
+  }
+  mainGrid.dataset.pageInactive = String(!showGrid);
+  mainGrid.classList.toggle("is-single-view", !overview);
+
+  for (const link of menuBar.querySelectorAll("a[data-panel]")) {
+    const selected = link.dataset.panel === panelId || (overview && link.dataset.panel === "dashboard");
+    link.classList.toggle("active", selected);
+    if (selected) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  for (const dropdown of menuBar.querySelectorAll(".nav-dropdown")) {
+    dropdown.classList.toggle("active", !!dropdown.querySelector("a[aria-current='page']"));
+  }
+  setNavigationOpen(false);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function renderAttendance(user) {
   if (!attendanceData) return;
@@ -379,7 +427,7 @@ function clearAppData() {
   for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
-function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
+function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
 
 $("#setup-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
@@ -403,7 +451,9 @@ $("#activation-form")?.addEventListener("submit", async event => {
 });
 $("#show-activate")?.addEventListener("click", () => { $("#login-form").hidden = true; $("#activation-form").hidden = false; });
 $("#show-login")?.addEventListener("click", () => { $("#activation-form").hidden = true; $("#login-form").hidden = false; });
-$("#logout").addEventListener("click", async () => { try { await api("/api/logout", { method: "POST" }); showLogin(); notice("Signed out."); } catch (error) { notice(error.message, true); } });
+async function signOut() { try { await api("/api/logout", { method: "POST" }); showLogin(); notice("Signed out."); } catch (error) { notice(error.message, true); } }
+$("#logout").addEventListener("click", signOut);
+$("#menu-logout").addEventListener("click", signOut);
 $("#export-csv").addEventListener("click", () => { window.location.assign("/api/export.csv"); });
 $("#attendance-date").value = meetingDateToday();
 selectedAttendanceDate = $("#attendance-date").value;
@@ -602,6 +652,46 @@ async function restoreSession() {
   await checkBackendConnection({ selectInitialScreen: true });
 }
 restoreSession();
+
+function setNavigationOpen(open) {
+  if (!menuToggle || !menuBar) return;
+  if (!open) {
+    for (const dropdown of menuBar.querySelectorAll(".nav-dropdown")) {
+      dropdown.classList.remove("open");
+      dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
+    }
+  }
+  menuToggle.setAttribute("aria-expanded", String(open));
+  menuToggle.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+  menuBar.classList.toggle("menu-open", open);
+  menuBar.setAttribute("aria-hidden", String(!open));
+}
+menuToggle.addEventListener("click", () => setNavigationOpen(menuToggle.getAttribute("aria-expanded") !== "true"));
+menuBar.addEventListener("click", event => {
+  const dropdownToggle = event.target.closest(".nav-dropdown-toggle");
+  if (dropdownToggle) {
+    const dropdown = dropdownToggle.closest(".nav-dropdown");
+    const expanded = dropdownToggle.getAttribute("aria-expanded") === "true";
+    dropdownToggle.setAttribute("aria-expanded", String(!expanded));
+    dropdown.classList.toggle("open", !expanded);
+    return;
+  }
+  const panelLink = event.target.closest("a[data-panel]");
+  if (panelLink) {
+    event.preventDefault();
+    showAppPage(panelLink.dataset.panel);
+  }
+});
+document.addEventListener("click", event => {
+  if (event.target.closest("#menu-bar, #menu-toggle")) return;
+  setNavigationOpen(false);
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && menuToggle.getAttribute("aria-expanded") === "true") {
+    setNavigationOpen(false);
+    menuToggle.focus();
+  }
+});
 
 const profileMenuButton = $("#profile-icon");
 const profileMenu = $("#profile-menu");
