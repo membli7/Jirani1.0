@@ -552,6 +552,25 @@ async function processDueLeadershipElections() {
   for (const chamaId of new Set(completed.map(item => item.chamaId))) publishMemberUpdate(chamaId);
   return completed.length;
 }
+function scheduleLeadershipElectionCheck(retryDelayMs) {
+  if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
+  const nextAt = Math.min(...state.leadershipChanges
+    .filter(item => isElection(item) && item.status === "verified" && Number.isFinite(Date.parse(item.activationAt)))
+    .map(item => Date.parse(item.activationAt)));
+  if (!Number.isFinite(nextAt)) { leadershipElectionTimer = null; return; }
+  const delay = Number.isFinite(retryDelayMs) ? retryDelayMs : Math.max(0, Math.min(2147483647, nextAt - Date.now()));
+  leadershipElectionTimer = setTimeout(async () => {
+    leadershipElectionTimer = null;
+    try {
+      await processDueLeadershipElections();
+      scheduleLeadershipElectionCheck();
+    } catch (error) {
+      logger.warn("Leadership election scheduler failed", { err: error.message });
+      scheduleLeadershipElectionCheck(5000);
+    }
+  }, delay);
+  leadershipElectionTimer.unref?.();
+}
 function publishMessageUpdate(message, chamaId = message?.chamaId) {
   if (!chamaId) return;
   const payload = `event: messages-updated\ndata: ${JSON.stringify({ id: message.id, at: message.at })}\n\n`;
@@ -1744,7 +1763,7 @@ app.post("/api/leadership-elections/:id/verify", requireAuth, requirePinChanged,
   saved.activationAt = new Date(Date.parse(saved.verifiedAt) + 24 * 60 * 60 * 1000).toISOString();
   updated.auditLog.push(auditEntry("leadership.election.verified", saved.id, req.user, { role: saved.role, winnerId: winner.id, activationAt: saved.activationAt }));
   addNotifications(updated, saved, `${winner.name} won the ${saved.role} election. The role and group portal access will switch in 24 hours.`, saved.verifiedAt);
-  return commit(req, res, next, updated, 200, { message: "Result verified. The group portal roles will update in 24 hours.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+  return commit(req, res, next, updated, 200, { message: "Result verified. The group portal roles will update in 24 hours.", data: safeElectionView(saved, req.user) }, undefined, () => { scheduleLeadershipElectionCheck(); publishMemberUpdate(req.user.chamaId); });
 }));
 
 app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
@@ -1918,15 +1937,10 @@ async function start() {
   }
   if (redisCache && !redisCache.isOpen) await redisCache.connect();
   await processDueLeadershipElections();
-  if (!leadershipElectionTimer) {
-    leadershipElectionTimer = setInterval(() => {
-      processDueLeadershipElections().catch(error => logger.warn("Leadership election scheduler failed", { err: error.message }));
-    }, 15000);
-    leadershipElectionTimer.unref?.();
-  }
+  scheduleLeadershipElectionCheck();
   const server = app.listen(PORT, () => logger.info(`Jirani Chama backend running at http://localhost:${PORT}`));
   server.once("close", () => {
-    if (leadershipElectionTimer) clearInterval(leadershipElectionTimer);
+    if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
     leadershipElectionTimer = null;
     void closeRuntimeDependencies();
   });

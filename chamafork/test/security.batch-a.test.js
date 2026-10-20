@@ -51,6 +51,8 @@ before(async () => {
     chamas: [{ id: "chama-a", name: "Chama A" }, { id: "chama-b", name: "Chama B" }],
     users: [
       account("a-chair", "A Chair", "+254711100001", "chairperson", "chama-a"),
+      account("a-secretary", "A Secretary", "+254711100005", "secretary", "chama-a"),
+      account("a-election-winner", "A Election Winner", "+254711100006", "member", "chama-a"),
       account("a-borrower", "A Borrower", "+254711100002", "member", "chama-a", 1000),
       account("a-guarantor-1", "A Guarantor One", "+254711100003", "member", "chama-a", 1000),
       account("a-guarantor-2", "A Guarantor Two", "+254711100004", "member", "chama-a", 1000),
@@ -60,7 +62,7 @@ before(async () => {
       { id: "a-cash", at: "2026-10-01T08:00:00.000Z", memberId: "a-chair", memberName: "A Chair", amount: 100, status: "confirmed", chamaId: "chama-a" },
       { id: "b-cash", at: "2026-10-01T08:00:00.000Z", memberId: "b-chair", memberName: "B Chair", amount: 500000, status: "confirmed", chamaId: "chama-b" },
     ],
-    loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {},
+    loans: [], payouts: [], invitations: [], leadershipChanges: [{ id: "due-startup-election", type: "election", chamaId: "chama-a", role: "treasurer", status: "verified", winnerId: "a-election-winner", candidateIds: ["a-election-winner"], candidateNames: [{ id: "a-election-winner", name: "A Election Winner" }], activationAt: new Date(Date.now() - 1000).toISOString() }], pendingMpesas: [], idempotency: {},
     registers: [], auditLog: [], penalties: [], welfareReserve: 0,
     settings: { defaultDeadlineDay: 5, meetingDates: {} }, dividendCycles: [], messages: [],
   }), "utf8");
@@ -110,4 +112,40 @@ test("Chama A loan approval cannot use Chama B's balance", async () => {
   assert.equal(approval.status, 409);
   const saved = JSON.parse(fs.readFileSync(dataFile, "utf8"));
   assert.notEqual(saved.loans.find(item => item.id === loanId).status, "approved");
+});
+
+test("leadership elections reject outside-group candidates and voters, and overdue roles activate on startup", async () => {
+  const secretaryCookie = await login("+254711100005");
+  const outsiderCookie = await login("+254711200001");
+  const secretaryDashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { Cookie: secretaryCookie } });
+  assert.equal((await secretaryDashboard.json()).user.role, "secretary");
+
+  const aDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, { headers: { Cookie: chairCookie } });
+  assert.equal(aDashboardResponse.status, 200);
+  const aDashboard = await aDashboardResponse.json();
+  assert.equal(aDashboard.members.find(user => user.id === "a-election-winner").role, "treasurer");
+  const saved = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  assert.equal(saved.leadershipChanges.find(item => item.id === "due-startup-election").status, "completed");
+  assert.ok(saved.messages.some(item => item.recipientId === "a-chair" && item.text.includes("now the treasurer")));
+
+  const write = (cookie, route, body) => fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(body),
+  });
+  const foreignCandidateProposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "b-chair"] });
+  assert.equal(foreignCandidateProposal.status, 404);
+
+  const proposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "a-guarantor-2"] });
+  assert.equal(proposal.status, 201);
+  const electionId = (await proposal.json()).data.id;
+  const accepted = await write(chairCookie, `/api/leadership-elections/${electionId}/accept`, {});
+  assert.equal(accepted.status, 200);
+
+  const outsideElections = await fetch(`${baseUrl}/api/leadership-elections`, { headers: { Cookie: outsiderCookie } });
+  assert.deepEqual((await outsideElections.json()).data, []);
+  const outsideVote = await write(outsiderCookie, `/api/leadership-elections/${electionId}/vote`, { candidateId: "a-guarantor-1" });
+  assert.equal(outsideVote.status, 404);
+  const insideElection = (await (await fetch(`${baseUrl}/api/leadership-elections`, { headers: { Cookie: chairCookie } })).json()).data.find(item => item.id === electionId);
+  assert.equal(insideElection.votesCast, 0);
 });
