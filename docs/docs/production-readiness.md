@@ -5,13 +5,14 @@ Evidence checked on 2026-10-20 for this checkout. This note records local observ
 ## Verified in the current environment
 
 - The application supports JSON and PostgreSQL. `DATA_BACKEND` defaults to JSON when unset; the current local `.env` selects PostgreSQL.
-- A read-only connection to the configured PostgreSQL database succeeded. The schema has 33 foreign keys, but all 16 tables with a `chama_id` column currently contain zero rows. This does not establish whether any separate local data file contains data.
+- A read-only PostgreSQL connection succeeded. The app-role tenant directory contains one chama. Counting records inside that chama's RLS context returned 5 users, 5 memberships, 6 contributions, 1 loan, 4 attendance rows, 1 attendance register, 8 transactions, 24 audit records, 2 messages, 4 invitations, and 4 penalties; dividends, ledger entries, loan repayments, and M-Pesa callbacks were empty. The database has 33 foreign keys.
+- `chamafork/data.json` also exists and parses, with 1 user and no transactions, loans, payouts, invitations, leadership changes, attendance registers, audit records, penalties, dividends, or messages. It is not the selected backend; the PostgreSQL snapshot is populated and materially different. Do not run an import from this JSON snapshot over PostgreSQL. The importer is absent from this checkout.
 - The application was not listening on `127.0.0.1:8000` during the check, so its active runtime backend and health endpoint could not be verified.
-- The local environment is development mode, has PostgreSQL TLS disabled, and uses a plaintext Redis URL. PostgreSQL and Redis were reachable locally, but these settings do not satisfy production requirements.
+- `NODE_ENV` is unset, so production-only startup validation is not active in this local process environment. PostgreSQL TLS is disabled and Redis uses a plaintext URL. PostgreSQL and Redis were reachable locally, but these settings do not satisfy production requirements.
 - Production startup checks require PostgreSQL, `PGSSL=verify-full`, TLS Redis (`rediss://`) for sessions and shared rate limits, trusted HTTPS origins, proxy configuration, and strong session and metrics secrets. These checks validate configuration values; they do not provision or verify the infrastructure.
 - PostgreSQL state writes replace a chama's stored snapshot. A database advisory lock rejects a second application runtime, so deployment must run one server process per database. This design does not support horizontally scaled application processes.
 - The M-Pesa callback route returns `503`; automated callback settlement is disabled until authenticated, exact-amount reconciliation is implemented.
-- No deployment manifests, backup/restore scripts, JSON importer, or tracked `SECURITY_AUDIT.md` are present in this checkout.
+- No deployment manifests or backup/restore scripts are present in this checkout. No `SECURITY_AUDIT.md` or JSON importer is tracked in this checkout or its available Git history.
 
 ## External deployment evidence still needed
 
