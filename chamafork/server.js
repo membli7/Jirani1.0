@@ -977,44 +977,10 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   }
   req.session.regenerate(error => { if (error) return next(error); req.session.userId = user.id; req.session.lastActivityAt = Date.now(); req.session.save(saveError => { if (saveError) return next(saveError); activeSessionsGauge.inc(); return res.json({ message: "Signed in successfully.", user: safeUser(user) }); }); });
 });
-app.post("/api/forgot-pin", pinRecoveryLimiter, async (req, res, next) => {
-  const email = normalizeEmail(req.body?.email);
-  if (!validEmail(email)) return res.json({ message: "If that email exists, an OTP has been sent." });
-  const matches = state.users.filter(user => user.status === "active" && normalizeEmail(user.email) === email);
-  if (!matches.length) return res.json({ message: "If that email exists, an OTP has been sent." });
-  const otp = String(crypto.randomInt(100000, 1000000));
-  const updated = structuredClone(state);
-  for (const user of updated.users) {
-    if (user.status === "active" && normalizeEmail(user.email) === email) {
-      user.resetOtp = otp;
-      user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
-    }
-  }
-  try { await persist(updated); } catch (error) { return next(error); }
-  // Stub for future Nodemailer/SendGrid integration; never expose this OTP in the API response.
-  console.log(`PIN recovery OTP for ${email}: ${otp}`);
-  return res.json({ message: "If that email exists, an OTP has been sent." });
-});
-app.post("/api/reset-pin", pinRecoveryLimiter, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const otp = clean(req.body?.otp);
-  const newPin = clean(req.body?.newPin);
-  if (!validEmail(email) || !/^\d{6}$/.test(otp) || !validNewPin(newPin)) return res.status(400).json({ message: "The email, OTP, or new PIN is invalid or expired." });
-  const matches = state.users.filter(user => user.status === "active" && normalizeEmail(user.email) === email);
-  const valid = matches.length > 0 && matches.every(user => typeof user.resetOtp === "string" && user.resetOtp.length === otp.length && crypto.timingSafeEqual(Buffer.from(user.resetOtp), Buffer.from(otp)) && Number(user.resetOtpExpires) > Date.now());
-  if (!valid) return res.status(400).json({ message: "The email, OTP, or new PIN is invalid or expired." });
-  const updated = structuredClone(state);
-  for (const user of updated.users) {
-    if (user.status === "active" && normalizeEmail(user.email) === email) {
-      user.pinHash = pinHash(newPin);
-      user.mustChangePin = false;
-      delete user.resetOtp;
-      delete user.resetOtpExpires;
-    }
-  }
-  await persist(updated);
-  return res.json({ message: "Your PIN has been reset. You can now sign in." });
-});
+app.post("/api/forgot-pin", pinRecoveryLimiter, (req, res) =>
+  res.status(503).json({ message: "PIN recovery is unavailable until secure email delivery is configured." }));
+app.post("/api/reset-pin", pinRecoveryLimiter, (req, res) =>
+  res.status(503).json({ message: "PIN recovery is unavailable until secure email delivery is configured." }));
 app.post("/api/logout", requireAuth, (req, res, next) => req.session.destroy(error => { if (error) return next(error); activeSessionsGauge.dec(); return res.clearCookie("chama.sid").json({ message: "Signed out." }); }));
 app.get("/api/dashboard", requireAuth, (req, res) => req.user.mustChangePin ? res.status(403).json({ message: "Change your PIN before viewing the dashboard.", mustChangePin: true }) : res.json(dashboardFor(req.user)));
 app.get("/api/attendance", requireAuth, requirePinChanged, (req, res) => {
@@ -1677,8 +1643,7 @@ app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "M
 
 // OTP phone-auth (Phase 1)
 // Alternative sign-in via SMS OTP — supplements the existing PIN login.
-// /api/otp/request  — send a 6-digit code to the phone (or log it if SMS
-//                     is not configured).
+// /api/otp/request  — send a 6-digit code only when SMS delivery is configured.
 // /api/otp/verify   — verify the code and open a session identical to PIN
 //                     login.
 // ---------------------------------------------------------------------------
@@ -1692,10 +1657,11 @@ const OTP_RATE_LIMIT = sharedRateLimit("otp", {
 app.post("/api/otp/request", OTP_RATE_LIMIT, (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   if (!phone) return res.status(400).json({ message: "Enter a valid Kenyan mobile phone number." });
+  if (!africaTalkingSmsConfigured()) return res.status(503).json({ message: "Phone-code sign-in is unavailable until secure SMS delivery is configured." });
   // Find at least one active account for this phone.
   const accounts = state.users.filter(u => u.phone === phone && u.status === "active");
   // Respond identically whether or not the phone is registered (no enumeration).
-  const genericOk = { message: "If that phone number is registered, an activation code has been sent." };
+  const genericOk = { message: "If that phone number is registered, a sign-in code may be sent." };
   if (!accounts.length) return res.json(genericOk);
   const otp = String(crypto.randomInt(100000, 1000000));
   const expiresAt = Date.now() + OTP_TTL_MS;
@@ -1705,17 +1671,15 @@ app.post("/api/otp/request", OTP_RATE_LIMIT, (req, res, next) => {
   req.session.otpExpiresAt = expiresAt;
   req.session.save(err => {
     if (err) return next(err);
-    // Attempt SMS delivery; fall back to console log.
+    // Never log one-time codes. Only return the generic response after dispatch.
     sendSms(phone, `Your Jirani Chama activation code is ${otp}. It expires in 10 minutes. Do not share it.`)
-      .catch(smsErr => {
-        if (smsErr.message !== "Africa's Talking is not configured.") {
-          console.error("OTP SMS delivery failed:", smsErr.message);
-        } else {
-          // Development/manual mode: log to console (never expose in response).
-          console.log(`OTP for ${phone}: ${otp}`);
-        }
+      .then(() => res.json(genericOk))
+      .catch(() => {
+        delete req.session.otpHash;
+        delete req.session.otpPhone;
+        delete req.session.otpExpiresAt;
+        req.session.save(saveError => saveError ? next(saveError) : res.json(genericOk));
       });
-    return res.json(genericOk);
   });
 });
 

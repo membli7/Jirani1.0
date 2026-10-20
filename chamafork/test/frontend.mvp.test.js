@@ -18,10 +18,14 @@ const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "u
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
   assert.match(memberLoginHtml, /src="\/auth-pages\.js\?v=/);
-  assert.match(authPagesScript, /fetch\("\/api\/login",\s*\{\s*method:\s*"POST"/);
+  assert.match(authPagesScript, /postJson\("\/api\/login"/);
+  assert.match(authPagesScript, /method:\s*"POST"/);
   assert.match(authPagesScript, /credentials:\s*"same-origin"/);
   assert.match(authPagesScript, /name = "chamaId"/);
   assert.match(authPagesScript, /window\.location\.assign\("\/"\)/);
+  assert.match(authPagesScript, /postJson\("\/api\/invitations\/activate"/);
+  assert.match(memberLoginHtml, /PIN recovery is not available yet/);
+  assert.doesNotMatch(memberLoginHtml, /We.ll send a one-time code|Send OTP/);
 });
 
 test("landing registration opens a complete first-chama setup page", () => {

@@ -103,7 +103,9 @@ describe("Jirani Chama server", () => {
     assert.match(await loginPage.text(), /method="post" action="\/api\/login"/);
     const authPagesScript = await request("/auth-pages.js");
     assert.equal(authPagesScript.status, 200);
-    assert.match(await authPagesScript.text(), /fetch\("\/api\/login"/);
+    const authPagesSource = await authPagesScript.text();
+    assert.match(authPagesSource, /postJson\("\/api\/login"/);
+    assert.match(authPagesSource, /postJson\("\/api\/invitations\/activate"/);
   });
 
   test("creates a chairperson session and serves the dashboard", async () => {
@@ -145,6 +147,17 @@ describe("Jirani Chama server", () => {
     assert.equal(dashboardBody.user.name, "Test Chair");
     assert.equal(dashboardBody.summary.balance, 0);
     assert.equal(dashboardBody.permissions.manageMembers, true);
+
+    const beforeRecovery = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
+    const forgotPin = await request("/api/forgot-pin", { method: "POST", body: JSON.stringify({ email: "chair@example.test" }) });
+    const resetPin = await request("/api/reset-pin", { method: "POST", body: JSON.stringify({ email: "chair@example.test", otp: "123456", newPin: "654321" }) });
+    const otpRequest = await request("/api/otp/request", { method: "POST", body: JSON.stringify({ phone: "0712345678" }) });
+    assert.equal(forgotPin.status, 503);
+    assert.equal(resetPin.status, 503);
+    assert.equal(otpRequest.status, 503);
+    const afterRecovery = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
+    assert.equal(afterRecovery.users[0].resetOtp, beforeRecovery.users[0].resetOtp);
+    assert.equal(afterRecovery.users[0].pinHash, beforeRecovery.users[0].pinHash);
   });
 
   test("preserves distinct concurrent writes instead of replacing a newer snapshot", async () => {

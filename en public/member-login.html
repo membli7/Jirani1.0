@@ -56,25 +56,9 @@
         </form>
         <section id="forgot-pin-view" class="login-card recovery-card" hidden>
             <h2>Forgot PIN?</h2>
-            <p>Enter the email address registered to your account. We’ll send a one-time code.</p>
-            <p class="login-notice" id="forgot-pin-notice" role="alert" aria-live="assertive" hidden></p>
-            <form id="forgot-pin-form">
-                <label class="field" for="forgot-pin-email">Email address<input id="forgot-pin-email" name="email" type="email" autocomplete="email" maxlength="254" required></label>
-                <button class="button-primary" type="submit">Send OTP</button>
-            </form>
+            <p>PIN recovery is not available yet because secure email delivery is not configured.</p>
             <button class="panel-link" id="forgot-pin-back" type="button">Back to sign in</button>
         </section>
-        <section id="reset-pin-view" class="login-card recovery-card" hidden>
-            <h2>Reset your PIN</h2>
-            <p>Enter the six-digit one-time code and choose a new 6–12 digit PIN.</p>
-            <p class="login-notice" id="reset-pin-notice" role="alert" aria-live="assertive" hidden></p>
-            <form id="reset-pin-form">
-                <label class="field" for="reset-pin-otp">6-digit OTP<input id="reset-pin-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required></label>
-                <label class="field" for="reset-pin-new">New PIN<input id="reset-pin-new" name="newPin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
-                <button class="button-primary" type="submit">Reset PIN</button>
-            </form>
-            <button class="panel-link" id="reset-pin-back" type="button">Back to sign in</button>
-               </section>
                 <p class="auth-page-links">Starting a new group? <a href="/register.html">Register a new chama</a></p>
                 <p class="auth-page-links"><a href="/">Back to home</a></p>
             </section>
