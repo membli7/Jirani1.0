@@ -99,7 +99,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.9" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261020\.10" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {

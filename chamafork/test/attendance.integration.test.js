@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -47,6 +48,11 @@ async function nextSseEvent(reader, eventName) {
     buffered += decoder.decode(result.value, { stream: true });
   }
   return buffered;
+}
+
+function pinHash(pin) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
 
 function sessionCookie(response) {
@@ -107,6 +113,14 @@ async function promote(chairCookie, secretaryCookie, userId, role) {
 
 before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-attendance-test-"));
+  const chamaId = "attendance-test-chama";
+  const users = [
+    ["chair", "Test Chair", "0700000001", "chairperson", "123456"],
+    ["secretary", "Test Secretary", "0700000002", "secretary", "234567"],
+    ["treasurer", "Test Treasurer", "0700000003", "treasurer", "345678"],
+    ["member", "Test Member", "0700000004", "member", "456789"],
+  ].map(([id, name, phone, role, pin]) => ({ id, name, phone: `+254${phone.slice(1)}`, email: `${id}@example.test`, role, status: "active", chamaId, pinHash: pinHash(pin), mustChangePin: false, shareCapital: 0 }));
+  fs.writeFileSync(dataFile(), JSON.stringify({ version: 2, chamas: [{ id: chamaId, name: "Test Chama", createdAt: new Date().toISOString() }], users, transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [] }));
   server = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
     env: {
@@ -152,24 +166,13 @@ after(async () => {
 
 describe("attendance registers", () => {
   test("audits attendance edits and verifies three-party loan approval workflows", async () => {
-    const setup = await request("/api/setup", {
-      method: "POST",
-      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0700000001", email: "chair@example.test", pin: "123456" })
-    });
-    assert.equal(setup.status, 201);
-    const chairCookie = sessionCookie(setup);
-
-    const secretaryId = await createAccount(chairCookie, "Test Secretary", "0700000002", "234567");
-    await promote(chairCookie, null, secretaryId, "secretary");
+    const chairCookie = await login("0700000001", "123456");
     const secretaryCookie = await login("0700000002", "234567");
-
-    const treasurerId = await createAccount(chairCookie, "Test Treasurer", "0700000003", "345678");
-    await promote(chairCookie, secretaryCookie, treasurerId, "treasurer");
     const treasurerCookie = await login("0700000003", "345678");
-
-    const memberId = await createAccount(chairCookie, "Test Member", "0700000004", "456789");
     const memberCookie = await login("0700000004", "456789");
-    const date = "2026-10-10";
+    const secretaryId = "secretary";
+    const treasurerId = "treasurer";
+    const memberId = "member";    const date = "2026-10-10";
     const initialList = await body(await request("/api/attendance", { cookie: secretaryCookie }));
     assert.equal(initialList.readOnly, false);
     assert.equal(initialList.registers.length, 0);

@@ -14,6 +14,7 @@ const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { parseAllowedOrigins, validateProductionConfig } = require("./security/production-config");
+const { addNotifications, applyDueElections, electionView, isElection, resultFor } = require("./leadership-elections");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const {
   logger,
@@ -100,6 +101,7 @@ const LOAN_MONTHLY_RATE = 0.05;
 const LOAN_LIMIT_MULTIPLE = 3;
 const monthDateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Africa/Nairobi" });
 const eventClients = new Set();
+let leadershipElectionTimer = null;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const sessionBackend = createSessionBackend();
 validateProductionConfig(process.env);
@@ -234,6 +236,11 @@ function newId() { return crypto.randomUUID(); }
 function now() { return new Date().toISOString(); }
 function auditEntry(type, entityId, actor, details = {}) {
   return { id: newId(), type, entityId, at: now(), by: { id: actor.id, name: actor.name, role: actor.role }, ...details };
+}
+function electionVoterToken(election, user) {
+  return crypto.createHmac("sha256", SESSION_SECRET)
+    .update(`leadership-election:${election.chamaId}:${election.id}:${user.id}`)
+    .digest("hex");
 }
 function displayPhone(phone, includeFull = false) {
   if (includeFull) return phone;
@@ -537,6 +544,14 @@ async function commit(req, res, next, updated, status, body, storedBody = body, 
   updated.idempotency[req.idempotency.key] = { fingerprint: req.idempotency.fingerprint, status, body: storedBody };
   try { await persist(updated); afterPersist?.(); return res.status(status).json(body); } catch (error) { return next(error); }
 }
+async function processDueLeadershipElections() {
+  const updated = structuredClone(state);
+  const completed = applyDueElections(updated);
+  if (!completed.length) return 0;
+  await persist(updated);
+  for (const chamaId of new Set(completed.map(item => item.chamaId))) publishMemberUpdate(chamaId);
+  return completed.length;
+}
 function publishMessageUpdate(message, chamaId = message?.chamaId) {
   if (!chamaId) return;
   const payload = `event: messages-updated\ndata: ${JSON.stringify({ id: message.id, at: message.at })}\n\n`;
@@ -620,6 +635,11 @@ function permissionsFor(user, usersInChama = scopeToChama(state.users, user.cham
     manageMembers: ["chairperson", "secretary"].includes(user.role),
     manageLeadership: ["chairperson", "secretary"].includes(user.role),
     proposeLeadership: user.role === "chairperson",
+    bootstrapLeadership: user.role === "chairperson" && !anotherOfficer && !priorLeadershipChange,
+    proposeLeadershipElection: user.role === "secretary",
+    acceptLeadershipElection: user.role === "chairperson",
+    closeLeadershipElection: user.role === "chairperson",
+    verifyLeadershipElection: user.role === "chairperson",
     revokeInvitations: user.role === "chairperson",
     revokeLeadershipRoles: user.role === "chairperson",
     recordPayments: user.role === "treasurer",
@@ -686,8 +706,15 @@ function dashboardFor(user) {
           })
       : [],
     leadershipChanges: ["chairperson", "secretary"].includes(user.role)
-      ? scopeToChama(state.leadershipChanges, chamaId)
+      ? scopeToChama(state.leadershipChanges, chamaId).filter(change => !isElection(change))
       : [],
+    leadershipElections: scopeToChama(state.leadershipChanges, chamaId)
+      .filter(isElection)
+      .map(election => electionView(election, user, usersInChama, electionVoterToken(election, user))),
+    notifications: scopeToChama(state.messages, chamaId, item => item.recipientId ? item.chamaId : null)
+      .filter(item => item.type === "notification" && item.recipientId === user.id)
+      .slice(-50)
+      .map(item => ({ id: item.id, at: item.at, text: item.text })),
   };
 }
 function validMeetingDate(value) {
@@ -1101,7 +1128,7 @@ app.get("/api/export.csv", requireAuth, requirePinChanged, (req, res) => {
 // Group chat: every active member can read and post. Messages cannot be edited or deleted, and each post is audited without its text.
 const MESSAGE_MAX_LENGTH = 500;
 const MESSAGES_SHOWN = 100;
-app.get("/api/messages", requireAuth, requirePinChanged, (req, res) => res.json({ data: scopeToChama(state.messages, req.user.chamaId).slice(-MESSAGES_SHOWN) }));
+app.get("/api/messages", requireAuth, requirePinChanged, (req, res) => res.json({ data: scopeToChama(state.messages, req.user.chamaId).filter(item => !item.recipientId || item.recipientId === req.user.id).slice(-MESSAGES_SHOWN) }));
 app.post("/api/messages", requireAuth, requirePinChanged, idempotent((req, res, next) => {
   const text = clean(req.body?.text);
   if (text.length < 1 || text.length > MESSAGE_MAX_LENGTH) return res.status(400).json({ message: "Enter a message of 1 to 500 characters." });
@@ -1591,6 +1618,135 @@ app.post("/api/loans/:id/decisions", requireAuth, requirePinChanged, requireRole
   return commit(req, res, next, updated, 200, { message, data: view, approvals: view.approvalCount, requiredApprovals: view.requiredApprovals, progress: view.progress, history: view.history }, undefined, () => { publishLoanUpdate(loan, loan.chamaId); publishFinancialUpdate(loan.chamaId); });
 }));
 
+const activeElectionStatuses = new Set(["proposed", "voting", "closed", "verified"]);
+function activeElectionFor(chamaId) {
+  return scopeToChama(state.leadershipChanges, chamaId).find(item => isElection(item) && activeElectionStatuses.has(item.status));
+}
+function electionById(id, chamaId) {
+  return scopeToChama(state.leadershipChanges, chamaId).find(item => isElection(item) && item.id === id);
+}
+function activeGroupMembers(chamaId) {
+  return scopeToChama(state.users, chamaId).filter(item => item.status === "active");
+}
+function safeElectionView(election, viewer) {
+  return electionView(election, viewer, scopeToChama(state.users, election.chamaId), electionVoterToken(election, viewer));
+}
+app.get("/api/leadership-elections", requireAuth, requirePinChanged, (req, res) => {
+  const data = scopeToChama(state.leadershipChanges, req.user.chamaId).filter(isElection).map(item => safeElectionView(item, req.user));
+  return res.json({ data, notifications: dashboardFor(req.user).notifications });
+});
+app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRole("secretary"), idempotent((req, res, next) => {
+  const role = clean(req.body?.role);
+  const rawCandidateIds = Array.isArray(req.body?.candidateIds) ? req.body.candidateIds : [];
+  const candidateIds = [...new Set(rawCandidateIds.map(clean).filter(Boolean))];
+  if (!["chairperson", "secretary", "treasurer"].includes(role)) return res.status(400).json({ message: "Choose Chairperson, Secretary, or Treasurer for this election." });
+  if (candidateIds.length < 2 || candidateIds.length > 20 || candidateIds.length !== rawCandidateIds.length) return res.status(400).json({ message: "Select 2 to 20 different active members as candidates." });
+  if (activeElectionFor(req.user.chamaId)) return res.status(409).json({ message: "Another leadership election is already in progress for this chama." });
+  for (const id of candidateIds) if (state.users.some(item => item.id === id && item.chamaId !== req.user.chamaId)) return res.status(404).json({ message: "One or more candidates are not active members of this chama." });
+  const members = activeGroupMembers(req.user.chamaId);
+  const candidates = candidateIds.map(id => members.find(item => item.id === id && item.role === "member"));
+  if (candidates.some(item => !item)) return res.status(400).json({ message: "Every candidate must be an active Member of this chama." });
+  const at = now();
+  const election = { id: newId(), type: "election", role, candidateIds, candidateNames: candidates.map(item => ({ id: item.id, name: item.name })), status: "proposed", proposedBy: req.user.id, proposedAt: at, ballots: [], chamaId: req.user.chamaId };
+  const updated = structuredClone(state);
+  updated.leadershipChanges.push(election);
+  updated.auditLog.push(auditEntry("leadership.election.proposed", election.id, req.user, { role, candidateCount: candidateIds.length }));
+  return commit(req, res, next, updated, 201, { message: "Election proposed. The Chairperson must accept the candidates before voting starts.", data: safeElectionView(election, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-elections/:id/decline", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+  const election = electionById(req.params.id, req.user.chamaId);
+  if (!election) return res.status(404).json({ message: "Election not found." });
+  if (election.status !== "proposed" || activeElectionFor(req.user.chamaId) !== election) return res.status(409).json({ message: "Only a proposal awaiting acceptance can be declined." });
+  const updated = structuredClone(state);
+  const saved = updated.leadershipChanges.find(item => isElection(item) && item.id === election.id && item.chamaId === req.user.chamaId);
+  saved.status = "declined"; saved.declinedAt = now(); saved.declinedBy = req.user.id;
+  updated.auditLog.push(auditEntry("leadership.election.declined", saved.id, req.user, { role: saved.role }));
+  addNotifications(updated, saved, `The ${saved.role} election proposal was declined. The Secretary may submit a new proposal.`, saved.declinedAt);
+  return commit(req, res, next, updated, 200, { message: "Election proposal declined. The Secretary can submit a new proposal.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-elections/:id/accept", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+  const election = electionById(req.params.id, req.user.chamaId);
+  if (!election) return res.status(404).json({ message: "Election not found." });
+  if (election.status !== "proposed" || activeElectionFor(req.user.chamaId) !== election) return res.status(409).json({ message: "This election is no longer awaiting acceptance." });
+  const members = activeGroupMembers(req.user.chamaId);
+  const candidates = election.candidateIds.map(id => members.find(item => item.id === id && item.role === "member"));
+  if (candidates.some(item => !item)) return res.status(409).json({ message: "A proposed candidate is no longer an active Member of this chama. Ask the Secretary to revise the proposal." });
+  if (members.length < 2) return res.status(409).json({ message: "At least two active chama members are required to hold an election." });
+  const updated = structuredClone(state);
+  const saved = updated.leadershipChanges.find(item => isElection(item) && item.id === election.id && item.chamaId === req.user.chamaId);
+  saved.status = "voting"; saved.acceptedAt = now(); saved.acceptedBy = req.user.id;
+  saved.eligibleVoterIds = members.map(item => item.id); saved.ballots = [];
+  updated.auditLog.push(auditEntry("leadership.election.accepted", saved.id, req.user, { role: saved.role, eligibleVoters: saved.eligibleVoterIds.length }));
+  return commit(req, res, next, updated, 200, { message: "Election accepted. Members can now vote.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-elections/:id/vote", requireAuth, requirePinChanged, idempotent((req, res, next) => {
+  const election = electionById(req.params.id, req.user.chamaId);
+  if (!election) return res.status(404).json({ message: "Election not found." });
+  if (election.status !== "voting") return res.status(409).json({ message: "Voting is not open for this election." });
+  const voter = state.users.find(item => item.id === req.user.id && item.chamaId === req.user.chamaId && item.status === "active");
+  if (!voter || !(election.eligibleVoterIds || []).includes(voter.id)) return res.status(403).json({ message: "Only active members of this chama who were eligible when voting opened may vote." });
+  const candidateId = clean(req.body?.candidateId);
+  const candidate = state.users.find(item => item.id === candidateId && item.chamaId === req.user.chamaId && item.status === "active" && item.role === "member");
+  if (!candidate || !election.candidateIds.includes(candidate.id)) return res.status(400).json({ message: "Choose an active candidate in this election." });
+  const voterToken = electionVoterToken(election, voter);
+  if ((election.ballots || []).some(item => item.voterToken === voterToken)) return res.status(409).json({ message: "You have already voted in this election." });
+  const updated = structuredClone(state);
+  const saved = updated.leadershipChanges.find(item => isElection(item) && item.id === election.id && item.chamaId === req.user.chamaId);
+  saved.ballots.push({ voterToken, candidateId: candidate.id, at: now() });
+  updated.auditLog.push(auditEntry("leadership.election.vote-cast", saved.id, req.user, { role: saved.role }));
+  return commit(req, res, next, updated, 200, { message: "Your secret vote has been recorded.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-elections/:id/close", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+  const election = electionById(req.params.id, req.user.chamaId);
+  if (!election) return res.status(404).json({ message: "Election not found." });
+  if (election.status !== "voting") return res.status(409).json({ message: "Only an open election can be closed." });
+  const updated = structuredClone(state);
+  const saved = updated.leadershipChanges.find(item => isElection(item) && item.id === election.id && item.chamaId === req.user.chamaId);
+  saved.status = "closed"; saved.closedAt = now(); saved.result = resultFor(saved);
+  updated.auditLog.push(auditEntry("leadership.election.closed", saved.id, req.user, { role: saved.role, votesCast: saved.result.votesCast }));
+  addNotifications(updated, saved, `Voting for ${saved.role} is closed. The Chairperson is verifying the result.`, saved.closedAt);
+  return commit(req, res, next, updated, 200, { message: "Voting is closed. The Chairperson can verify the result.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-elections/:id/verify", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+  const election = electionById(req.params.id, req.user.chamaId);
+  if (!election) return res.status(404).json({ message: "Election not found." });
+  if (election.status !== "closed" || !election.result) return res.status(409).json({ message: "Only a closed election can be verified." });
+  const updated = structuredClone(state);
+  const saved = updated.leadershipChanges.find(item => isElection(item) && item.id === election.id && item.chamaId === req.user.chamaId);
+  saved.verifiedAt = now(); saved.verifiedBy = req.user.id;
+  if (saved.result.tiedCandidateIds?.length > 1) {
+    const members = activeGroupMembers(req.user.chamaId);
+    const runoffCandidates = saved.result.tiedCandidateIds.filter(id => members.some(item => item.id === id && item.role === "member"));
+    if (runoffCandidates.length < 2) {
+      saved.status = "verified-no-winner";
+      saved.result.reason = "Fewer than two tied candidates remain eligible for a runoff.";
+      updated.auditLog.push(auditEntry("leadership.election.verified-no-winner", saved.id, req.user, { role: saved.role, reason: "runoff candidates are no longer eligible" }));
+      addNotifications(updated, saved, `The ${saved.role} election was tied, but a runoff could not open because fewer than two tied candidates remain eligible.`, saved.verifiedAt);
+      return commit(req, res, next, updated, 200, { message: "The tie is verified, but a runoff cannot open because fewer than two tied candidates remain eligible.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+    }
+    saved.status = "verified-tie";
+    const runoffAt = now();
+    const runoff = { id: newId(), type: "election", role: saved.role, candidateIds: runoffCandidates, candidateNames: saved.candidateNames.filter(item => runoffCandidates.includes(item.id)), status: "voting", parentElectionId: saved.id, proposedBy: saved.proposedBy, proposedAt: runoffAt, acceptedAt: runoffAt, acceptedBy: req.user.id, eligibleVoterIds: members.map(item => item.id), ballots: [], chamaId: req.user.chamaId };
+    updated.leadershipChanges.push(runoff);
+    updated.auditLog.push(auditEntry("leadership.election.runoff-opened", saved.id, req.user, { role: saved.role, candidateCount: runoffCandidates.length }));
+    addNotifications(updated, saved, `The ${saved.role} election was tied. A runoff is now open between the tied candidates.`, saved.verifiedAt);
+    return commit(req, res, next, updated, 200, { message: "The tie has been verified. A runoff is open for the tied candidates.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+  }
+  const winner = saved.result.winnerId && updated.users.find(item => item.id === saved.result.winnerId && item.chamaId === req.user.chamaId && item.status === "active" && item.role === "member");
+  if (!winner) {
+    saved.status = "verified-no-winner";
+    saved.result.reason = saved.result.votesCast ? "The leading candidate is no longer eligible." : "No votes were cast.";
+    updated.auditLog.push(auditEntry("leadership.election.verified-no-winner", saved.id, req.user, { role: saved.role, votesCast: saved.result.votesCast }));
+    addNotifications(updated, saved, `The ${saved.role} election has no winner. The Secretary can propose another election.`, saved.verifiedAt);
+    return commit(req, res, next, updated, 200, { message: "The result is verified; no eligible winner was recorded.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+  }
+  saved.status = "verified"; saved.winnerId = winner.id;
+  saved.activationAt = new Date(Date.parse(saved.verifiedAt) + 24 * 60 * 60 * 1000).toISOString();
+  updated.auditLog.push(auditEntry("leadership.election.verified", saved.id, req.user, { role: saved.role, winnerId: winner.id, activationAt: saved.activationAt }));
+  addNotifications(updated, saved, `${winner.name} won the ${saved.role} election. The role and group portal access will switch in 24 hours.`, saved.verifiedAt);
+  return commit(req, res, next, updated, 200, { message: "Result verified. The group portal roles will update in 24 hours.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+
 app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
   const role = clean(req.body?.role); const incomingUserId = clean(req.body?.incomingUserId);
   const foreignIncoming = state.users.find(item => item.id === incomingUserId && item.chamaId !== req.user.chamaId);
@@ -1598,13 +1754,19 @@ app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole(
   const incoming = scopeToChama(state.users, req.user.chamaId).find(item => item.id === incomingUserId && item.status === "active"); const effectiveDate = clean(req.body?.effectiveDate);
   if (!["chairperson", "secretary", "treasurer"].includes(role) || !incoming || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) return res.status(400).json({ message: "Provide an active member, an office, and an effective date." });
   const chamaUsers = scopeToChama(state.users, req.user.chamaId);
-  const outgoing = chamaUsers.find(item => item.role === role && item.status === "active"); const hasOtherOfficer = chamaUsers.some(item => item.status === "active" && item.id !== req.user.id && ["chairperson", "secretary", "treasurer"].includes(item.role)); const confirmedImmediately = !hasOtherOfficer;
-  const proposedAt = now(); const record = { id: newId(), type: "appointment", role, outgoingUserId: outgoing?.id || null, incomingUserId: incoming.id, effectiveDate, vote: null, emergencyReason: null, status: confirmedImmediately ? "confirmed" : "pending", proposedBy: req.user.id, proposedAt, confirmedBy: confirmedImmediately ? req.user.id : null, confirmedAt: confirmedImmediately ? proposedAt : null, audit: [{ action: "proposed", by: req.user.id, at: proposedAt }], chamaId: req.user.chamaId };
+  const outgoing = chamaUsers.find(item => item.role === role && item.status === "active");
+  const hasOtherOfficer = chamaUsers.some(item => item.status === "active" && item.id !== req.user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
+  const priorLeadershipChange = scopeToChama(state.leadershipChanges, req.user.chamaId).some(item => item.type === "appointment");
+  const bootstrapOnly = !hasOtherOfficer && !priorLeadershipChange && !outgoing && incoming.role === "member" && incoming.id !== req.user.id && ["secretary", "treasurer"].includes(role);
+  if (!bootstrapOnly) return res.status(409).json({ message: "Officer changes after initial setup must use a member election." });
+  const confirmedImmediately = true;
+  const proposedAt = now(); const record = { id: newId(), type: "appointment", bootstrap: true, role, outgoingUserId: null, incomingUserId: incoming.id, effectiveDate, vote: null, emergencyReason: null, status: "confirmed", proposedBy: req.user.id, proposedAt, confirmedBy: req.user.id, confirmedAt: proposedAt, audit: [{ action: "proposed", by: req.user.id, at: proposedAt }], chamaId: req.user.chamaId };
   if (confirmedImmediately) record.audit.push({ action: "confirmed", by: req.user.id, at: proposedAt });
   const updated = structuredClone(state); if (confirmedImmediately) { const savedOutgoing = record.outgoingUserId && scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.outgoingUserId); const savedIncoming = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.incomingUserId); if (savedOutgoing) savedOutgoing.role = "member"; savedIncoming.role = record.role; } updated.leadershipChanges.push(record); updated.auditLog.push(auditEntry(confirmedImmediately ? "leadership.confirmed" : "leadership.proposed", record.id, req.user, { role, incomingUserId: incoming.id, outgoingUserId: outgoing?.id || null })); return commit(req, res, next, updated, 201, { message: confirmedImmediately ? "Officer assignment approved by the Chairperson." : "Officer assignment proposed and awaiting another officer.", data: record });
 }));
 app.post("/api/leadership-changes/:id/confirm", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
   const updated = structuredClone(state); const record = scopeToChama(updated.leadershipChanges, req.user.chamaId).find(item => item.id === req.params.id && item.status === "pending"); if (!record) return res.status(404).json({ message: "Pending leadership change not found." });
+  if (record.type !== "appointment" || !record.bootstrap) return res.status(409).json({ message: "Officer changes after initial setup must use a member election." });
   if (record.proposedBy === req.user.id) return res.status(409).json({ message: "A different officer must confirm this leadership change." });
   const oldOfficial = record.outgoingUserId && scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.outgoingUserId); const incoming = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.incomingUserId); if (oldOfficial) oldOfficial.role = "member"; if (!incoming) return res.status(404).json({ message: "Pending leadership change not found." }); incoming.role = record.role; record.status = "confirmed"; record.confirmedBy = req.user.id; record.confirmedAt = now(); record.audit.push({ action: "confirmed", by: req.user.id, at: record.confirmedAt });
   updated.auditLog.push(auditEntry("leadership.confirmed", record.id, req.user, { role: record.role, incomingUserId: record.incomingUserId, outgoingUserId: record.outgoingUserId }));
@@ -1628,7 +1790,7 @@ app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, r
   updated.auditLog.push(revocation);
   return commit(req, res, next, updated, 200, { message: "Leadership role revoked.", data: record, history: revocation });
 }));
-app.get("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId) }));
+app.get("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId).filter(item => !isElection(item)) }));
 app.get("/api/audit-log", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), (req, res) => {
   const userChamas = new Map(state.users.map(user => [user.id, user.chamaId]));
   const data = scopeToChama(state.auditLog, req.user.chamaId, entry =>
@@ -1755,8 +1917,19 @@ async function start() {
     });
   }
   if (redisCache && !redisCache.isOpen) await redisCache.connect();
+  await processDueLeadershipElections();
+  if (!leadershipElectionTimer) {
+    leadershipElectionTimer = setInterval(() => {
+      processDueLeadershipElections().catch(error => logger.warn("Leadership election scheduler failed", { err: error.message }));
+    }, 15000);
+    leadershipElectionTimer.unref?.();
+  }
   const server = app.listen(PORT, () => logger.info(`Jirani Chama backend running at http://localhost:${PORT}`));
-  server.once("close", () => { void closeRuntimeDependencies(); });
+  server.once("close", () => {
+    if (leadershipElectionTimer) clearInterval(leadershipElectionTimer);
+    leadershipElectionTimer = null;
+    void closeRuntimeDependencies();
+  });
   return server;
 }
 

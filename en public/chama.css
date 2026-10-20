@@ -196,6 +196,18 @@ td { padding: 12px 13px; border-top: 1px solid #f0f2ef; font-size: 10px; white-s
 .loan-panel-body { display: grid; gap: 12px; padding: 0 17px 17px; }
 .loan-list { display: grid; gap: 12px; }
 .loan-card { min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.leadership-elections, .election-notifications { display: grid; gap: 12px; }
+.election-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.election-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.election-card-heading h4 { margin: 0; font-size: 16px; text-transform: capitalize; }
+.election-candidates, .election-counts ul { margin: 0; padding-left: 22px; }
+.election-counts { display: grid; gap: 6px; }
+.election-ballot { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.election-ballot .field { min-width: min(100%, 260px); margin: 0; }
+.election-notice { padding: 12px 14px; border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 8px; background: var(--paper); }
+.election-notice p, .election-result, .election-action-note { margin: 5px 0 0; }
+.election-card > p { margin: 0; }
+.election-card .status-pill { white-space: normal; }
 .loan-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .loan-card-heading h3 { margin: 0; font-size: 14px; }
 .loan-progress { margin: 12px 0; color: var(--green); font-size: 12px; font-weight: 700; }
@@ -2127,4 +2139,6 @@ body:has(#app:not([hidden])) {
   .topbar.is-authenticated .top-actions { gap: 7px !important; }
   .header-icon-button, .profile-icon { width: 40px; height: 40px; flex-basis: 40px; }
   .profile-menu { top: calc(100% + 8px); max-height: min(68dvh, 440px); overflow-y: auto; }
+  .election-card-heading, .election-ballot { align-items: stretch; flex-direction: column; }
+  .election-card-heading .status-pill { align-self: flex-start; }
 }

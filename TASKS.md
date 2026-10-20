@@ -11,9 +11,15 @@
 ## Feature scope decision (2026-10-11)
 - [x] Keep CSV export: transaction and attendance records, scoped for Member accounts.
 - [x] Keep loan requests: 1, 2, 3, and 6 month terms with three role decisions; Secretary substitutes when the borrower is Chairperson or Treasurer. No money is disbursed by the app.
-- [x] Keep Chairperson-proposed officer assignments with a second-officer confirmation after initial setup; voting is deferred.
+- [x] Use the leadership-election workflow below for officer changes after initial setup; direct assignment remains limited to initial bootstrap.
 - [x] Defer Chat, WhatsApp/SMS broadcasts, Paybill processing/matching, and loan terms outside 1, 2, 3, and 6 months.
 
+## Leadership election decisions (2026-10-20)
+- Secretary proposes 2-20 active ordinary Members for Chairperson, Secretary, or Treasurer; Chairperson accepts the proposal and manually closes voting.
+- All active chama accounts are eligible when voting opens. Ballots are secret and each eligible account may vote once.
+- The candidate with the highest vote total wins; no quorum threshold applies. A tie among the highest candidates opens a rematch limited to the tied candidates.
+- Chairperson verifies the closed result. The elected role and portal access switch exactly 24 hours after verification.
+- No SQL schema change; elections use existing leadership, audit, and message records. Post-bootstrap officer changes must use elections.
 ## Step 0: setup
 - [ ] Commit everything, create branch `review-fixes`
 - [ ] Save report as `docs/review.md` and UX plan as `docs/ux-plan.md`
@@ -59,7 +65,7 @@ Before implementing larger UX work, decide: should attendance tracking be restor
 
 ## Step 4: larger UX work (Codex, after steps 2 and 3 are merged)
 - [ ] New Chairperson setup checklist
-- [x] Vote lifecycle panel deferred; retain officer assignments without voting.
+- [x] Leadership election lifecycle and dashboard panel implemented; see decisions dated 2026-10-20.
 - [ ] Mobile layout
 - [ ] Swahili text pass
 - [ ] Sample-group demo
@@ -76,7 +82,6 @@ Before implementing larger UX work, decide: should attendance tracking be restor
 ## Deferred / not in scope
 - [ ] Chat and broadcast delivery via WhatsApp/SMS
 - [ ] Paybill callback/matching
-- [ ] Voting
 - [ ] Loan terms outside 1, 2, 3, and 6 months
 - [ ] SMS invitation delivery (provider not configured)
 - [ ] Overdue/default loan actions (recovery, penalty, note)

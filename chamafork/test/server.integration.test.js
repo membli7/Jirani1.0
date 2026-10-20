@@ -219,7 +219,7 @@ describe("Jirani Chama server", () => {
     assert.deepEqual(Buffer.from(await savedPhoto.arrayBuffer()), png);
   });
 
-  test("proposes and confirms a leadership change", async () => {
+  test("only permits direct officer assignment during initial setup", async () => {
     const chairCookie = cookie;
     const invitation = await request("/api/invitations", {
       method: "POST",
@@ -293,45 +293,70 @@ describe("Jirani Chama server", () => {
       write: true,
       body: JSON.stringify({ role: "treasurer", incomingUserId: treasurerId, effectiveDate: "2030-02-01" }),
     });
-    assert.equal(laterProposal.status, 201);
-    const laterProposalBody = await json(laterProposal);
-    assert.equal(laterProposalBody.data.status, "pending");
+    assert.equal(laterProposal.status, 409);
+    assert.match((await json(laterProposal)).message, /member election/i);
+
+    const secondInvitation = await request("/api/invitations", { method: "POST", write: true, body: JSON.stringify({ name: "Runoff Candidate", phone: "0712345681", email: "runoff@example.test", role: "member" }) });
+    assert.equal(secondInvitation.status, 201);
+    const secondInvitationBody = await json(secondInvitation);
+    const secondActivation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0712345681", code: secondInvitationBody.activationCode, pin: "678901" }) });
+    assert.equal(secondActivation.status, 201);
+    const secondCandidateId = (await json(secondActivation)).user.id;
 
     cookie = secretaryCookie;
-    const confirmation = await request(`/api/leadership-changes/${laterProposalBody.data.id}/confirm`, {
-      method: "POST",
-      write: true,
-      body: JSON.stringify({}),
-    });
-    assert.equal(confirmation.status, 200);
-    assert.equal((await json(confirmation)).data.status, "confirmed");
-
-    cookie = secretaryCookie;
-    const deniedRevocation = await request(`/api/leadership-changes/${laterProposalBody.data.id}/revoke`, {
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ reason: "Incorrect office assignment" }),
-    });
-    assert.equal(deniedRevocation.status, 403);
-
+    const declinedProposal = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId] }) });
+    assert.equal(declinedProposal.status, 201);
+    const declinedId = (await json(declinedProposal)).data.id;
     cookie = chairCookie;
-    const revocationResponse = await request(`/api/leadership-changes/${laterProposalBody.data.id}/revoke`, {
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ reason: "Incorrect office assignment" }),
-    });
-    assert.equal(revocationResponse.status, 200);
-    const revocationBody = await json(revocationResponse);
-    assert.equal(revocationBody.history.type, "leadership.role.revoked");
-    assert.equal(revocationBody.history.reason, "Incorrect office assignment");
-    assert.equal(revocationBody.history.by.role, "chairperson");
-    assert.equal(revocationBody.data.audit.at(-1).action, "revoked");
-    const dashboardAfterRevocation = await request("/api/dashboard");
-    assert.equal((await json(dashboardAfterRevocation)).members.find(member => member.id === treasurerId).role, "member");
+    assert.equal((await request(`/api/leadership-elections/${declinedId}/decline`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
+    cookie = secretaryCookie;
+    const electionProposal = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId] }) });
+    assert.equal(electionProposal.status, 201);
+    const electionId = (await json(electionProposal)).data.id;
+    cookie = chairCookie;
+    assert.equal((await request(`/api/leadership-elections/${electionId}/accept`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
 
-    const leadershipHistory = await request("/api/leadership-changes");
-    const savedRevocation = (await json(leadershipHistory)).data.find(change => change.id === laterProposalBody.data.id);
-    assert.equal(savedRevocation.audit.at(-1).reason, "Incorrect office assignment");
+    const castVote = async (voterCookie, candidateId) => {
+      cookie = voterCookie;
+      return request(`/api/leadership-elections/${electionId}/vote`, { method: "POST", write: true, body: JSON.stringify({ candidateId }) });
+    };
+    await castVote(chairCookie, treasurerId);
+    await castVote(secretaryCookie, secondCandidateId);
+    const treasurerLogin = await request("/api/login", { method: "POST", body: JSON.stringify({ phone: "0712345680", pin: "901234" }) });
+    const treasurerCookie = treasurerLogin.headers.getSetCookie?.()[0]?.split(";")[0] || treasurerLogin.headers.get("set-cookie")?.split(";")[0];
+    assert.equal(treasurerLogin.status, 200);
+    await castVote(treasurerCookie, treasurerId);
+    const secondLogin = await request("/api/login", { method: "POST", body: JSON.stringify({ phone: "0712345681", pin: "678901" }) });
+    const secondCookie = secondLogin.headers.getSetCookie?.()[0]?.split(";")[0] || secondLogin.headers.get("set-cookie")?.split(";")[0];
+    assert.equal(secondLogin.status, 200);
+    assert.equal((await castVote(secondCookie, secondCandidateId)).status, 200);
+    assert.equal((await castVote(secondCookie, treasurerId)).status, 409);
+
+    cookie = secondCookie;
+    const votingElection = (await json(await request("/api/dashboard"))).leadershipElections.find(item => item.id === electionId);
+    assert.equal(votingElection.votesCast, 4);
+    assert.equal(votingElection.result, null);
+    cookie = chairCookie;
+    const legacyLeadershipView = await json(await request("/api/leadership-changes"));
+    assert.ok(legacyLeadershipView.data.every(item => item.type !== "election"), "the legacy leadership endpoint must not reveal raw secret ballots");
+    cookie = secondCookie;
+    assert.equal(JSON.stringify(votingElection).includes("voterToken"), false);
+    cookie = chairCookie;
+    const closed = await request(`/api/leadership-elections/${electionId}/close`, { method: "POST", write: true, body: JSON.stringify({}) });
+    assert.equal(closed.status, 200);
+    assert.deepEqual((await json(closed)).data.result.tiedCandidateIds.sort(), [treasurerId, secondCandidateId].sort());
+    cookie = secondCookie;
+    assert.equal((await json(await request("/api/leadership-elections"))).data.find(item => item.id === electionId).result, null);
+    cookie = chairCookie;
+    assert.equal((await request(`/api/leadership-elections/${electionId}/verify`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
+    cookie = secondCookie;
+    const electionList = await json(await request("/api/leadership-elections"));
+    const runoff = electionList.data.find(item => item.runoff && item.parentElectionId === electionId);
+    assert.ok(runoff, "a verified tie should open a runoff");
+    assert.equal(runoff.status, "voting");
+    assert.deepEqual(runoff.candidates.map(item => item.id).sort(), [treasurerId, secondCandidateId].sort());
+    const privateMessages = await json(await request("/api/messages"));
+    assert.ok(privateMessages.data.every(message => !message.recipientId || message.recipientId === secondCandidateId));
   });
 
   test("exports transactions and expires the session after logout", async () => {

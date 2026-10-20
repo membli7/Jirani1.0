@@ -182,15 +182,10 @@ test("loan requests and decisions write audit entries, newest first", async () =
   assert.equal(entries[requestedIndex].by.id, member.id);
 });
 
-test("officer appointments write audit entries when proposed", async () => {
+test("direct officer assignment is limited to initial setup", async () => {
   const response = await writeRequest("/api/leadership-changes", chairCookie, { role: "secretary", incomingUserId: member.id, effectiveDate: "2026-10-12" });
-  assert.equal(response.status, 201);
-  const record = (await json(response)).data;
-  const entries = (await json(await readAuditLog(chairCookie))).data;
-  const entry = entries.find(item => item.entityId === record.id);
-  assert.ok(entry, "leadership change should be audited");
-  assert.equal(entry.role, "secretary");
-  assert.equal(entry.incomingUserId, member.id);
+  assert.equal(response.status, 409);
+  assert.match((await json(response)).message, /member election/i);
 });
 
 test("the audit log is append-only in the saved data", async () => {

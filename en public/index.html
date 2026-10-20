@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
-        <link rel="stylesheet" href="/chama.css?v=20261020.6">
+        <link rel="stylesheet" href="/chama.css?v=20261020.7">
     </head>
 <body>
  <header class="topbar">
@@ -98,6 +98,7 @@
         </button>
         <div class="nav-dropdown-menu">
           <a href="#leadership-panel" data-panel="leadership-panel">Officers</a>
+          <a href="#leadership-elections-panel" data-panel="leadership-elections-panel">Elections</a>
           <a href="#penalty-panel" data-panel="penalty-panel">Penalties</a>
           <a href="#audit-panel" data-panel="audit-panel">Audit log</a>
           <a href="#dividend-panel" data-panel="dividend-panel">Dividends</a>
@@ -605,6 +606,30 @@
         </form>
         <div id="leadership-list" class="schedule-body"></div>
     </section>
+    <section class="panel" id="leadership-elections-panel" aria-labelledby="leadership-elections-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="leadership-elections-title">Leadership elections</h2>
+                <p>The Secretary proposes active chama members. The Chairperson accepts and closes voting, then verifies the result. The highest vote count wins; a tie opens a runoff. Verified winners take office after 24 hours.</p>
+            </div>
+        </div>
+        <form id="election-proposal-form" class="form-body" hidden>
+            <h3>Propose an election</h3>
+            <label class="field" for="election-role">Office<select id="election-role" name="role" required>
+                <option value="chairperson">Chairperson</option>
+                <option value="secretary">Secretary</option>
+                <option value="treasurer">Treasurer</option>
+            </select></label>
+            <label class="field" for="election-candidates">Candidates (choose at least two active Members)
+                <select id="election-candidates" name="candidateIds" multiple size="6" required></select>
+            </label>
+            <button class="button-primary" type="submit">Send to Chairperson</button>
+        </form>
+        <h3>Election notices</h3>
+        <div id="election-notifications" class="election-notifications" aria-live="polite"></div>
+        <h3>Ballots and results</h3>
+        <div id="leadership-elections" class="leadership-elections" aria-live="polite"></div>
+    </section>
     <section class="panel" id="audit-panel" aria-labelledby="audit-title" hidden>
         <div class="panel-heading">
             <div>
@@ -1075,7 +1100,7 @@
  <script src="/write-requests.js?v=20261016.1" defer>
 
  </script>
- <script src="/chama.js?v=20261020.9" defer>
+ <script src="/chama.js?v=20261020.10" defer>
 
  </script>
  <!--==================================================================== DEMO FOOTER: replace demo@example.com with the real contact email before launch ===========================================-->

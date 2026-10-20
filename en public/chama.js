@@ -79,7 +79,7 @@ function meetingDateToday() {
 }
 
 function render() {
-  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges } = state;
+  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges, leadershipElections = [], notifications = [] } = state;
   if (!authenticated) {
     authenticated = true;
     lastActivity = Date.now();
@@ -108,7 +108,12 @@ function render() {
   $("#audit-panel").hidden = !permissions.viewAuditLog;
   $("#penalty-panel").hidden = !permissions.assessPenalties;
   $("#dividend-panel").hidden = !permissions.manageDividends;
-  $("#leadership-form").hidden = !permissions.proposeLeadership;
+  $("#leadership-form").hidden = !permissions.bootstrapLeadership;
+  $("#leadership-elections-panel").hidden = false;
+  $("#election-proposal-form").hidden = !permissions.proposeLeadershipElection;
+  $("#election-candidates").innerHTML = members
+    .filter(member => member.status === "active" && member.role === "member")
+    .map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
   $("#pin-change").hidden = !user.mustChangePin;
   if (user.mustChangePin) notice("Change your temporary PIN before making any records.", true);
 
@@ -157,6 +162,7 @@ function render() {
   }).join("") || '<div class="empty-state">No loans available.</div>';
   populateSelects(members, loans, guarantorMembers);
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
+  renderElections(leadershipElections, user, notifications);
   renderAttendance(user);
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
@@ -302,6 +308,34 @@ function renderLeadership(changes, members, user) {
       : `<span class="schedule-sub">Officer assignment proposed by ${esc(proposer)} · ${esc(change.status)}</span>`;
     return `<div class="schedule-item"><div><strong>${esc(revocation ? `${incoming} — role revoked` : `${roleName(change.role)}: ${incoming}`)}</strong>${details}</div>${canConfirm ? `<button class="mini-btn" data-confirm="${esc(change.id)}">Confirm</button>` : ""}</div>`;
   }).join("") || '<div class="empty-state">No officer assignments recorded.</div>';
+}
+function renderElections(elections, user, notifications) {
+  $("#election-notifications").innerHTML = notifications.slice().reverse().map(item =>
+    `<article class="election-notice"><strong>${esc(fmtDate(item.at))} · Election update</strong><p>${esc(item.text)}</p></article>`
+  ).join("") || '<p class="empty-state">No election notices yet.</p>';
+  $("#leadership-elections").innerHTML = elections.slice().reverse().map(election => {
+    const candidates = election.candidates.map(candidate => `<li>${esc(candidate.name)}${candidate.active ? "" : " · no longer eligible"}</li>`).join("");
+    const labels = {
+      proposed: "Awaiting Chairperson acceptance", voting: "Voting open", closed: "Closed · awaiting verification",
+      verified: "Verified · role change scheduled", "verified-tie": "Tie verified · runoff open",
+      "verified-no-winner": "Verified · no winner", completed: "Role updated", cancelled: "Election cancelled", declined: "Proposal declined",
+    };
+    const countSummary = election.result
+      ? `<div class="election-counts"><strong>${election.result.votesCast} vote${election.result.votesCast === 1 ? "" : "s"}</strong><ul>${election.candidates.map(candidate => `<li>${esc(candidate.name)}: ${election.result.counts[candidate.id] || 0}</li>`).join("")}</ul></div>`
+      : `<p>${election.votesCast} vote${election.votesCast === 1 ? "" : "s"} recorded · ${election.eligibleVoters} eligible members</p>`;
+    const voteForm = election.canVote
+      ? `<form class="election-ballot" data-election-ballot="${esc(election.id)}"><label class="field" for="election-choice-${esc(election.id)}">Choose one candidate<select id="election-choice-${esc(election.id)}" name="candidateId" required><option value="">Select a candidate</option>${election.candidates.filter(candidate => candidate.active).map(candidate => `<option value="${esc(candidate.id)}">${esc(candidate.name)}</option>`).join("")}</select></label><button class="button-primary" type="submit">Cast secret vote</button></form>`
+      : election.hasVoted ? '<p class="election-action-note">Your secret vote is recorded.</p>' : "";
+    const actions = [
+      election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="accept" data-election-id="${esc(election.id)}">Accept candidates and open voting</button>` : "",
+      election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="decline" data-election-id="${esc(election.id)}">Decline proposal</button>` : "",
+      election.status === "voting" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="close" data-election-id="${esc(election.id)}">Close voting</button>` : "",
+      election.status === "closed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="verify" data-election-id="${esc(election.id)}">Verify result</button>` : "",
+    ].filter(Boolean).join("");
+    const winner = election.winnerName ? `<p class="election-result">Winner: <strong>${esc(election.winnerName)}</strong>. ${election.activationAt ? `Portal access changes ${esc(fmtDate(election.activationAt))} at ${esc(fmtTime(election.activationAt))}.` : ""}</p>` : "";
+    const runoff = election.runoff ? '<p class="election-action-note">Runoff ballot for the tied candidates.</p>' : "";
+    return `<article class="election-card"><div class="election-card-heading"><div><h4>${esc(roleName(election.role))} election${election.runoff ? " · runoff" : ""}</h4><span class="schedule-sub">${election.acceptedAt ? `Voting opened ${esc(fmtDate(election.acceptedAt))} at ${esc(fmtTime(election.acceptedAt))}` : `Proposed ${esc(fmtDate(election.proposedAt))} by the Secretary`}</span></div><span class="status-pill ${election.status === "completed" ? "active" : ["verified-no-winner", "cancelled", "declined"].includes(election.status) ? "inactive" : "pending"}">${esc(labels[election.status] || election.status)}</span></div><ul class="election-candidates">${candidates}</ul>${countSummary}${winner}${runoff}${voteForm}${actions}</article>`;
+  }).join("") || '<p class="empty-state">No leadership elections are active.</p>';
 }
 function auditDescription(entry) {
   switch (entry.type) {
@@ -524,7 +558,7 @@ function clearAppData() {
   attendanceData = null;
   guarantorMembers = [];
   dividendDraft = null;
-  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
+  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
     const node = $(selector); if (node) node.textContent = "";
   }
   $("#attendance-editor").hidden = true;
@@ -533,7 +567,7 @@ function clearAppData() {
   $("#invite-result").hidden = true;
   $("#copy-invite-code").hidden = true;
   for (const selector of ["#payment-member", "#payment-loan", "#incoming-user"]) $(selector)?.replaceChildren();
-  for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
+  for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
 function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
@@ -739,6 +773,31 @@ $("#leadership-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const values = Object.fromEntries(new FormData(form)); setButton(form, true);
   try { await api("/api/leadership-changes", { method: "POST", body: values, write: true }); form.reset(); notice("Officer assignment proposed."); await refresh(); }
   catch (error) { notice(error.message, true); } finally { setButton(form, false); }
+});
+$("#election-proposal-form").addEventListener("submit", async event => {
+  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const formData = new FormData(form);
+  const values = { role: formData.get("role"), candidateIds: formData.getAll("candidateIds") };
+  if (values.candidateIds.length < 2) { notice("Choose at least two active Members as candidates.", true); return; }
+  setButton(form, true);
+  try { await api("/api/leadership-elections", { method: "POST", body: values, write: form }); form.reset(); notice("Election proposal sent to the Chairperson."); await refresh(); }
+  catch (error) { notice(error.message, true); } finally { setButton(form, false); }
+});
+$("#leadership-elections").addEventListener("submit", async event => {
+  const form = event.target.closest("form[data-election-ballot]"); if (!form) return;
+  event.preventDefault(); if (!form.reportValidity()) return; const electionId = form.dataset.electionBallot;
+  const candidateId = new FormData(form).get("candidateId"); const button = form.querySelector("button[type=submit]"); if (button) button.disabled = true;
+  try { await api("/api/leadership-elections/" + encodeURIComponent(electionId) + "/vote", { method: "POST", body: { candidateId }, write: form }); notice("Your secret vote has been recorded."); await refresh(); }
+  catch (error) { notice(error.message, true); if (button) button.disabled = false; }
+});
+$("#leadership-elections").addEventListener("click", async event => {
+  const button = event.target.closest("[data-election-action]"); if (!button) return;
+  const action = button.dataset.electionAction; const electionId = button.dataset.electionId;
+  const prompts = { accept: "Accept these candidates and open voting?", decline: "Decline this proposal? The Secretary can submit a new one.", close: "Close voting now? Members will no longer be able to vote.", verify: "Verify the displayed election result?" };
+  if (prompts[action] && !window.confirm(prompts[action])) return;
+  const path = "/api/leadership-elections/" + encodeURIComponent(electionId) + "/" + encodeURIComponent(action);
+  button.disabled = true;
+  try { const result = await api(path, { method: "POST", body: {}, write: true }); notice(result.message); await refresh(); }
+  catch (error) { notice(error.message, true); button.disabled = false; }
 });
 $("#loans").addEventListener("click", async event => {
   const button = event.target.closest("[data-loan]"); if (!button) return; const reason = $("[data-reason-for='" + CSS.escape(button.dataset.loan) + "']")?.value.trim() || ""; if (reason.length < 5) { notice("Enter a reason of at least 5 characters.", true); return; } button.disabled = true;
