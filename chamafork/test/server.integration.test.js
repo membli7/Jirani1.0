@@ -41,6 +41,8 @@ before(async () => {
       PORT: String(testPort),
       SESSION_SECRET: "integration-test-session-secret",
       CHAMA_DATA_FILE: path.join(tempDir, "data.json"),
+      CHAMA_PROFILE_ICON_DIR: path.join(tempDir, "profile-icons"),
+      CHAMA_PROFILE_DETAILS_FILE: path.join(tempDir, "profile-details.json"),
       AFRICASTALKING_USERNAME: "",
       AFRICASTALKING_API_KEY: "",
     },
@@ -92,7 +94,7 @@ describe("Jirani Chama server", () => {
   test("creates a chairperson session and serves the dashboard", async () => {
     const setup = await request("/api/setup", {
       method: "POST",
-      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", pin: "123456" }),
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456" }),
     });
     assert.equal(setup.status, 201);
     const setupBody = await json(setup);
@@ -111,6 +113,46 @@ describe("Jirani Chama server", () => {
     assert.equal(dashboardBody.user.name, "Test Chair");
     assert.equal(dashboardBody.summary.balance, 0);
     assert.equal(dashboardBody.permissions.manageMembers, true);
+  });
+
+  test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
+    const page = await request("/profile.html");
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /src="\/profile\.js"/);
+    const script = await request("/profile.js");
+    assert.equal(script.status, 200);
+    assert.match(await script.text(), /\/api\/profile\/photo\/\$\{size\}/);
+
+    const profile = await request("/api/profile");
+    assert.equal(profile.status, 200);
+    assert.deepEqual((await json(profile)).data, {
+      firstName: "Test", lastName: "Chair", nickname: "", phone: "+254712345678", email: "chair@example.test",
+    });
+
+    const save = await request("/api/profile", {
+      method: "PUT",
+      write: true,
+      body: JSON.stringify({ firstName: "New", lastName: "Chair", nickname: "N", phone: "0712345678", email: "new@example.test" }),
+    });
+    assert.equal(save.status, 200);
+    assert.equal((await json(save)).data.nickname, "N");
+
+    const png = Buffer.alloc(24);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
+    png.writeUInt32BE(13, 8);
+    png.write("IHDR", 12, "ascii");
+    png.writeUInt32BE(180, 16);
+    png.writeUInt32BE(180, 20);
+    const photo = await fetch(`${baseUrl}/api/profile/photo/180`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "image/png", "X-Requested-With": "chama", "Idempotency-Key": `photo-${Date.now()}-integration` },
+      body: png,
+    });
+    assert.equal(photo.status, 201);
+    const savedPhoto = await request("/api/profile/photo/180");
+    assert.equal(savedPhoto.status, 200);
+    assert.equal(savedPhoto.headers.get("content-type"), "image/png");
+    assert.deepEqual(Buffer.from(await savedPhoto.arrayBuffer()), png);
   });
 
   test("proposes and confirms a leadership change", async () => {

@@ -8,6 +8,8 @@ const { test } = require("node:test");
 const frontend = path.join(__dirname, "..", "..", "en public");
 const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
+const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
+const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);
@@ -45,4 +47,17 @@ test("loan form has two guarantor selects and repayments send reference and date
   assert.match(html, /name="referenceNumber"/);
   assert.match(html, /name="date" type="date"/);
   assert.match(script, /values\.paymentType === "Loan Repayment" \? "\/api\/loans\/repay"/);
+});
+
+test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
+  assert.match(profileHtml, /src="\/write-requests\.js" defer/);
+  assert.match(profileHtml, /src="\/profile\.js" defer/);
+  assert.match(profileScript, /fetch\("\/api\/profile"/);
+  assert.match(profileScript, /path: "\/api\/profile"/);
+  assert.match(profileScript, /\/api\/profile\/photo\/\$\{size\}/);
+  assert.match(profileScript, /"X-Requested-With": "chama"/);
+  assert.match(profileScript, /credentials: "same-origin"/);
+  assert.doesNotMatch(profileScript, /\.innerHTML\s*=/);
+  assert.match(script, /for \(const action of \["#edit-profile", "#view-profile"\]\)/);
+  assert.match(script, /window\.location\.assign\("\/profile\.html"\)/);
 });

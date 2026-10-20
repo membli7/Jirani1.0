@@ -581,3 +581,19 @@ $("#leadership-list").addEventListener("click", async event => {
 
 showLogin();
 checkBackendConnection({ selectInitialScreen: true });
+
+const profileMenuButton = $("#profile-icon");
+const profileMenu = $("#profile-menu");
+profileMenuButton.addEventListener("click", () => {
+  const expanded = profileMenuButton.getAttribute("aria-expanded") === "true";
+  profileMenuButton.setAttribute("aria-expanded", String(!expanded));
+  profileMenu.hidden = expanded;
+});
+document.addEventListener("click", event => {
+  if (event.target.closest(".profile-menu-wrap")) return;
+  profileMenu.hidden = true;
+  profileMenuButton.setAttribute("aria-expanded", "false");
+});
+for (const action of ["#edit-profile", "#view-profile"]) {
+  $(action).addEventListener("click", () => window.location.assign("/profile.html"));
+}

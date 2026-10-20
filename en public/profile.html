@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/api/profile/photo/32">
   <link rel="apple-touch-icon" sizes="180x180" href="/api/profile/photo/180">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/chama.css?v=20261016.4">
+  <link rel="stylesheet" href="/chama.css?v=20261020.1">
 </head>
 <body class="profile-page">
   <main class="profile-shell">
@@ -21,7 +21,7 @@
           <div class="profile-fields">
           <label class="field" for="profile-first-name">First name<input id="profile-first-name" name="firstName" maxlength="50" required></label>
           <label class="field" for="profile-last-name">Last name<input id="profile-last-name" name="lastName" maxlength="50" required></label>
-          <label class="field" for="profile-nickname">Nickname <span class="field-help">(optional and will be see in groupchat)</span><input id="profile-nickname" name="nickname" maxlength="50"></label>
+          <label class="field" for="profile-nickname">Nickname <span class="field-help">(optional; shown in group chat)</span><input id="profile-nickname" name="nickname" maxlength="50"></label>
           <label class="field" for="profile-phone">Phone number<input id="profile-phone" name="phone" type="tel" autocomplete="tel" required></label>
           <label class="field" for="profile-email">Email<input id="profile-email" name="email" type="email" autocomplete="email" required></label>
           </div>
@@ -36,10 +36,11 @@
         <span>Choose a profile photo</span>
         <input id="profile-photo" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon" required>
       </label>
-      <p class="field-help">PNG, JPEG, WebP, GIF, SVG, or icon image. </p>
+      <p class="field-help">Choose a PNG, JPEG, WebP, GIF, SVG, or icon image. It will be converted to PNG icons in your browser before upload.</p>
       <p id="profile-status" class="form-notice" role="status" aria-live="polite"></p>
     </section>
   </main>
+  <script src="/write-requests.js" defer></script>
   <script src="/profile.js" defer></script>
 </body>
 </html>
