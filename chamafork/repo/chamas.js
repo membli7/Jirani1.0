@@ -11,9 +11,9 @@ async function listDirectory(client) {
   return result.rows;
 }
 
-function row(chama, state, order) {
+function row(chama, state, order, tenantId) {
   return {
-    chama_id: recordId("chama", "", chama.id),
+    chama_id: tenantId || recordId("chama", "", chama.id),
     source_id: String(chama.id),
     name: String(chama.name || "Chama"),
     settings: toStoredData(state.settings || {}),
@@ -23,8 +23,8 @@ function row(chama, state, order) {
   };
 }
 
-async function save(client, chama, state, order) {
-  const value = row(chama, state, order);
+async function save(client, chama, state, order, tenantId) {
+  const value = row(chama, state, order, tenantId);
   await client.query(
     `INSERT INTO chamas (chama_id, source_id, name, settings, state_data, record_data, record_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
