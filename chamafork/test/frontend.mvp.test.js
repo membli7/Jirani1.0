@@ -86,6 +86,84 @@ test("registration signs in and opens the dashboard when setup was already compl
   assert.equal(registrationNotice.hidden, true);
 });
 
+test("root page restores the dashboard for an existing authenticated session", async () => {
+  const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "root page should define its session restoration flow");
+  assert.match(html, /src="\/chama\.js\?v=20261020\.4" defer/);
+
+  const calls = [];
+  const restoreSession = vm.runInNewContext(`(${source})`, {
+    api: async path => { calls.push(["api", path]); return { authenticated: true }; },
+    showLogin: () => calls.push(["showLogin"]),
+    refresh: async () => calls.push(["refresh"]),
+    checkBackendConnection: async options => calls.push(["checkBackendConnection", options]),
+  });
+  await restoreSession();
+
+  assert.deepEqual(calls, [["showLogin"], ["api", "/api/session"], ["refresh"]]);
+});
+
+test("root page keeps setup selection for a signed-out visitor", async () => {
+  const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "root page should define its session restoration flow");
+
+  const calls = [];
+  const restoreSession = vm.runInNewContext(`(${source})`, {
+    api: async path => { calls.push(["api", path]); return { authenticated: false }; },
+    showLogin: () => calls.push(["showLogin"]),
+    refresh: async () => calls.push(["refresh"]),
+    checkBackendConnection: async options => calls.push(["checkBackendConnection", options]),
+  });
+  await restoreSession();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    ["showLogin"],
+    ["api", "/api/session"],
+    ["checkBackendConnection", { selectInitialScreen: true }],
+  ]);
+});
+
+test("root app tolerates the absence of standalone authentication forms", async () => {
+  const normalizedScript = script.replace(/\r\n/g, "\n");
+  const backendStart = normalizedScript.indexOf("async function checkBackendConnection(");
+  const backendEnd = normalizedScript.indexOf("\nfunction setLoginNotice", backendStart);
+  const loginSource = script.split(/\r?\n/).find(line => line.startsWith("function showLogin()"));
+  const backendSource = backendStart >= 0 && backendEnd > backendStart ? normalizedScript.slice(backendStart, backendEnd) : null;
+  assert.ok(backendSource, "root page should define backend status handling");
+  assert.ok(loginSource, "root page should define its signed-out state");
+
+  const nodes = new Map([["#logout", {}], ["#app", {}], ["#login", {}]]);
+  const context = {
+    $: selector => nodes.get(selector) || null,
+    fetch: async url => url === "/api/health"
+      ? { ok: true }
+      : { ok: true, json: async () => ({ requiresSetup: false }) },
+    setConnectionStatus() {},
+    clearAppData() {},
+    stopPollingFallback() {},
+    clearTimeout() {},
+    clearInterval() {},
+    setLoginNotice() {},
+    eventStream: null,
+    streamRetryTimer: null,
+    activityTimer: null,
+    authenticated: false,
+  };
+  const checkBackendConnection = vm.runInNewContext(`(${backendSource})`, context);
+  const showLogin = vm.runInNewContext(`(${loginSource})`, context);
+  await checkBackendConnection({ selectInitialScreen: true });
+  showLogin();
+
+  assert.equal(nodes.get("#app").hidden, true);
+  assert.equal(nodes.get("#login").hidden, false);
+});
+
+test("root renderer tolerates summary cards absent from the current dashboard markup", () => {
+  for (const id of ["balance", "contributions", "outstanding"]) {
+    assert.doesNotMatch(script, new RegExp(`\\$\\("#${id}"\\)\\.textContent\\s*=`));
+  }
+});
+
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);
   assert.match(html, /<tbody id="audit-list"/);

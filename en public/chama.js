@@ -44,15 +44,19 @@ async function checkBackendConnection({ selectInitialScreen = false } = {}) {
     const setupResponse = await fetch("/api/setup/status", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
     if (selectInitialScreen && setupResponse.ok && !authenticated) {
       const setup = await setupResponse.json();
-      $("#setup-form").hidden = !setup.requiresSetup;
-      $("#login-form").hidden = !!setup.requiresSetup;
-      $("#activation-form").hidden = true;
+      const setupForm = $("#setup-form");
+      const loginForm = $("#login-form");
+      const activationForm = $("#activation-form");
+      if (setupForm) setupForm.hidden = !setup.requiresSetup;
+      if (loginForm) loginForm.hidden = !!setup.requiresSetup;
+      if (activationForm) activationForm.hidden = true;
     }
   } catch {
     setConnectionStatus("offline");
   }
 }
 function setLoginNotice(node, message) {
+  if (!node) return;
   node.textContent = message;
   node.hidden = !message;
 }
@@ -79,9 +83,12 @@ function render() {
   $("#logout").hidden = false;
   $("#role-label").textContent = `${roleName(user.role)} dashboard`;
   $("#greeting").textContent = `Welcome, ${user.name}`;
-  $("#balance").textContent = money(summary.balance);
-  $("#contributions").textContent = money(summary.contributions);
-  $("#outstanding").textContent = money(summary.outstanding);
+  const balance = $("#balance");
+  const contributions = $("#contributions");
+  const outstanding = $("#outstanding");
+  if (balance) balance.textContent = money(summary.balance);
+  if (contributions) contributions.textContent = money(summary.contributions);
+  if (outstanding) outstanding.textContent = money(summary.outstanding);
   [$("#balance"), $("#contributions"), $("#outstanding")].forEach(node => node?.classList.remove("skeleton"));
   $("#transaction-copy").textContent = user.role === "member" ? "Only your confirmed entries are shown." : "All confirmed group entries.";
   $("#members-panel").hidden = user.role === "member";
@@ -372,9 +379,9 @@ function clearAppData() {
   for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
-function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; $("#setup-form").hidden = true; $("#login-form").hidden = false; $("#activation-form").hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
+function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
 
-$("#setup-form").addEventListener("submit", async event => {
+$("#setup-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
   try {
     await api("/api/setup", { method: "POST", body: Object.fromEntries(new FormData(form)) });
@@ -384,18 +391,18 @@ $("#setup-form").addEventListener("submit", async event => {
   } finally { setButton(form, false); }
 });
 
-$("#login-form").addEventListener("submit", async event => {
+$("#login-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
   try { await api("/api/login", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#login-notice"), ""); await refresh(); }
   catch (error) { if (error instanceof TypeError) { setConnectionStatus("offline"); setLoginNotice($("#login-notice"), "Cannot reach the server. Check that it is running, then try again."); } else setLoginNotice($("#login-notice"), error.message); } finally { setButton(form, false); }
 });
-$("#activation-form").addEventListener("submit", async event => {
+$("#activation-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
   try { const result = await api("/api/invitations/activate", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#activation-notice"), ""); setLoginNotice($("#login-notice"), result.message); $("#activation-form").hidden = true; $("#login-form").hidden = false; }
   catch (error) { setLoginNotice($("#activation-notice"), error instanceof TypeError ? "Cannot reach the server. Check that it is running, then try again." : error.message); } finally { setButton(form, false); }
 });
-$("#show-activate").addEventListener("click", () => { $("#login-form").hidden = true; $("#activation-form").hidden = false; });
-$("#show-login").addEventListener("click", () => { $("#activation-form").hidden = true; $("#login-form").hidden = false; });
+$("#show-activate")?.addEventListener("click", () => { $("#login-form").hidden = true; $("#activation-form").hidden = false; });
+$("#show-login")?.addEventListener("click", () => { $("#activation-form").hidden = true; $("#login-form").hidden = false; });
 $("#logout").addEventListener("click", async () => { try { await api("/api/logout", { method: "POST" }); showLogin(); notice("Signed out."); } catch (error) { notice(error.message, true); } });
 $("#export-csv").addEventListener("click", () => { window.location.assign("/api/export.csv"); });
 $("#attendance-date").value = meetingDateToday();
@@ -455,7 +462,7 @@ window.addEventListener("online", () => { setConnectionStatus("reconnecting"); i
 window.addEventListener("offline", () => { if (eventStream) { eventStream.close(); eventStream = null; } setConnectionStatus("offline"); startPollingFallback(); });
 
 document.body.insertAdjacentHTML("beforeend", '<section class="login-overlay" id="pin-change" hidden><form id="pin-form" class="login-card"><h2>Change your PIN</h2><p>Choose a private 6–12 digit PIN before using the dashboard.</p><label class="field" for="current-pin">Current PIN<input id="current-pin" name="currentPin" type="password" inputmode="numeric" required></label><label class="field" for="new-pin">New PIN<input id="new-pin" name="newPin" type="password" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label><button class="button-primary">Save PIN</button></form></section>');
-$("#pin-form").addEventListener("submit", async event => {
+$("#pin-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
   try { await api("/api/pin/change", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); notice("PIN changed successfully."); await refresh(); }
   catch (error) { notice(error.message, true); } finally { setButton(form, false); }
@@ -583,8 +590,18 @@ $("#leadership-list").addEventListener("click", async event => {
   catch (error) { notice(error.message, true); button.disabled = false; }
 });
 
-showLogin();
-checkBackendConnection({ selectInitialScreen: true });
+async function restoreSession() {
+  showLogin();
+  try {
+    const session = await api("/api/session");
+    if (session.authenticated) {
+      await refresh();
+      return;
+    }
+  } catch {}
+  await checkBackendConnection({ selectInitialScreen: true });
+}
+restoreSession();
 
 const profileMenuButton = $("#profile-icon");
 const profileMenu = $("#profile-menu");
