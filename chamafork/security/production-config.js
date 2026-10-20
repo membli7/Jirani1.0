@@ -33,7 +33,9 @@ function validateProductionConfig(env = process.env) {
   if (canonicalOrigin && allowedOrigins.length && !allowedOrigins.includes(canonicalOrigin)) errors.push("APP_ALLOWED_ORIGINS must include APP_CANONICAL_ORIGIN.");
   if (!strongSecret(env.SESSION_SECRET)) errors.push("SESSION_SECRET must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
   if (env.DATA_BACKEND !== "postgres" || !env.DATABASE_URL) errors.push("Production requires DATA_BACKEND=postgres and DATABASE_URL.");
-  if (!env.REDIS_URL || env.SESSION_STORE !== "redis") errors.push("Production requires REDIS_URL and SESSION_STORE=redis for shared sessions and rate limits.");
+  let redisProtocol = null;
+  try { redisProtocol = new URL(env.REDIS_URL).protocol; } catch {}
+  if (redisProtocol !== "rediss:" || env.SESSION_STORE !== "redis") errors.push("Production requires a TLS-protected rediss:// REDIS_URL and SESSION_STORE=redis for shared sessions and rate limits.");
   if (env.TRUST_PROXY !== "1") errors.push("Production TLS termination requires TRUST_PROXY=1 behind the trusted public HTTPS proxy.");
   if (env.PGSSL !== "verify-full") errors.push("Production requires PGSSL=verify-full to validate the database TLS certificate.");
   if (!strongSecret(env.METRICS_BEARER_TOKEN)) errors.push("METRICS_BEARER_TOKEN must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");

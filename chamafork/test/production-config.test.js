@@ -31,6 +31,7 @@ test("production startup requires secure origins, strong secrets, PostgreSQL, Re
   })) {
     assert.throws(() => validateProductionConfig({ ...good, [key]: value }), /Unsafe production configuration/);
   }
+  assert.throws(() => validateProductionConfig({ ...good, REDIS_URL: "redis://redis.example.test" }), /Unsafe production configuration/);
 });
 
 test("origin parsing rejects paths and non-HTTPS origins", () => {
