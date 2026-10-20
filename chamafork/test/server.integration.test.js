@@ -147,6 +147,20 @@ describe("Jirani Chama server", () => {
     assert.equal(dashboardBody.permissions.manageMembers, true);
   });
 
+  test("preserves distinct concurrent writes instead of replacing a newer snapshot", async () => {
+    const responses = await Promise.all([
+      request("/api/messages", { method: "POST", write: true, body: JSON.stringify({ text: "Concurrent message A" }) }),
+      request("/api/messages", { method: "POST", write: true, body: JSON.stringify({ text: "Concurrent message B" }) }),
+    ]);
+    assert.deepEqual(responses.map(response => response.status), [201, 201]);
+
+    const messages = await request("/api/messages");
+    assert.equal(messages.status, 200);
+    const texts = (await json(messages)).data.map(message => message.text);
+    assert.ok(texts.includes("Concurrent message A"));
+    assert.ok(texts.includes("Concurrent message B"));
+  });
+
   test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
     const page = await request("/profile.html");
     assert.equal(page.status, 200);
