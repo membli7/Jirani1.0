@@ -23,7 +23,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false },
   ], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const port = 30000 + (process.pid % 20000) + servers.length;
-  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: production ? "production" : "test", PORT: String(port), SESSION_SECRET: "auth-test-secret", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: production ? "production" : "test", PORT: String(port), SESSION_SECRET: "auth-test-secret", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -102,9 +102,9 @@ test("login lockout expires after the 15-minute interval", async () => {
 
 test("production redirects HTTP to HTTPS and marks session cookies Secure", async () => {
   const server = await startAuthServer({ production: true });
-  const redirect = await fetch(`${server.baseUrl}/api/health`, { redirect: "manual" });
+  const redirect = await fetch(`${server.baseUrl}/api/health`, { redirect: "manual", headers: { Host: "attacker.example" } });
   assert.equal(redirect.status, 301);
-  assert.match(redirect.headers.get("location"), /^https:\/\//);
+  assert.equal(redirect.headers.get("location"), "https://chama.example.test/api/health");
   const response = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("set-cookie"), /; secure/i);

@@ -8,6 +8,7 @@ const express = require("express");
 const compression = require("compression");
 const session = require("express-session");
 const rateLimit = require("express-rate-limit");
+const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security/https-origin");
 const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
@@ -69,6 +70,7 @@ const pinRecoveryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, messag
 const app = express();
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8000);
+const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const DATA_BACKEND = process.env.DATA_BACKEND || "json";
 if (!["json", "postgres"].includes(DATA_BACKEND)) throw new Error("DATA_BACKEND must be json or postgres.");
 const postgresPool = DATA_BACKEND === "postgres" ? createPostgresPool() : null;
@@ -717,7 +719,11 @@ app.use((req, res, next) => {
     const hasVersion = typeof version === "string" && /^[A-Za-z0-9._-]{1,40}$/.test(version);
     res.setHeader("Cache-Control", hasVersion ? "public, max-age=31536000, immutable" : "no-store");
   }
-  if (process.env.NODE_ENV === "production" && !req.secure) return res.redirect(301, `https://${req.get("host")}${req.originalUrl}`);
+  if (process.env.NODE_ENV === "production" && !req.secure) {
+    const location = httpsRedirectLocation(APP_CANONICAL_ORIGIN, req.originalUrl);
+    if (!location) return res.status(400).send("HTTPS is required. Configure APP_CANONICAL_ORIGIN to enable redirects.");
+    return res.redirect(301, location);
+  }
   return next();
 });
 app.use(express.json({ limit: "32kb" }));
