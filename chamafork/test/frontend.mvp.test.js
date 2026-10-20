@@ -17,6 +17,9 @@ const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "u
 
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
+  assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true">J<\/span>/);
+  assert.doesNotMatch(memberLoginHtml, /[A-Za-z]:\\Users\\/);
+  assert.match(memberLoginHtml, /<\/select><\/label>\s*<\/header>/);
   assert.match(memberLoginHtml, /src="\/auth-pages\.js\?v=/);
   assert.match(authPagesScript, /postJson\("\/api\/login"/);
   assert.match(authPagesScript, /method:\s*"POST"/);
