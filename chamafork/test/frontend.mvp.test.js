@@ -40,10 +40,13 @@ test("penalty button calls the assessment endpoint", () => {
   assert.match(script, /api\("\/api\/penalties\/assess"/);
 });
 
-test("loan form has two guarantor selects and repayments send reference and date", () => {
-  assert.match(html, /id="loan-guarantor-1" name="guarantorIds"/);
-  assert.match(html, /id="loan-guarantor-2" name="guarantorIds"/);
-  assert.match(script, /values\.guarantorIds = \[\.\.\.form\.querySelectorAll\('select\[name="guarantorIds"\]'\)\]/);
+test("loan form sends two guarantors and repayments send reference and date", () => {
+  assert.match(html, /id="loan-amount" name="amount"/);
+  assert.match(html, /id="loan-months" name="months"/);
+  assert.match(html, /id="loan-guarantor-1" name="guarantorIds" required/);
+  assert.match(html, /id="loan-guarantor-2" name="guarantorIds" required/);
+  assert.match(script, /values\.guarantorIds = formData\.getAll\("guarantorIds"\)/);
+  assert.match(script, /api\("\/api\/loans\/guarantors"\)/);
   assert.match(html, /name="referenceNumber"/);
   assert.match(html, /name="date" type="date"/);
   assert.match(script, /values\.paymentType === "Loan Repayment" \? "\/api\/loans\/repay"/);

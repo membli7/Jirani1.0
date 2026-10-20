@@ -12,7 +12,6 @@ const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security
 const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
-const { getMpesaQueue } = require("./jobs/queue");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const {
   logger,
@@ -26,7 +25,7 @@ const {
   redisCacheHitRate,
   setOperationalMetricsProvider,
 } = require("./observability");
-const { createPostgresPool } = require("./db/postgres");
+const { acquireRuntimeLock, createPostgresPool } = require("./db/postgres");
 const postgresState = require("./repo/postgres-state");
 
 // ---------------------------------------------------------------------------
@@ -63,9 +62,9 @@ function recordSummaryCacheMiss() {
 }
 
 
-const setupLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many registrations. Please try again later." }, keyGenerator: (req) => req.ip });
-const activationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many activation attempts. Please try again later." }, keyGenerator: (req) => req.ip });
-const pinRecoveryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many PIN recovery attempts. Please try again later." }, keyGenerator: req => req.ip });
+const setupLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many registrations. Please try again later." } });
+const activationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many activation attempts. Please try again later." } });
+const pinRecoveryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many PIN recovery attempts. Please try again later." } });
 
 const app = express();
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
@@ -74,6 +73,7 @@ const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL
 const DATA_BACKEND = process.env.DATA_BACKEND || "json";
 if (!["json", "postgres"].includes(DATA_BACKEND)) throw new Error("DATA_BACKEND must be json or postgres.");
 const postgresPool = DATA_BACKEND === "postgres" ? createPostgresPool() : null;
+let postgresRuntimeLock;
 const DATA_FILE = process.env.CHAMA_DATA_FILE || path.join(__dirname, "data.json");
 const FRONTEND = path.join(__dirname, "..", "en public");
 const PROFILE_ICON_DIR = process.env.CHAMA_PROFILE_ICON_DIR || path.join(__dirname, "uploads", "profile-icons");
@@ -355,6 +355,7 @@ function persistProfileDetails(next) {
 async function persist(next = state) {
   if (DATA_BACKEND === "postgres") {
     if (!postgresPool) throw new Error("DATABASE_URL must be set for DATA_BACKEND=postgres.");
+    postgresRuntimeLock?.assertHeld();
     await postgresState.saveState(postgresPool, next);
     if (process.env.NODE_ENV === "test" && Object.hasOwn(process.env, "CHAMA_DATA_FILE")) {
       await writeQueue.writeFile(DATA_FILE, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
@@ -372,6 +373,7 @@ function initializeStorage() {
       if (!fs.existsSync(PROFILE_DETAILS_FILE)) await persistProfileDetails(profileDetails);
       if (DATA_BACKEND === "postgres") {
         if (!postgresPool) throw new Error("DATABASE_URL must be set for DATA_BACKEND=postgres.");
+        postgresRuntimeLock = await acquireRuntimeLock(postgresPool);
         if (process.env.NODE_ENV === "test" && Object.hasOwn(process.env, "CHAMA_DATA_FILE")) {
           state = loadState();
           await postgresState.saveState(postgresPool, state);
@@ -815,6 +817,7 @@ app.get("/manifest.webmanifest", requireAuth, requirePinChanged, (req, res) => {
 app.use(express.static(FRONTEND));
 app.get("/", (req, res) => res.sendFile(path.join(FRONTEND, "index.html")));
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/setup/status", (req, res) => res.json({ requiresSetup: state.users.length === 0 }));
 app.get("/api/session", (req, res) => {
   const user = req.session?.userId && state.users.find(item => item.id === req.session.userId && item.status === "active");
   res.json({ authenticated: !!user });
@@ -835,8 +838,9 @@ app.get("/api/bootstrap", async (req, res, next) => {
   }
   return res.json({ session: sessionData, health: { status: "ok" }, summary });
 });
-app.get("/api/setup", (req, res) => { res.json({ open: true }); });
+app.get("/api/setup", (req, res) => { res.json({ open: state.users.length === 0 && state.chamas.length === 0 }); });
 app.post("/api/setup", setupLimiter, async (req, res, next) => {
+  if (state.users.length > 0 || state.chamas.length > 0) return res.status(409).json({ message: "Initial setup has already been completed." });
   const chamaName = clean(req.body?.chamaName);
   const name = clean(req.body?.name);
   const phone = normalizePhone(req.body?.phone);
@@ -1166,6 +1170,13 @@ app.get("/api/loans", requireAuth, requirePinChanged, (req, res) => {
   return res.json({ data: page, limit, nextCursor });
 });
 
+app.get("/api/loans/guarantors", requireAuth, requirePinChanged, (req, res) => {
+  const data = scopeToChama(state.users, req.user.chamaId)
+    .filter(member => member.status === "active" && member.id !== req.user.id)
+    .map(member => ({ id: member.id, name: member.name }));
+  return res.json({ data });
+});
+
 app.get("/api/attendance/list", requireAuth, requirePinChanged, (req, res) => {
   const { limit, offset } = parsePagination(req.query);
   const all = scopeToChama(state.registers, req.user.chamaId)
@@ -1460,10 +1471,28 @@ app.post("/api/loan-repayment", requireAuth, requirePinChanged, requireRole("tre
 app.post("/api/loans", requireAuth, requirePinChanged, idempotent((req, res, next) => {
   const amount = Number(req.body?.amount); const months = Number(req.body?.months); const interestModel = clean(req.body?.interestModel) || "reducing";
   if (!Number.isSafeInteger(amount) || amount < 1 || ![1, 2, 3, 6].includes(months) || !["reducing", "flat"].includes(interestModel)) return res.status(400).json({ message: "Enter a whole amount, a repayment period of 1, 2, 3, or 6 months, and an interest model of reducing or flat." });
+  const guarantorIds = req.body?.guarantorIds;
+  if (!Array.isArray(guarantorIds) || guarantorIds.length !== 2 || guarantorIds.some(id => typeof id !== "string" || !id.trim()) || new Set(guarantorIds).size !== 2 || guarantorIds.includes(req.user.id)) return res.status(400).json({ message: "Choose exactly two different active members to guarantee this loan." });
+  const foreignGuarantor = state.users.find(member => guarantorIds.includes(member.id) && member.chamaId !== req.user.chamaId);
+  if (foreignGuarantor) return res.status(404).json({ message: "Guarantor not found." });
+  const guarantors = guarantorIds.map(id => scopeToChama(state.users, req.user.chamaId).find(member => member.id === id && member.status === "active"));
+  if (guarantors.some(member => !member)) return res.status(400).json({ message: "Choose exactly two different active members to guarantee this loan." });
   const shareCapital = req.user.shareCapital || 0; const limit = LOAN_LIMIT_MULTIPLE * shareCapital;
   if (amount > limit) return res.status(400).json({ message: `The most you can borrow is KES ${limit}, three times your share capital of KES ${shareCapital}.` });
-  const updated = structuredClone(state); const loan = { id: newId(), memberId: req.user.id, memberName: req.user.name, amount, months, interestModel, outstanding: 0, status: "Requested", createdAt: now(), approvals: [], approvalHistory: [], guarantors: [], chamaId: req.user.chamaId }; updated.loans.push(loan);
-  updated.auditLog.push(auditEntry("loan.requested", loan.id, req.user, { amount, months, interestModel }));
+  const activeLoans = scopeToChama(state.loans, req.user.chamaId).filter(loanIsPending).concat(scopeToChama(state.loans, req.user.chamaId).filter(loan => loan.status === "approved"));
+  const capacities = guarantors.map(member => {
+    const held = activeLoans.flatMap(loan => loan.guarantors || []).filter(item => item.memberId === member.id).reduce((sum, item) => sum + (Number.isSafeInteger(item.held) && item.held > 0 ? item.held : 0), 0);
+    return { member, available: Math.max(0, (Number.isSafeInteger(member.shareCapital) ? member.shareCapital : 0) - held) };
+  });
+  if (capacities[0].available + capacities[1].available < amount) return res.status(409).json({ message: "The guarantors' combined unpledged share capital does not cover this loan amount." });
+  let remainingToPledge = amount;
+  const loanGuarantors = capacities.map(({ member, available }) => {
+    const pledged = Math.min(available, remainingToPledge);
+    remainingToPledge -= pledged;
+    return { memberId: member.id, pledged, held: pledged };
+  });
+  const updated = structuredClone(state); const loan = { id: newId(), memberId: req.user.id, memberName: req.user.name, amount, months, interestModel, outstanding: 0, status: "Requested", createdAt: now(), approvals: [], approvalHistory: [], guarantors: loanGuarantors, chamaId: req.user.chamaId }; updated.loans.push(loan);
+  updated.auditLog.push(auditEntry("loan.requested", loan.id, req.user, { amount, months, interestModel, guarantors: loanGuarantors.map(({ memberId, pledged }) => ({ memberId, pledged })) }));
   return commit(req, res, next, updated, 201, { message: "Loan request submitted. Your request is waiting for approval.", data: loan }, undefined, () => { publishLoanUpdate(loan, req.user.chamaId); publishFinancialUpdate(req.user.chamaId); });
 }));
 app.post("/api/loans/:id/decisions", requireAuth, requirePinChanged, requireRole("chairperson", "secretary", "treasurer", "member"), idempotent((req, res, next) => {
@@ -1596,12 +1625,10 @@ app.post("/api/mpesa/callback", express.json({ limit: "64kb" }), async (req, res
 //                     login.
 // ---------------------------------------------------------------------------
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const { ipKeyGenerator } = require("express-rate-limit");
 const OTP_RATE_LIMIT = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { message: "Too many OTP requests. Please try again later." },
-  keyGenerator: ipKeyGenerator,
 });
 
 app.post("/api/otp/request", OTP_RATE_LIMIT, (req, res, next) => {
@@ -1713,6 +1740,10 @@ async function start() {
 }
 
 async function closeRuntimeDependencies() {
+  if (postgresRuntimeLock) {
+    await postgresRuntimeLock.release().catch(error => logger.warn("PostgreSQL runtime lock release failed", { err: error.message }));
+    postgresRuntimeLock = null;
+  }
   const tasks = [
     sessionBackend.close(),
     closeRedisClient(redisPub),

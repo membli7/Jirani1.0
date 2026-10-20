@@ -23,7 +23,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false },
   ], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const port = 30000 + (process.pid % 20000) + servers.length;
-  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: production ? "production" : "test", PORT: String(port), SESSION_SECRET: "auth-test-secret", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: production ? "production" : "test", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -45,17 +45,17 @@ after(async () => { for (const server of servers) await server.stop(); });
 
 test("signup rejects a four-digit PIN", async () => {
   const server = await startAuthServer({ empty: true });
-  const signup = pin => fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ name: "Test Chair", phone: "0711000001", pin }) });
+  const signup = pin => fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin }) });
   assert.equal((await signup("1234")).status, 400);
   assert.equal((await signup("123456")).status, 201);
 });
 
 test("invitation activation rejects a four-digit PIN", async () => {
   const server = await startAuthServer({ empty: true });
-  const setup = await fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ name: "Test Chair", phone: "0711000001", pin: "123456" }) });
+  const setup = await fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456" }) });
   assert.equal(setup.status, 201);
   const cookie = setup.headers.getSetCookie()[0].split(";")[0];
-  const invite = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": "auth-invite-test" }, body: JSON.stringify({ name: "Test Member", phone: "0711000002", role: "member" }) });
+  const invite = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": "auth-invite-test" }, body: JSON.stringify({ name: "Test Member", phone: "0711000002", email: "member@example.test", role: "member" }) });
   assert.equal(invite.status, 201);
   const { activationCode } = await json(invite);
   const activate = pin => fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone: "0711000002", code: activationCode, pin }) });

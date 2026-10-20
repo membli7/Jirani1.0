@@ -7,6 +7,7 @@ const t = key => window.jiraniI18n?.t(key) || key;
 const writeRequester = window.chamaWriteRequests.createWriteRequester();
 let state;
 let attendanceData;
+let guarantorMembers = [];
 let selectedAttendanceDate;
 let eventStream;
 let streamRetryTimer;
@@ -137,7 +138,7 @@ function render() {
     const statusClass = loan.status === "approved" ? "success" : loan.status === "rejected" ? "inactive" : "pending";
     return `<article class="loan-card"><div class="loan-card-heading"><div><h3>${esc(loan.memberName)} · ${money(loan.amount)}</h3><span class="schedule-sub">${loan.months} month${loan.months === 1 ? "" : "s"} · Requested ${esc(fmtDate(loan.createdAt))}</span></div><span class="status-pill ${statusClass}">${esc(loan.status)}</span></div><p class="loan-progress">${esc(loan.progressMessage)}</p><ol class="loan-approval-trail" aria-label="Approval trail for ${esc(loan.memberName)}">${steps}</ol>${action}</article>`;
   }).join("") || '<div class="empty-state">No loans available.</div>';
-  populateSelects(members, loans);
+  populateSelects(members, loans, guarantorMembers);
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
   renderAttendance(user);
   $("#app").hidden = false; $("#login").hidden = true;
@@ -207,13 +208,14 @@ function updateAttendanceCount() {
   $("#attendance-count").textContent = `${present} present · ${choices.length - present} absent · ${choices.length} members`;
   choices.forEach(input => { input.closest(".attendance-row").querySelector("[data-attendance-status]").textContent = input.checked ? "Present" : "Absent"; });
 }
-function populateSelects(members, loans) {
+function populateSelects(members, loans, guarantors = []) {
   $("#payment-member").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
   $("#incoming-user").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)} (${esc(roleName(member.role))})</option>`).join("");
-  const guarantorOptions = members.filter(member => member.status === "active" && member.id !== state?.user?.id).map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
-  for (const id of ["#loan-guarantor-1", "#loan-guarantor-2"]) $(id).innerHTML = guarantorOptions;
   const selected = $("#payment-member").value;
   $("#payment-loan").innerHTML = `<option value="">Select a loan</option>${loans.filter(loan => loan.status === "approved" && loan.memberId === selected).map(loan => `<option value="${esc(loan.id)}">${esc(loan.memberName)} — ${money(loan.outstanding)}</option>`).join("")}`;
+  const options = `<option value="">Select a guarantor</option>${guarantors.map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("")}`;
+  $("#loan-guarantor-1").innerHTML = options;
+  $("#loan-guarantor-2").innerHTML = options;
 }
 function renderLeadership(changes, members, user) {
   $("#leadership-list").innerHTML = changes.map(change => {
@@ -293,6 +295,7 @@ async function refresh() {
   try {
     state = await api("/api/dashboard");
     attendanceData = await api("/api/attendance");
+    guarantorMembers = (await api("/api/loans/guarantors")).data || [];
     if (!selectedAttendanceDate) selectedAttendanceDate = meetingDateToday();
     $("#retry").hidden = true;
     render();
@@ -355,6 +358,7 @@ function connectEventStream() {
 function clearAppData() {
   state = null;
   attendanceData = null;
+  guarantorMembers = [];
   dividendDraft = null;
   for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
     const node = $(selector); if (node) node.textContent = "";
@@ -489,7 +493,7 @@ $("#payment-form").addEventListener("submit", async event => {
 });
 $("#loan-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
-  try { const values = Object.fromEntries(new FormData(form)); values.amount = Number(values.amount); values.months = Number(values.months); values.guarantorIds = [...form.querySelectorAll('select[name="guarantorIds"]')].map(select => select.value); await api("/api/loans", { method: "POST", body: values, write: true }); form.reset(); notice("Loan request submitted."); await refresh(); }
+  try { const formData = new FormData(form); const values = Object.fromEntries(formData); values.amount = Number(values.amount); values.months = Number(values.months); values.guarantorIds = formData.getAll("guarantorIds"); await api("/api/loans", { method: "POST", body: values, write: true }); form.reset(); notice("Loan request submitted."); await refresh(); }
   catch (error) { notice(error.message, true); } finally { setButton(form, false); }
 });
 $("#invite-form").addEventListener("submit", async event => {

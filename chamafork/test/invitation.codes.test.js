@@ -17,7 +17,7 @@ function user(id, name, phone, role) {
   return { id, name, phone, role, status: "active", pinHash: pinHash("654321"), mustChangePin: false, createdAt: new Date().toISOString() };
 }
 async function startProcess(server) {
-  server.child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", PORT: String(server.port), SESSION_SECRET: "invitation-test-secret", CHAMA_DATA_FILE: server.dataFile, CHAMA_SCHEDULER_MS: "60000", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  server.child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", DATA_BACKEND: "json", PORT: String(server.port), SESSION_SECRET: "invitation-test-secret", CHAMA_DATA_FILE: server.dataFile, CHAMA_SCHEDULER_MS: "60000", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   server.child.stdout.on("data", chunk => { output += chunk; });
   server.child.stderr.on("data", chunk => { output += chunk; });
@@ -53,7 +53,8 @@ async function login(server, phone) {
   return response.headers.getSetCookie()[0].split(";")[0];
 }
 async function createInvitation(server, cookie, phone, role = "member") {
-  const response = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ name: "Test Invitee", phone, role }) });
+  const email = `invitee-${String(phone).replace(/\D/g, "")}@example.test`;
+  const response = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ name: "Test Invitee", phone, email, role }) });
   return { response, body: await response.json() };
 }
 function postAction(server, cookie, route, body) {

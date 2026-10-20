@@ -91,7 +91,7 @@ before(async () => {
   const port = await freePort();
   serverProcess = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, NODE_ENV: "test", PORT: String(port), SESSION_SECRET: "assess-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
+    env: { ...process.env, NODE_ENV: "test", DATA_BACKEND: "json", PORT: String(port), SESSION_SECRET: "assess-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
   });
   let output = "";
   serverProcess.stdout.on("data", chunk => { output += chunk; });

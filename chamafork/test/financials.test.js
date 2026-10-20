@@ -82,6 +82,7 @@ before(async () => {
     env: {
       ...process.env,
       NODE_ENV: "test",
+      DATA_BACKEND: "json",
       PORT: String(port),
       SESSION_SECRET: "financials-test-session-secret",
       CHAMA_DATA_FILE: dataFile,

@@ -38,6 +38,7 @@ before(async () => {
     cwd: path.join(__dirname, ".."),
     env: {
       ...process.env,
+      DATA_BACKEND: "json",
       PORT: String(testPort),
       SESSION_SECRET: "integration-test-session-secret",
       CHAMA_DATA_FILE: path.join(tempDir, "data.json"),
@@ -97,6 +98,11 @@ describe("Jirani Chama server", () => {
       body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456" }),
     });
     assert.equal(setup.status, 201);
+    const duplicateSetup = await request("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({ chamaName: "Another Chama", name: "Second Chair", phone: "0712345688", email: "second@example.test", pin: "654321" }),
+    });
+    assert.equal(duplicateSetup.status, 409);
     const setupBody = await json(setup);
     assert.equal(setupBody.user.role, "chairperson");
     assert.match(setupBody.user.phone, /^\+254/);
@@ -160,7 +166,7 @@ describe("Jirani Chama server", () => {
     const invitation = await request("/api/invitations", {
       method: "POST",
       write: true,
-      body: JSON.stringify({ name: "Test Secretary", phone: "0712345679", role: "secretary" }),
+      body: JSON.stringify({ name: "Test Secretary", phone: "0712345679", email: "secretary@example.test", role: "member" }),
     });
     assert.equal(invitation.status, 201);
     const invitationBody = await json(invitation);
@@ -213,7 +219,7 @@ describe("Jirani Chama server", () => {
     const treasurerInvitation = await request("/api/invitations", {
       method: "POST",
       write: true,
-      body: JSON.stringify({ name: "Test Treasurer", phone: "0712345680", role: "treasurer" }),
+      body: JSON.stringify({ name: "Test Treasurer", phone: "0712345680", email: "treasurer@example.test", role: "member" }),
     });
     assert.equal(treasurerInvitation.status, 201);
     const treasurerInvitationBody = await json(treasurerInvitation);
@@ -277,7 +283,7 @@ describe("Jirani Chama server", () => {
     assert.match(csv.headers.get("content-disposition"), /jirani-register\.csv/);
     assert.match(await csv.text(), /"Date","Member","Amount \(KES\)","Method","Type","Reference"/);
 
-    assert.equal((await request("/api/messages", { method: "POST", body: JSON.stringify({ type: "meeting", message: "Test" }) })).status, 404);
+    assert.equal((await request("/api/messages", { method: "POST", body: JSON.stringify({ type: "meeting", message: "Test" }) })).status, 400);
     assert.equal((await request("/api/payments/mpesa/callback", { method: "POST", body: JSON.stringify({}) })).status, 404);
 
     const logout = await request("/api/logout", { method: "POST", body: JSON.stringify({}) });

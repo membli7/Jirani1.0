@@ -77,6 +77,14 @@ function requestLoan(cookie, body) {
   return post("/api/loans", cookie, body);
 }
 
+test("guarantor choices expose only active same-group member names", async () => {
+  const response = await fetch(`${baseUrl}/api/loans/guarantors`, { headers: { Cookie: cookies.borrower, "X-Requested-With": "chama" } });
+  assert.equal(response.status, 200);
+  const ids = (await response.json()).data.map(member => member.id);
+  assert.ok(ids.includes("g1"));
+  assert.ok(!ids.includes("borrower"));
+});
+
 function decide(loanId, cookie, decision) {
   return post(`/api/loans/${loanId}/decisions`, cookie, { decision, reason: "Reviewed against the savings and guarantors" });
 }
@@ -121,7 +129,7 @@ before(async () => {
   const port = await freePort();
   serverProcess = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, NODE_ENV: "test", PORT: String(port), SESSION_SECRET: "loans-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
+    env: { ...process.env, NODE_ENV: "test", DATA_BACKEND: "json", PORT: String(port), SESSION_SECRET: "loans-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
   });
   let output = "";
   serverProcess.stdout.on("data", chunk => { output += chunk; });
@@ -150,6 +158,7 @@ test("reducing balance: KES 1,000 over 2 months at 5% a month", async () => {
   assert.equal(response.status, 201);
   const loan = await approveLoan((await response.json()).data.id);
   assert.equal(loan.status, "approved");
+  assert.deepEqual(loan.guarantors, [{ memberId: "g1", pledged: 1000, held: 1000 }, { memberId: "g2", pledged: 0, held: 0 }]);
   // Installment = 1000 × 0.05 / (1 − 1.05⁻²) = 537.80, rounded to 538.
   assert.deepEqual(loan.schedule.map(row => row.installment), [538, 538]);
   // Month 1 interest is 5% of 1,000 = 50, so principal is 488 and 512 remains.

@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { after, before, test } = require("node:test");
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-security-batch-a-"));
 const dataFile = path.join(tempDir, "data.json");
@@ -44,7 +45,7 @@ async function login(phone) {
   return (response.headers.getSetCookie?.()[0] || response.headers.get("set-cookie")).split(";")[0];
 }
 
-beforeAll(async () => {
+before(async () => {
   fs.writeFileSync(dataFile, JSON.stringify({
     version: 2,
     chamas: [{ id: "chama-a", name: "Chama A" }, { id: "chama-b", name: "Chama B" }],
@@ -67,7 +68,7 @@ beforeAll(async () => {
   const port = await freePort();
   serverProcess = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, NODE_ENV: "test", PORT: String(port), SESSION_SECRET: "security-batch-a-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
+    env: { ...process.env, NODE_ENV: "test", DATA_BACKEND: "json", PORT: String(port), SESSION_SECRET: "security-batch-a-test-session-secret", CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" },
   });
   let output = "";
   serverProcess.stdout.on("data", chunk => { output += chunk; });
@@ -84,7 +85,7 @@ beforeAll(async () => {
   borrowerCookie = await login("+254711100002");
 });
 
-afterAll(async () => {
+after(async () => {
   if (serverProcess && serverProcess.exitCode === null) {
     serverProcess.kill("SIGTERM");
     await new Promise(resolve => serverProcess.once("exit", resolve));

@@ -94,6 +94,7 @@ before(async () => {
     env: {
       ...process.env,
       NODE_ENV: "test",
+      DATA_BACKEND: "json",
       PORT: String(port),
       SESSION_SECRET: "idempotency-test-session-secret",
       CHAMA_DATA_FILE: dataFile,
@@ -134,7 +135,7 @@ after(async () => {
 
 test("invitation retries return the saved invitation and activation code without duplicating it", async () => {
   const key = crypto.randomUUID();
-  const body = { name: "Invite Test", phone: "0711000004", role: "member" };
+  const body = { name: "Invite Test", phone: "0711000004", email: "invite-test@example.test", role: "member" };
   const first = await writeRequest("/api/invitations", chairCookie, key, body);
   assert.equal(first.status, 201);
   const firstBody = await json(first);
@@ -159,7 +160,7 @@ test("invitation retries return the saved invitation and activation code without
 
 test("concurrent invitation retries with the same key create one invitation", async () => {
   const key = crypto.randomUUID();
-  const body = { name: "Concurrent Invite", phone: "0711000005", role: "member" };
+  const body = { name: "Concurrent Invite", phone: "0711000005", email: "concurrent-invite@example.test", role: "member" };
   const responses = await Promise.all(Array.from({ length: 3 }, () => writeRequest("/api/invitations", chairCookie, key, body)));
   const responseBodies = await Promise.all(responses.map(json));
   assert.ok(responses.every(response => response.status === 201));

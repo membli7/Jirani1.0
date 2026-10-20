@@ -60,7 +60,7 @@ async function createAccount(chairCookie, name, phone, pin) {
     cookie: chairCookie,
     method: "POST",
     write: true,
-    body: JSON.stringify({ name, phone, role: "member" })
+    body: JSON.stringify({ name, phone, email: `member-${phone.replace(/\D/g, "")}@example.test`, role: "member" })
   });
   assert.equal(invitationResponse.status, 201);
   const invitation = await body(invitationResponse);
@@ -111,6 +111,7 @@ before(async () => {
     cwd: path.join(__dirname, ".."),
     env: {
       ...process.env,
+      DATA_BACKEND: "json",
       PORT: String(testPort),
       SESSION_SECRET: "attendance-integration-test-session-secret",
       CHAMA_DATA_FILE: dataFile(),
@@ -153,7 +154,7 @@ describe("attendance registers", () => {
   test("audits attendance edits and verifies three-party loan approval workflows", async () => {
     const setup = await request("/api/setup", {
       method: "POST",
-      body: JSON.stringify({ name: "Test Chair", phone: "0700000001", pin: "123456" })
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0700000001", email: "chair@example.test", pin: "123456" })
     });
     assert.equal(setup.status, 201);
     const chairCookie = sessionCookie(setup);
