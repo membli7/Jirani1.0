@@ -80,7 +80,7 @@ app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8000);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));
-const DATA_BACKEND = process.env.DATA_BACKEND || "json";
+const DATA_BACKEND = process.env.DATA_BACKEND || "postgres";
 if (!["json", "postgres"].includes(DATA_BACKEND)) throw new Error("DATA_BACKEND must be json or postgres.");
 const postgresPool = DATA_BACKEND === "postgres" ? createPostgresPool() : null;
 let postgresRuntimeLock;

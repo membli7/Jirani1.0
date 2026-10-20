@@ -41,7 +41,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
   assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
   assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.1" defer/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.2" defer/);
   assert.match(registerScript, /fetch\("\/api\/setup"/);
   assert.match(registerScript, /credentials: "same-origin"/);
   assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
@@ -49,7 +49,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerScript, /formData\.lateContributionPenalty = Number\(formData\.lateContributionPenalty\)/);
   assert.match(registerScript, /formData\.loanMonthlyRatePercent = Number\(formData\.loanMonthlyRatePercent\)/);
   assert.match(registerScript, /X-Requested-With": "chama"/);
-  assert.match(registerScript, /register-success/);
+  assert.match(registerScript, /window\.location\.assign\("\/"\)/);
   assert.match(registerScript, /registrationNotice\.textContent = error instanceof TypeError/);
 });
 

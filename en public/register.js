@@ -28,9 +28,7 @@ registrationForm.addEventListener("submit", async event => {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.message || "Could not register the chama. Please try again.");
 
-    registrationForm.hidden = true;
-    document.querySelector("#register-success").hidden = false;
-    document.querySelector("#register-success a").focus();
+    window.location.assign("/");
   } catch (error) {
     registrationNotice.textContent = error instanceof TypeError
       ? "Cannot reach the server. Check that it is running, then try again."

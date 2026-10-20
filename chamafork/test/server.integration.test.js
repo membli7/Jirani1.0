@@ -9,6 +9,7 @@ const { promisify } = require("node:util");
 const { after, before, describe, test } = require("node:test");
 
 const execFileAsync = promisify(execFile);
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
 let server;
 let baseUrl;
 let tempDir;
@@ -82,6 +83,10 @@ after(async () => {
 });
 
 describe("Jirani Chama server", () => {
+  test("uses PostgreSQL by default when no storage backend is selected", () => {
+    assert.match(serverSource, /const DATA_BACKEND = process\.env\.DATA_BACKEND \|\| "postgres";/);
+  });
+
   test("reports health and requires first-time setup", async () => {
     const health = await request("/api/health");
     assert.equal(health.status, 200);
