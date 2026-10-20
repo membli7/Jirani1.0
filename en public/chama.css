@@ -2142,3 +2142,10 @@ body:has(#app:not([hidden])) {
   .election-card-heading, .election-ballot { align-items: stretch; flex-direction: column; }
   .election-card-heading .status-pill { align-self: flex-start; }
 }
+
+
+
+
+
+
+
