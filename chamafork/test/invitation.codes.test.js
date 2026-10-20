@@ -98,19 +98,19 @@ test("invitation codes are random six-digit values, hashed at rest, and single-u
   assert.equal((await reused.json()).message, "Code already used");
 });
 
-test("five wrong guesses exhaust attempts and a sixth guess does not decrement again", async () => {
+test("wrong activation codes cannot decrement an invitation counter using its phone", async () => {
   const server = await startServer();
   const cookie = await login(server, "+254711000001");
   await createInvitation(server, cookie, "0712000004");
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     const response = await activate(server, "0712000004", "000000");
     assert.equal(response.status, 400);
-    if (attempt === 5) assert.equal((await response.json()).message, "Too many attempts. Request a new code.");
+    assert.equal((await response.json()).message, "Incorrect activation code.");
   }
-  assert.equal(persisted(server).invitations[0].attemptsRemaining, 0);
+  assert.equal(persisted(server).invitations[0].attemptsRemaining, 5);
   const sixth = await activate(server, "0712000004", "000000");
-  assert.equal((await sixth.json()).message, "Too many attempts. Request a new code.");
-  assert.equal(persisted(server).invitations[0].attemptsRemaining, 0);
+  assert.equal((await sixth.json()).message, "Incorrect activation code.");
+  assert.equal(persisted(server).invitations[0].attemptsRemaining, 5);
 });
 
 test("correct code works after three wrong guesses", async () => {
@@ -118,16 +118,16 @@ test("correct code works after three wrong guesses", async () => {
   const cookie = await login(server, "+254711000001");
   const { body } = await createInvitation(server, cookie, "0712000005");
   for (let attempt = 0; attempt < 3; attempt += 1) assert.equal((await activate(server, "0712000005", "000000")).status, 400);
-  assert.equal(persisted(server).invitations[0].attemptsRemaining, 2);
+  assert.equal(persisted(server).invitations[0].attemptsRemaining, 5);
   assert.equal((await activate(server, "0712000005", body.activationCode)).status, 201);
 });
 
-test("correct code still activates after the wrong-guess counter reaches zero", async () => {
+test("a valid activation code remains usable after invalid-code attempts", async () => {
   const server = await startServer();
   const cookie = await login(server, "+254711000001");
   const { body } = await createInvitation(server, cookie, "0712000006");
   for (let attempt = 0; attempt < 5; attempt += 1) await activate(server, "0712000006", "000000");
-  assert.equal(persisted(server).invitations[0].attemptsRemaining, 0);
+  assert.equal(persisted(server).invitations[0].attemptsRemaining, 5);
   assert.equal((await activate(server, "0712000006", body.activationCode)).status, 201);
 });
 

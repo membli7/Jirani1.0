@@ -285,6 +285,10 @@ describe("Jirani Chama server", () => {
 
     assert.equal((await request("/api/messages", { method: "POST", body: JSON.stringify({ type: "meeting", message: "Test" }) })).status, 400);
     assert.equal((await request("/api/payments/mpesa/callback", { method: "POST", body: JSON.stringify({}) })).status, 404);
+    const beforeCallback = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8")).pendingMpesas.length;
+    const callback = await request("/api/mpesa/callback", { method: "POST", body: JSON.stringify({ Body: { stkCallback: { CheckoutRequestID: "unmatched", ResultCode: 0, CallbackMetadata: { Item: [{ Name: "Amount", Value: 900 }] } } } }) });
+    assert.equal(callback.status, 503);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8")).pendingMpesas.length, beforeCallback);
 
     const logout = await request("/api/logout", { method: "POST", body: JSON.stringify({}) });
     assert.equal(logout.status, 200);

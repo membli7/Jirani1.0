@@ -23,7 +23,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false },
   ], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const port = 30000 + (process.pid % 20000) + servers.length;
-  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: production ? "production" : "test", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", FORCE_HTTPS_REDIRECT: production ? "1" : "0", FORCE_SECURE_COOKIE: production ? "1" : "0", FORCE_METRICS_AUTH: production ? "1" : "0", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", METRICS_BEARER_TOKEN: "test-metrics-bearer-token-long-enough-123456", APP_ALLOWED_ORIGINS: production ? "https://chama.example.test" : "", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -70,6 +70,11 @@ test("legacy four-digit PIN login requires a six-digit change before dashboard a
   const cookie = response.headers.getSetCookie()[0].split(";")[0];
   const dashboardUrl = `${server.baseUrl}/api/dashboard`;
   assert.equal((await fetch(dashboardUrl, { headers: { Cookie: cookie } })).status, 403);
+  for (const route of ["/api/export.csv", "/api/leadership-changes", "/api/events/stream"]) {
+    const gated = await fetch(`${server.baseUrl}${route}`, { headers: { Cookie: cookie } });
+    assert.equal(gated.status, 403, `${route} must stay closed until the PIN changes`);
+    assert.equal((await gated.json()).mustChangePin, true);
+  }
   const change = newPin => fetch(`${server.baseUrl}/api/pin/change`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ currentPin: "1234", newPin }) });
   assert.equal((await change("5678")).status, 400);
   assert.equal((await change("567890")).status, 200);
@@ -108,4 +113,8 @@ test("production redirects HTTP to HTTPS and marks session cookies Secure", asyn
   const response = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("set-cookie"), /; secure/i);
+  const metrics = await fetch(`${server.baseUrl}/metrics`);
+  assert.equal(metrics.status, 404);
+  const metricsAuthorized = await fetch(`${server.baseUrl}/metrics`, { headers: { Authorization: "Bearer test-metrics-bearer-token-long-enough-123456" } });
+  assert.equal(metricsAuthorized.status, 200);
 });

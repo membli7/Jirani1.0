@@ -1,13 +1,20 @@
 "use strict";
 
+const fs = require("fs");
+
 function createPostgresPool({ connectionString = process.env.DATABASE_URL } = {}) {
   if (!connectionString) return null;
   const { Pool } = require("pg");
   const configuredMax = Number(process.env.PG_POOL_MAX || 10);
+  const pgSsl = process.env.PGSSL || "";
+  if (pgSsl && !["disable", "require", "verify-full"].includes(pgSsl)) throw new Error("PGSSL must be disable, require, or verify-full.");
+  const ssl = ["require", "verify-full"].includes(pgSsl)
+    ? { rejectUnauthorized: true, ...(process.env.PGSSL_CA_FILE ? { ca: fs.readFileSync(process.env.PGSSL_CA_FILE, "utf8") } : {}) }
+    : undefined;
   return new Pool({
     connectionString,
     max: Number.isSafeInteger(configuredMax) ? Math.max(2, configuredMax) : 10,
-    ssl: process.env.PGSSL === "require" ? { rejectUnauthorized: false } : undefined,
+    ssl,
   });
 }
 

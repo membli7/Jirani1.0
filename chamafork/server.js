@@ -12,6 +12,8 @@ const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security
 const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
+const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
+const { parseAllowedOrigins, validateProductionConfig } = require("./security/production-config");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const {
   logger,
@@ -62,14 +64,22 @@ function recordSummaryCacheMiss() {
 }
 
 
-const setupLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many registrations. Please try again later." } });
-const activationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many activation attempts. Please try again later." } });
-const pinRecoveryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many PIN recovery attempts. Please try again later." } });
+function sharedRateLimit(name, options) {
+  const store = redisCache && (process.env.NODE_ENV === "production" || process.env.RATE_LIMIT_STORE === "redis")
+    ? new RedisRateLimitStore({ client: redisCache, prefix: `jirani:ratelimit:${name}:`, windowMs: options.windowMs })
+    : undefined;
+  return rateLimit({ ...options, ...(store ? { store } : {}) });
+}
+const setupLimiter = sharedRateLimit("setup", { windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many registrations. Please try again later." } });
+const activationLimiter = sharedRateLimit("activation", { windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many activation attempts. Please try again later." } });
+const pinRecoveryLimiter = sharedRateLimit("pin-recovery", { windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many PIN recovery attempts. Please try again later." } });
+const loginLimiter = sharedRateLimit("login", { windowMs: 15 * 60 * 1000, max: 100, message: { message: "Too many login attempts. Please try again later." } });
 
 const app = express();
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8000);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
+const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));
 const DATA_BACKEND = process.env.DATA_BACKEND || "json";
 if (!["json", "postgres"].includes(DATA_BACKEND)) throw new Error("DATA_BACKEND must be json or postgres.");
 const postgresPool = DATA_BACKEND === "postgres" ? createPostgresPool() : null;
@@ -92,9 +102,9 @@ const monthDateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", m
 const eventClients = new Set();
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const sessionBackend = createSessionBackend();
+validateProductionConfig(process.env);
 const codeLifetimeMs = 24 * 60 * 60 * 1000;
 const idempotencyLifetimeMs = 24 * 60 * 60 * 1000;
-const invitationAttemptLimit = 5;
 const idleSessionMs = 15 * 60 * 1000;
 const loginLockoutMs = Number(process.env.CHAMA_LOGIN_LOCKOUT_MS) || 15 * 60 * 1000;
 const loginFailureCap = Number(process.env.CHAMA_LOGIN_FAILURE_CAP) || 10000;
@@ -164,6 +174,7 @@ function publishLoanUpdate(loan, chamaId = loan?.chamaId) {
 }
 function validPin(pin) { return /^\d{4,12}$/.test(clean(pin)); }
 function validNewPin(pin) { return /^\d{6,12}$/.test(clean(pin)); }
+const invitationAttemptLimit = 5;
 function pinHash(pin, salt = crypto.randomBytes(16).toString("hex")) { return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`; }
 function verifyPin(pin, stored) {
   if (!validPin(pin) || typeof stored !== "string") return false;
@@ -177,10 +188,23 @@ function loginThrottleEntry(key) {
   if (entry && entry.resetAt <= Date.now()) { loginFailures.delete(key); return null; }
   return entry || null;
 }
-function loginLocked(phoneKey, ipKey) {
+function sharedLoginThrottleEnabled() { return process.env.NODE_ENV === "production"; }
+function hashedThrottleKey(key) { return crypto.createHmac("sha256", SESSION_SECRET).update(key).digest("hex"); }
+async function loginLocked(phoneKey, ipKey) {
+  if (sharedLoginThrottleEnabled()) {
+    if (!redisCache?.isOpen) throw new Error("Shared login protection is unavailable.");
+    const result = await redisCache.sendCommand(["MGET", `jirani:login-failures:${hashedThrottleKey(phoneKey)}`, `jirani:login-failures:${hashedThrottleKey(ipKey)}`]);
+    return result.some(value => Number(value) >= 5);
+  }
   return [phoneKey, ipKey].some(key => (loginThrottleEntry(key)?.lockedUntil || 0) > Date.now());
 }
-function recordLoginFailure(phoneKey, ipKey) {
+async function recordLoginFailure(phoneKey, ipKey) {
+  if (sharedLoginThrottleEnabled()) {
+    if (!redisCache?.isOpen) throw new Error("Shared login protection is unavailable.");
+    const incrementScript = "for i=1,#KEYS do local n=redis.call('INCR',KEYS[i]); if n==1 then redis.call('PEXPIRE',KEYS[i],ARGV[1]); end; end; return 1";
+    await redisCache.sendCommand(["EVAL", incrementScript, "2", `jirani:login-failures:${hashedThrottleKey(phoneKey)}`, `jirani:login-failures:${hashedThrottleKey(ipKey)}`, String(loginLockoutMs)]);
+    return;
+  }
   const nowMs = Date.now();
   for (const [key, entry] of loginFailures) if (entry.resetAt <= nowMs) loginFailures.delete(key);
   for (const key of [phoneKey, ipKey]) {
@@ -196,6 +220,14 @@ function recordLoginFailure(phoneKey, ipKey) {
       console.warn("login failure map at capacity with all entries locked", { size: loginFailures.size, cap: loginFailureCap });
     }
   }
+}
+async function clearLoginFailures(phoneKey, ipKey) {
+  if (sharedLoginThrottleEnabled()) {
+    if (!redisCache?.isOpen) throw new Error("Shared login protection is unavailable.");
+    await redisCache.sendCommand(["DEL", `jirani:login-failures:${hashedThrottleKey(phoneKey)}`, `jirani:login-failures:${hashedThrottleKey(ipKey)}`]);
+    return;
+  }
+  loginFailures.delete(phoneKey); loginFailures.delete(ipKey);
 }
 function hashCode(code) { return crypto.createHash("sha256").update(code).digest("hex"); }
 function newId() { return crypto.randomUUID(); }
@@ -407,13 +439,17 @@ function requireAuth(req, res, next) {
   req.user = user; return next();
 }
 function requireRole(...roles) { return (req, res, next) => roles.includes(req.user.role) ? next() : res.status(403).json({ message: "Your role is not allowed to perform this action." }); }
-function requirePinChanged(req, res, next) { return req.user.mustChangePin ? res.status(403).json({ message: "Change your temporary PIN before making any records." }) : next(); }
+function requirePinChanged(req, res, next) { return req.user.mustChangePin ? res.status(403).json({ message: "Change your temporary PIN before making any records.", mustChangePin: true }) : next(); }
 function protectWriteRequest(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   if (req.get("X-Requested-With") !== "chama") return res.status(400).json({ message: "Missing required request header." });
   const origin = req.get("Origin");
   if (origin) {
-    try { if (new URL(origin).host !== req.get("host")) return res.status(403).json({ message: "Cross-site request blocked." }); }
+    try {
+      const parsedOrigin = new URL(origin);
+      const strictOrigin = process.env.NODE_ENV === "production" || process.env.FORCE_HTTPS_REDIRECT === "1";
+      if (strictOrigin ? parsedOrigin.protocol !== "https:" || !APP_ALLOWED_ORIGINS.has(parsedOrigin.origin) : parsedOrigin.host !== req.get("host")) return res.status(403).json({ message: "Cross-site request blocked." });
+    }
     catch { return res.status(403).json({ message: "Invalid request origin." }); }
   }
   return next();
@@ -712,7 +748,13 @@ app.use((req, res, next) => {
 app.use(latencyMiddleware);
 // Prometheus metrics endpoint (scrape with: prometheus.io/scrape: "true").
 // Restrict to localhost in production via nginx or a firewall rule.
-app.get("/metrics", metricsHandler);
+function metricsAuthorized(req) {
+  if (process.env.NODE_ENV !== "production" && process.env.FORCE_METRICS_AUTH !== "1") return true;
+  const expected = Buffer.from(process.env.METRICS_BEARER_TOKEN || "");
+  const supplied = Buffer.from((req.get("Authorization") || "").replace(/^Bearer\s+/i, ""));
+  return expected.length >= 32 && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+}
+app.get("/metrics", (req, res) => metricsAuthorized(req) ? metricsHandler(req, res) : res.status(404).end());
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'");
   if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store");
@@ -721,7 +763,7 @@ app.use((req, res, next) => {
     const hasVersion = typeof version === "string" && /^[A-Za-z0-9._-]{1,40}$/.test(version);
     res.setHeader("Cache-Control", hasVersion ? "public, max-age=31536000, immutable" : "no-store");
   }
-  if (process.env.NODE_ENV === "production" && !req.secure) {
+  if ((process.env.NODE_ENV === "production" || process.env.FORCE_HTTPS_REDIRECT === "1") && !req.secure) {
     const location = httpsRedirectLocation(APP_CANONICAL_ORIGIN, req.originalUrl);
     if (!location) return res.status(400).send("HTTPS is required. Configure APP_CANONICAL_ORIGIN to enable redirects.");
     return res.redirect(301, location);
@@ -729,7 +771,7 @@ app.use((req, res, next) => {
   return next();
 });
 app.use(express.json({ limit: "32kb" }));
-const sessionOptions = { name: "chama.sid", secret: SESSION_SECRET, resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", maxAge: idleSessionMs } };
+const sessionOptions = { name: "chama.sid", secret: SESSION_SECRET, resave: false, saveUninitialized: false, rolling: true, cookie: { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" || process.env.FORCE_SECURE_COOKIE === "1", maxAge: idleSessionMs } };
 if (sessionBackend.store) sessionOptions.store = sessionBackend.store;
 app.use(session(sessionOptions));
 app.use("/api", protectWriteRequest);
@@ -816,7 +858,29 @@ app.get("/manifest.webmanifest", requireAuth, requirePinChanged, (req, res) => {
 });
 app.use(express.static(FRONTEND));
 app.get("/", (req, res) => res.sendFile(path.join(FRONTEND, "index.html")));
-app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/health", async (req, res) => {
+  const dependencies = { postgres: DATA_BACKEND === "postgres" ? "unavailable" : "not_required", redis: sessionBackend.usingRedis ? "unavailable" : "not_required" };
+  try {
+    if (DATA_BACKEND === "postgres") {
+      if (!postgresPool || !postgresRuntimeLock) throw new Error("PostgreSQL is not initialized.");
+      postgresRuntimeLock.assertHeld();
+      await postgresPool.query("SELECT 1");
+      dependencies.postgres = "ready";
+    }
+    if (sessionBackend.usingRedis) {
+      await sessionBackend.ping();
+    }
+    const redisClients = [redisPub, redisSub, redisCache].filter(Boolean);
+    for (const client of redisClients) {
+      if (!client.isOpen) throw new Error("Redis application client is disconnected.");
+      await client.ping();
+    }
+    if (sessionBackend.usingRedis || redisClients.length) dependencies.redis = "ready";
+  } catch {
+    return res.status(503).json({ status: "unavailable", dependencies });
+  }
+  return res.json({ status: "ok" });
+});
 app.get("/api/setup/status", (req, res) => res.json({ requiresSetup: state.users.length === 0 }));
 app.get("/api/session", (req, res) => {
   const user = req.session?.userId && state.users.find(item => item.id === req.session.userId && item.status === "active");
@@ -862,13 +926,13 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   });
 });
 
-app.post("/api/login", async (req, res, next) => {
+app.post("/api/login", loginLimiter, async (req, res, next) => {
   const phoneInput = clean(req.body?.phone); const phone = normalizePhone(phoneInput); const phoneKey = `phone:${phone || phoneInput}`; const ipKey = `ip:${req.ip}`;
-  if (loginLocked(phoneKey, ipKey)) return res.status(429).json({ message: "Too many login attempts. Try again in 15 minutes." });
+  if (await loginLocked(phoneKey, ipKey)) return res.status(429).json({ message: "Too many login attempts. Try again in 15 minutes." });
   const pin = clean(req.body?.pin); const requestedChamaId = clean(req.body?.chamaId);
   const user = phone && state.users.find(item => item.phone === phone && item.status === "active" && (!requestedChamaId || item.chamaId === requestedChamaId));
-  if (!user || !verifyPin(pin, user.pinHash)) { recordLoginFailure(phoneKey, ipKey); return res.status(401).json({ message: "Incorrect phone number or PIN." }); }
-  loginFailures.delete(phoneKey); loginFailures.delete(ipKey);
+  if (!user || !verifyPin(pin, user.pinHash)) { await recordLoginFailure(phoneKey, ipKey); return res.status(401).json({ message: "Incorrect phone number or PIN." }); }
+  await clearLoginFailures(phoneKey, ipKey);
   const userChamaAccounts = state.users.filter(item => item.phone === phone && item.status === "active");
   if (userChamaAccounts.length > 1 && !requestedChamaId) {
     return res.status(200).json({ message: "Pick a chama to enter.", chooseChamaId: userChamaAccounts.map(account => ({ chamaId: account.chamaId, name: findChamaName(account.chamaId) })) });
@@ -1007,7 +1071,7 @@ function csvCell(value) {
   if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
-app.get("/api/export.csv", requireAuth, (req, res) => {
+app.get("/api/export.csv", requireAuth, requirePinChanged, (req, res) => {
   const chamaTransactions = scopeToChama(state.transactions, req.user.chamaId);
   const transactions = req.user.role === "member" ? chamaTransactions.filter(item => item.memberId === req.user.id) : chamaTransactions;
   const rows = [["Date", "Member", "Amount (KES)", "Method", "Type", "Reference"], ...transactions.map(item => [item.at, item.memberName, item.amount, item.method, item.paymentType, item.ref])];
@@ -1187,7 +1251,7 @@ app.get("/api/attendance/list", requireAuth, requirePinChanged, (req, res) => {
   return res.json({ data: page, total: all.length, limit, offset });
 });
 
-app.get("/api/events/stream", requireAuth, (req, res) => {
+app.get("/api/events/stream", requireAuth, requirePinChanged, (req, res) => {
   res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store, no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
   res.write(`retry: 5000\nevent: ready\ndata: ${JSON.stringify({ at: now() })}\n\n`);
   const client = { res, chamaId: req.user.chamaId, keepAlive: null, closed: false };
@@ -1266,13 +1330,7 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
   if (matchingCode && invitationRevocation(matchingCode)) return res.status(400).json({ message: "Invitation revoked" });
   if (matchingCode && Date.parse(matchingCode.expiresAt) <= Date.now()) return res.status(400).json({ message: "Code expired" });
   if (matchingCode && matchingCode.phone !== phone) return res.status(400).json({ message: "Phone number does not match the invitation" });
-  const invitation = matchingCode || (phone && state.invitations.find(item => item.phone === phone && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now()));
   if (!matchingCode) {
-    if (!invitation) return res.status(400).json({ message: "Incorrect activation code." });
-    const remaining = Number.isInteger(invitation.attemptsRemaining) ? invitation.attemptsRemaining : invitationAttemptLimit;
-    if (remaining <= 0) return res.status(400).json({ message: "Too many attempts. Request a new code." });
-    const updated = structuredClone(state); const saved = updated.invitations.find(item => item.id === invitation.id && item.chamaId === invitation.chamaId); saved.attemptsRemaining = remaining - 1; await persist(updated);
-    if (saved.attemptsRemaining === 0) return res.status(400).json({ message: "Too many attempts. Request a new code." });
     return res.status(400).json({ message: "Incorrect activation code." });
   }
   if (!validEmail(matchingCode.email) || !validNewPin(pin)) return res.status(400).json({ message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." });
@@ -1570,7 +1628,7 @@ app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, r
   updated.auditLog.push(revocation);
   return commit(req, res, next, updated, 200, { message: "Leadership role revoked.", data: record, history: revocation });
 }));
-app.get("/api/leadership-changes", requireAuth, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId) }));
+app.get("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId) }));
 app.get("/api/audit-log", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), (req, res) => {
   const userChamas = new Map(state.users.map(user => [user.id, user.chamaId]));
   const data = scopeToChama(state.auditLog, req.user.chamaId, entry =>
@@ -1580,43 +1638,9 @@ app.get("/api/audit-log", requireAuth, requirePinChanged, requireRole("chairpers
 });
 
 // ---------------------------------------------------------------------------
-// M-Pesa callback handler (Phase 1)
-// Safaricom calls this URL directly after a C2B/STK push completes.
-// Rule: return 200 immediately so Daraja does not retry. All processing
-// (matching, ledger entries, duplicate detection) is done by a background
-// job that reads from pendingMpesas.
-// ---------------------------------------------------------------------------
-app.post("/api/mpesa/callback", express.json({ limit: "64kb" }), async (req, res, next) => {
-  const payload = req.body;
-  // Derive chama_id from a URL param so multi-tenant routing is possible.
-  // The Daraja portal is configured with
-  //   https://host/api/mpesa/callback?chama=<chama_id>
-  const chamaId = clean(req.query?.chama);
-  const callbackKey = clean(
-    payload?.Body?.stkCallback?.CheckoutRequestID ||
-    payload?.TransID ||
-    payload?.MpesaReceiptNumber ||
-    ""
-  );
-  // Store the raw callback; background job will do the rest.
-  const entry = {
-    id: newId(),
-    chamaId: chamaId || null,
-    callbackKey: callbackKey || newId(),
-    payload,
-    receivedAt: now(),
-    processed: false,
-  };
-  const updated = structuredClone(state);
-  if (!Array.isArray(updated.pendingMpesas)) updated.pendingMpesas = [];
-  updated.pendingMpesas.push(entry);
-  try { await persist(updated); } catch (error) { return next(error); }
-  // Always ACK immediately — Daraja will retry if we respond slowly or with
-  // a non-2xx status.
-  return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
-});
+// M-Pesa settlement callbacks stay disabled until request authentication and exact amount matching exist.
+app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "M-Pesa callback settlement is disabled until requests can be authenticated and matched." }));
 
-// ---------------------------------------------------------------------------
 // OTP phone-auth (Phase 1)
 // Alternative sign-in via SMS OTP — supplements the existing PIN login.
 // /api/otp/request  — send a 6-digit code to the phone (or log it if SMS
@@ -1625,7 +1649,7 @@ app.post("/api/mpesa/callback", express.json({ limit: "64kb" }), async (req, res
 //                     login.
 // ---------------------------------------------------------------------------
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const OTP_RATE_LIMIT = rateLimit({
+const OTP_RATE_LIMIT = sharedRateLimit("otp", {
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { message: "Too many OTP requests. Please try again later." },
@@ -1661,7 +1685,7 @@ app.post("/api/otp/request", OTP_RATE_LIMIT, (req, res, next) => {
   });
 });
 
-app.post("/api/otp/verify", OTP_RATE_LIMIT, (req, res, next) => {
+app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   const code = clean(req.body?.code);
   const requestedChamaId = clean(req.body?.chamaId);
@@ -1670,7 +1694,7 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, (req, res, next) => {
   }
   const phoneKey = `phone:${phone}`;
   const ipKey = `ip:${req.ip}`;
-  if (loginLocked(phoneKey, ipKey)) {
+  if (await loginLocked(phoneKey, ipKey)) {
     return res.status(429).json({ message: "Too many login attempts. Try again in 15 minutes." });
   }
   const { otpHash, otpPhone, otpExpiresAt } = req.session;
@@ -1683,15 +1707,14 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, (req, res, next) => {
     otpHash.length === codeDigest.length &&
     crypto.timingSafeEqual(Buffer.from(otpHash), Buffer.from(codeDigest));
   if (!valid) {
-    recordLoginFailure(phoneKey, ipKey);
+    await recordLoginFailure(phoneKey, ipKey);
     return res.status(401).json({ message: "Incorrect or expired activation code." });
   }
   // OTP is single-use — clear it from the session immediately.
   delete req.session.otpHash;
   delete req.session.otpPhone;
   delete req.session.otpExpiresAt;
-  loginFailures.delete(phoneKey);
-  loginFailures.delete(ipKey);
+  await clearLoginFailures(phoneKey, ipKey);
   const accounts = state.users.filter(u => u.phone === phone && u.status === "active");
   if (!accounts.length) return res.status(401).json({ message: "No active account found for that phone number." });
   // Multi-chama: let the caller pick, same as PIN login.

@@ -20,6 +20,7 @@ function createSessionBackend({
   return {
     store: new RedisStore({ client, prefix }),
     connect: async () => { if (!client.isOpen) await client.connect(); },
+    ping: async () => { if (!client.isOpen) throw new Error("Redis session store is disconnected."); return client.ping(); },
     close: async () => { if (client.isOpen) await client.quit(); },
     usingRedis: true,
   };
