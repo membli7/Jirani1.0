@@ -12,6 +12,8 @@
   const photoPreview = document.querySelector("#profile-photo-preview");
   const photoStatus = document.querySelector("#profile-status");
   const writeRequests = window.chamaWriteRequests?.createWriteRequester();
+  const profileMode = new URLSearchParams(window.location.search).get("mode");
+  const viewOnly = profileMode === "view";
 
   function showStatus(element, message, isError = false) {
     element.textContent = message;
@@ -141,6 +143,19 @@
   currentPhoto.alt = "Current profile photo";
   currentPhoto.src = "/api/profile/photo/180";
   currentPhoto.addEventListener("load", () => photoPreview.replaceChildren(currentPhoto), { once: true });
+
+  if (viewOnly) {
+    document.title = "View profile | Jirani Chama";
+    document.querySelector("#profile-title").textContent = "View profile";
+    changeButton.hidden = true;
+    photoInput.disabled = true;
+    document.querySelector(".profile-upload").hidden = true;
+    document.querySelector(".profile-card > p").textContent = "Your contact details and profile photo.";
+  } else if (profileMode === "edit") {
+    fields.disabled = false;
+    saveButton.hidden = false;
+    changeButton.hidden = true;
+  }
 
   loadProfile().catch(error => showStatus(detailsStatus, error.message, true));
 })();

@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
-        <link rel="stylesheet" href="/chama.css?v=20261020.5">
+        <link rel="stylesheet" href="/chama.css?v=20261020.6">
     </head>
 <body>
  <header class="topbar">
@@ -39,6 +39,9 @@
        </button>
      </nav>
      <div class="top-actions">
+         <button id="notification-button" class="header-icon-button notification-button" type="button" aria-label="Open group messages" title="Messages" aria-controls="chat-panel">
+           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+         </button>
          <div class="profile-menu-wrap">
          <button id="profile-icon" class="profile-icon" type="button" aria-label="Profile" aria-expanded="false" aria-controls="profile-menu" title="Profile">
            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -47,7 +50,10 @@
            </svg>
          </button>
          <div id="profile-menu" class="profile-menu" hidden>
-           <a href="/profile.html">My profile</a>
+           <a href="/profile.html?mode=view">View profile</a>
+           <a href="/profile.html?mode=edit">Edit profile</a>
+           <a href="/register.html?new-chama=1">Create new chama</a>
+           <a href="/member-login.html?switch-chama=1">Switch chama</a>
          </div>
          </div>
          <button
@@ -101,10 +107,6 @@
       </div>
       <a href="#chat-panel" data-panel="chat-panel">Group chat</a>
       <div class="menu-tools">
-        <button id="notification-button" class="notification-button" type="button" aria-label="Messages" title="Messages">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
-          <span>Messages</span>
-        </button>
         <label class="language-control" for="language-switch" data-i18n="language">Language<select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
           <option value="en" data-i18n="englishOption">English</option><option value="sw" data-i18n="swahili">Kiswahili</option>
         </select></label>
@@ -1073,7 +1075,7 @@
  <script src="/write-requests.js?v=20261016.1" defer>
 
  </script>
- <script src="/chama.js?v=20261020.7" defer>
+ <script src="/chama.js?v=20261020.8" defer>
 
  </script>
  <!--==================================================================== DEMO FOOTER: replace demo@example.com with the real contact email before launch ===========================================-->

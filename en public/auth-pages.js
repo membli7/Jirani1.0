@@ -6,6 +6,12 @@ const activationForm = document.querySelector("#activation-form");
 const activationNotice = document.querySelector("#activation-notice");
 const forgotPinView = document.querySelector("#forgot-pin-view");
 
+if (new URLSearchParams(window.location.search).get("switch-chama") === "1") {
+  document.querySelector("#login-page-title")?.replaceChildren("Switch chama");
+  document.querySelector("#login-form-title")?.replaceChildren("Choose a chama");
+  document.querySelector("#login-form-copy")?.replaceChildren("Sign in again to choose a chama linked to your phone number.");
+}
+
 async function postJson(url, data) {
   const response = await fetch(url, {
     method: "POST",

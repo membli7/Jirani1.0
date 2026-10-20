@@ -2021,9 +2021,68 @@ body > .site-footer {
 .dashboard-tab.is-active { border-color: #d4e7d8; color: var(--green); background: var(--green-soft); }
 .brand-mark { border-radius: 50%; overflow: hidden; }
 .brand-mark svg { width: 100%; height: 100%; }
+.topbar.is-authenticated .connection-status {
+  display: inline-flex !important;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  color: transparent;
+  background: transparent;
+}
 .topbar.is-authenticated .connection-status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa39d; }
 .topbar.is-authenticated .connection-status[data-status="live"] .connection-status-dot { background: #2f9b5e; box-shadow: 0 0 0 3px rgba(47, 155, 94, .14); }
 .topbar.is-authenticated .connection-status:not([data-status="live"]) .connection-status-dot { background: #9aa39d; box-shadow: none; }
+.topbar.is-authenticated .connection-status-label { display: none; }
+.top-actions { align-items: center; }
+.header-icon-button, .profile-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: #40534a;
+  background: rgba(255, 255, 255, .82);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.header-icon-button svg, .profile-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.header-icon-button:hover, .profile-icon:hover, .profile-icon[aria-expanded="true"] { border-color: #c5d8c9; color: var(--green); background: var(--green-soft); }
+.profile-menu-wrap { position: relative; }
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 1201;
+  display: grid;
+  width: min(250px, calc(100vw - 24px));
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: 0 12px 32px rgba(31, 48, 40, .16);
+}
+.profile-menu[hidden] { display: none !important; }
+.profile-menu a { display: flex; min-height: 44px; align-items: center; padding: 9px 12px; border-radius: 9px; color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.profile-menu a:hover, .profile-menu a:focus-visible { color: var(--green); background: var(--green-soft); }
+.profile-menu a + a:nth-of-type(3) { margin-top: 5px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; }
+.topbar.is-authenticated .connection-status ~ #identity,
+.topbar.is-authenticated .connection-status ~ #logout { display: none !important; }
+.topbar.is-authenticated { background: rgba(245, 247, 244, .9); }
+body:has(#app:not([hidden])) {
+  background-color: #f5f7f4;
+  background-image:
+    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .09), transparent 36%),
+    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .075), transparent 34%),
+    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .1), transparent 38%),
+    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .075), transparent 36%);
+  background-attachment: fixed;
+}
 .finance-view-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .finance-table-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 #dashboard .finance-table-grid { display: none; }
@@ -2049,6 +2108,7 @@ body > .site-footer {
 .finance-data-notice:not([hidden]) { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; color: #7d5316; background: #fff4df; }
 .audit-table-wrap, .cash-flow-table-wrap { max-height: min(60vh, 560px); overflow: auto; }
 .audit-table-wrap thead, .cash-flow-table-wrap thead { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+.menu-bar { height: auto; bottom: auto; max-height: min(72vh, 640px); }
 @media (max-width: 700px) {
   .finance-table-grid { grid-template-columns: minmax(0, 1fr); }
   .finance-table-wrap { overflow-x: auto; }
@@ -2061,4 +2121,10 @@ body > .site-footer {
   .audit-table { min-width: 620px; width: 100%; border-collapse: collapse; }
   .audit-table thead { position: sticky; top: 0; width: auto; height: auto; overflow: visible; clip: auto; }
   .audit-table td::before { content: none; }
+}
+@media (max-width: 600px) {
+  .menu-bar { top: 72px; max-height: calc(100dvh - 88px - env(safe-area-inset-bottom)); }
+  .topbar.is-authenticated .top-actions { gap: 7px !important; }
+  .header-icon-button, .profile-icon { width: 40px; height: 40px; flex-basis: 40px; }
+  .profile-menu { top: calc(100% + 8px); max-height: min(68dvh, 440px); overflow-y: auto; }
 }

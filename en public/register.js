@@ -62,3 +62,23 @@ registrationForm.addEventListener("submit", async event => {
     submitButton.disabled = false;
   }
 });
+
+if (new URLSearchParams(window.location.search).get("new-chama") === "1") {
+  fetch("/api/setup", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } })
+    .then(async response => {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Could not check whether this instance is ready for setup.");
+      return result;
+    })
+    .then(result => {
+      if (result.open) return;
+      registrationForm.hidden = true;
+      document.querySelector("#new-chama-existing-instance").hidden = false;
+    })
+    .catch(error => {
+      registrationNotice.textContent = error instanceof TypeError
+        ? "Cannot reach the server. Check that it is running, then try again."
+        : error.message;
+      registrationNotice.hidden = false;
+    });
+}

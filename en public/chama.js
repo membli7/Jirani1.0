@@ -821,6 +821,12 @@ document.addEventListener("click", event => {
   profileMenu.hidden = true;
   profileMenuButton.setAttribute("aria-expanded", "false");
 });
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape" || profileMenu.hidden) return;
+  profileMenu.hidden = true;
+  profileMenuButton.setAttribute("aria-expanded", "false");
+  profileMenuButton.focus();
+});
 $("#audit-search").addEventListener("input", () => { auditPage = 0; renderAuditLogPage(); });
 $("#audit-previous").addEventListener("click", () => { auditPage = Math.max(0, auditPage - 1); renderAuditLogPage(); });
 $("#audit-next").addEventListener("click", () => { auditPage += 1; renderAuditLogPage(); });

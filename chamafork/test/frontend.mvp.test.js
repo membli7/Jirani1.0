@@ -43,7 +43,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
   assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
   assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.3" defer/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.4" defer/);
   assert.match(registerScript, /fetch\("\/api\/setup"/);
   assert.match(registerScript, /credentials: "same-origin"/);
   assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
@@ -70,13 +70,14 @@ test("registration signs in and opens the dashboard when setup was already compl
   const context = {
     document: { querySelector: selector => selector === "#register-chama-form" ? registrationForm : registrationNotice },
     FormData: class { constructor() { return [["phone", "0700000000"], ["pin", "135790"]]; } },
+    URLSearchParams,
     fetch: async (url, options) => {
       requests.push({ url, options });
       return requests.length === 1
         ? { ok: false, status: 409, json: async () => ({ message: "Initial setup has already been completed." }) }
         : { ok: true, status: 200, json: async () => ({ message: "Signed in successfully." }) };
     },
-    window: { location: { assign: url => { redirect = url; } } },
+    window: { location: { search: "", assign: url => { redirect = url; } } },
   };
   vm.runInNewContext(registerScript, context);
   await submitHandler({ preventDefault() {} });
@@ -90,7 +91,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.7" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261020\.8" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -191,11 +192,64 @@ test("You and Group have separate financial views with mobile bottom navigation 
   assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?bottom:\s*0;/);
 });
 
+test("header icons, profile actions, live dot, muted background, and short menu are usable", () => {
+  const profileMenu = html.match(/<div id="profile-menu"[\s\S]*?<\/div>/)?.[0] || "";
+  for (const action of ["View profile", "Edit profile", "Create new chama", "Switch chama"]) assert.match(profileMenu, new RegExp(action));
+  assert.match(html, /id="notification-button"[^>]*aria-controls="chat-panel"/);
+  assert.match(script, /\$\("#notification-button"\)\.addEventListener\("click", \(\) => showAppPage\("chat-panel"\)\)/);
+  assert.match(html, /connection-status-dot/);
+  assert.match(css, /\.topbar\.is-authenticated \.connection-status\s*\{[\s\S]*?display:\s*inline-flex !important/);
+  assert.match(css, /\.connection-status\[data-status="live"\] \.connection-status-dot\s*\{\s*background:\s*#2f9b5e/);
+  assert.match(css, /\.connection-status:not\(\[data-status="live"\]\) \.connection-status-dot\s*\{\s*background:\s*#9aa39d/);
+  assert.match(css, /body:has\(#app:not\(\[hidden\]\)\)\s*\{[\s\S]*?radial-gradient/);
+  assert.match(css, /\.menu-bar\s*\{\s*height:\s*auto; bottom:\s*auto; max-height:\s*min\(72vh, 640px\)/);
+  assert.match(profileScript, /profileMode === "view"/);
+  assert.match(profileScript, /profileMode === "edit"/);
+  assert.match(registerHtml, /id="new-chama-existing-instance"/);
+  assert.match(registerScript, /get\("new-chama"\) === "1"/);
+  assert.match(memberLoginHtml, /id="login-page-title"/);
+  assert.match(authPagesScript, /get\("switch-chama"\) === "1"/);
+});
+
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);
   assert.match(html, /<tbody id="audit-list"/);
   assert.match(html, /<section class="panel" id="penalty-panel"[^>]*hidden>/);
   assert.match(html, /<section class="panel" id="dividend-panel"[^>]*hidden>/);
+});
+
+test("audit log search and paging render only the requested entries", () => {
+  const renderSource = script.match(/function renderAuditLogPage\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(renderSource, "audit log should define its search and pagination renderer");
+  const nodes = new Map([
+    ["#audit-search", { value: "" }],
+    ["#audit-list", { innerHTML: "" }],
+    ["#audit-page-info", { textContent: "" }],
+    ["#audit-previous", { disabled: false }],
+    ["#audit-next", { disabled: false }],
+  ]);
+  const context = {
+    $: selector => nodes.get(selector),
+    auditEntries: Array.from({ length: 30 }, (_, index) => ({ at: `2026-10-${String(index + 1).padStart(2, "0")}`, type: `Action ${index}` })),
+    auditPage: 0,
+    auditPageSize: 25,
+    esc: value => String(value),
+    fmtDate: value => value,
+    fmtTime: () => "09:00",
+    roleName: value => value,
+    auditDescription: entry => entry.type,
+  };
+  const renderPage = vm.runInNewContext(`(${renderSource})`, context);
+  renderPage();
+  assert.match(nodes.get("#audit-list").innerHTML, /Action 0/);
+  assert.doesNotMatch(nodes.get("#audit-list").innerHTML, /Action 29/);
+  assert.equal(nodes.get("#audit-page-info").textContent, "1 / 2 · 30 entries");
+  assert.equal(nodes.get("#audit-next").disabled, false);
+  nodes.get("#audit-search").value = "Action 29";
+  renderPage();
+  assert.match(nodes.get("#audit-list").innerHTML, /Action 29/);
+  assert.equal(nodes.get("#audit-page-info").textContent, "1 / 1 · 1 entries");
+  assert.equal(nodes.get("#audit-next").disabled, true);
 });
 
 test("penalty and dividend panels are shown only to the right roles", () => {
@@ -234,12 +288,69 @@ test("loan form sends two guarantors and repayments send reference and date", ()
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
   assert.match(profileHtml, /src="\/write-requests\.js" defer/);
-  assert.match(profileHtml, /src="\/profile\.js" defer/);
+  assert.match(profileHtml, /src="\/profile\.js\?v=20261020\.2" defer/);
   assert.match(profileScript, /fetch\("\/api\/profile"/);
   assert.match(profileScript, /path: "\/api\/profile"/);
   assert.match(profileScript, /\/api\/profile\/photo\/\$\{size\}/);
   assert.match(profileScript, /"X-Requested-With": "chama"/);
   assert.match(profileScript, /credentials: "same-origin"/);
   assert.doesNotMatch(profileScript, /\.innerHTML\s*=/);
-  assert.match(html, /id="profile-menu"[\s\S]*?href="\/profile\.html"[^>]*>My profile<\/a>/);
+  assert.match(html, /id="profile-menu"[\s\S]*?href="\/profile\.html\?mode=view"[^>]*>View profile<\/a>/);
+});
+
+test("profile menu view and edit links select the correct profile-page mode", async () => {
+  async function loadMode(mode) {
+    const detailFields = Object.fromEntries(["firstName", "lastName", "nickname", "phone", "email"].map(name => [name, { value: "" }]));
+    const fields = { disabled: true };
+    const changeButton = { hidden: false, addEventListener() {} };
+    const saveButton = { hidden: true };
+    const detailsForm = { elements: { namedItem: name => detailFields[name] }, addEventListener() {} };
+    const photoInput = { disabled: false, addEventListener() {} };
+    const photoPreview = { replaceChildren() {} };
+    const uploadLabel = { hidden: false };
+    const pageHeading = { textContent: "Edit profile" };
+    const nodes = new Map([
+      ["#profile-details-form", detailsForm],
+      ["#profile-details-fields", fields],
+      ["#change-details", changeButton],
+      ["#save-details", saveButton],
+      ["#profile-details-status", { classList: { toggle() {} }, textContent: "" }],
+      ["#profile-photo", photoInput],
+      ["#profile-photo-preview", photoPreview],
+      ["#profile-status", { classList: { toggle() {} }, textContent: "" }],
+      [".profile-upload", uploadLabel],
+      [".profile-card > p", { textContent: "" }],
+      ["#profile-title", pageHeading],
+    ]);
+    const document = {
+      title: "",
+      querySelector: selector => nodes.get(selector),
+      createElement: () => ({ addEventListener() {}, alt: "", src: "" }),
+    };
+    const context = {
+      document,
+      URLSearchParams,
+      window: { location: { search: mode ? "?mode=" + mode : "", assign() {} } },
+      fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { firstName: "Asha", lastName: "Test", nickname: "", phone: "+254700000000", email: "asha@example.test" } }) }),
+    };
+    vm.runInNewContext(profileScript, context);
+    await new Promise(resolve => setImmediate(resolve));
+    return { detailFields, fields, changeButton, saveButton, photoInput, uploadLabel, document, pageHeading };
+  }
+
+  const view = await loadMode("view");
+  assert.equal(view.pageHeading.textContent, "View profile");
+  assert.equal(view.fields.disabled, true);
+  assert.equal(view.changeButton.hidden, true);
+  assert.equal(view.saveButton.hidden, true);
+  assert.equal(view.photoInput.disabled, true);
+  assert.equal(view.uploadLabel.hidden, true);
+  assert.equal(view.document.title, "View profile | Jirani Chama");
+  assert.equal(view.detailFields.firstName.value, "Asha");
+
+  const edit = await loadMode("edit");
+  assert.equal(edit.fields.disabled, false);
+  assert.equal(edit.changeButton.hidden, true);
+  assert.equal(edit.saveButton.hidden, false);
+  assert.equal(edit.photoInput.disabled, false);
 });
