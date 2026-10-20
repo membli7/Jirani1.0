@@ -26,6 +26,30 @@ registrationForm.addEventListener("submit", async event => {
       body: JSON.stringify(formData)
     });
     const result = await response.json().catch(() => ({}));
+    if (!response.ok && response.status === 409 && result.message === "Initial setup has already been completed.") {
+      const loginResponse = await fetch("/api/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "chama"
+        },
+        body: JSON.stringify({ phone: formData.phone, pin: formData.pin })
+      });
+      const loginResult = await loginResponse.json().catch(() => ({}));
+      if (loginResponse.ok && !Array.isArray(loginResult.chooseChamaId)) {
+        window.location.assign("/");
+        return;
+      }
+      if (loginResponse.status === 401) {
+        throw new Error("This chama is already registered. Sign in with the phone number and PIN used for its Chairperson account.");
+      }
+      if (Array.isArray(loginResult.chooseChamaId)) {
+        window.location.assign("/member-login.html");
+        return;
+      }
+      throw new Error(loginResult.message || "This chama is already registered. Please sign in with its Chairperson account.");
+    }
     if (!response.ok) throw new Error(result.message || "Could not register the chama. Please try again.");
 
     window.location.assign("/");

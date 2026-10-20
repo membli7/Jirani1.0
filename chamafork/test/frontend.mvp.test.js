@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 const { test } = require("node:test");
 
 const frontend = path.join(__dirname, "..", "..", "en public");
@@ -41,7 +42,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
   assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
   assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.2" defer/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.3" defer/);
   assert.match(registerScript, /fetch\("\/api\/setup"/);
   assert.match(registerScript, /credentials: "same-origin"/);
   assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
@@ -49,8 +50,40 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerScript, /formData\.lateContributionPenalty = Number\(formData\.lateContributionPenalty\)/);
   assert.match(registerScript, /formData\.loanMonthlyRatePercent = Number\(formData\.loanMonthlyRatePercent\)/);
   assert.match(registerScript, /X-Requested-With": "chama"/);
+  assert.match(registerScript, /response\.status === 409/);
+  assert.match(registerScript, /fetch\("\/api\/login"/);
   assert.match(registerScript, /window\.location\.assign\("\/"\)/);
   assert.match(registerScript, /registrationNotice\.textContent = error instanceof TypeError/);
+});
+
+test("registration signs in and opens the dashboard when setup was already completed", async () => {
+  let submitHandler;
+  let redirect = "";
+  const requests = [];
+  const submitButton = { disabled: false };
+  const registrationForm = {
+    addEventListener: (event, handler) => { if (event === "submit") submitHandler = handler; },
+    querySelector: () => submitButton,
+  };
+  const registrationNotice = { hidden: true, textContent: "" };
+  const context = {
+    document: { querySelector: selector => selector === "#register-chama-form" ? registrationForm : registrationNotice },
+    FormData: class { constructor() { return [["phone", "0700000000"], ["pin", "135790"]]; } },
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      return requests.length === 1
+        ? { ok: false, status: 409, json: async () => ({ message: "Initial setup has already been completed." }) }
+        : { ok: true, status: 200, json: async () => ({ message: "Signed in successfully." }) };
+    },
+    window: { location: { assign: url => { redirect = url; } } },
+  };
+  vm.runInNewContext(registerScript, context);
+  await submitHandler({ preventDefault() {} });
+
+  assert.deepEqual(requests.map(request => request.url), ["/api/setup", "/api/login"]);
+  assert.deepEqual(JSON.parse(requests[1].options.body), { phone: "0700000000", pin: "135790" });
+  assert.equal(redirect, "/");
+  assert.equal(registrationNotice.hidden, true);
 });
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {

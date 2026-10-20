@@ -146,7 +146,6 @@ function userRowsForState(state, tenantIds) {
       result.push(userRow(synthetic, nextOrder++, tenantIds.get(String(chama.id))));
     }
   }
-  result.users = loadedUsers.sort((left, right) => left.order - right.order).map(item => item.user);
   return result;
 }
 
@@ -571,6 +570,7 @@ async function loadState(pool) {
       else result.payouts.push(record);
     }
   }
+  result.users = loadedUsers.sort((left, right) => left.order - right.order).map(item => item.user);
   return result;
 }
 
