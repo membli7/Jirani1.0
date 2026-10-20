@@ -22,7 +22,7 @@ test("loading PostgreSQL state restores account records from the users table", a
       if (sql.includes("SELECT name, settings, payment_policy")) {
         return { rows: [{ name: "Example Chama", settings: {}, payment_policy: {}, state_data: {}, record_data: { id: "chama-a", name: "Example Chama" }, record_order: 0 }] };
       }
-      if (sql.includes("SELECT * FROM users ORDER BY")) {
+      if (sql === "SELECT * FROM users WHERE chama_id = $1 ORDER BY record_order, source_id") {
         return { rows: [{ ...user, record_data: user, record_order: 0 }] };
       }
       return { rows: [] };
