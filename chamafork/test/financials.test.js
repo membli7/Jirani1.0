@@ -39,6 +39,7 @@ fs.writeFileSync(dataFile, JSON.stringify({
   idempotency: {},
   registers: [],
   auditLog: [],
+  settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 350, lateContributionPenalty: 125, loanMonthlyRatePercent: 5, meetingDates: {} },
 }));
 
 function persistedState() {
@@ -120,25 +121,25 @@ after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("the first payment of the month sends KES 500 to welfare and the rest to share capital", async () => {
+test("the first payment of the month uses the configured welfare amount", async () => {
   const response = await contribute(member.id, { amount: 1500 });
   assert.equal(response.status, 201);
   const transaction = (await response.json()).data;
-  assert.equal(transaction.welfareAmount, 500);
-  assert.equal(transaction.shareCapitalAmount, 1000);
+  assert.equal(transaction.welfareAmount, 350);
+  assert.equal(transaction.shareCapitalAmount, 1150);
   assert.equal(transaction.penaltyAmount, 0);
   assert.equal(transaction.contributionMonth, "2026-10");
   assert.equal(transaction.referenceNumber, "RCPT-1000");
   assert.equal(transaction.date, "2026-10-05");
 
   const saved = persistedState();
-  assert.equal(saved.welfareReserve, 500);
-  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1000);
+  assert.equal(saved.welfareReserve, 350);
+  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1150);
   const entry = saved.auditLog.find(item => item.type === "contribution.recorded" && item.entityId === transaction.id);
   assert.ok(entry, "contribution should be audited");
   assert.equal(entry.by.role, "treasurer");
-  assert.equal(entry.welfareAmount, 500);
-  assert.equal(entry.shareCapitalAmount, 1000);
+  assert.equal(entry.welfareAmount, 350);
+  assert.equal(entry.shareCapitalAmount, 1150);
 });
 
 test("a second payment in the same month goes entirely to share capital", async () => {
@@ -149,22 +150,22 @@ test("a second payment in the same month goes entirely to share capital", async 
   assert.equal(transaction.shareCapitalAmount, 800);
 
   const saved = persistedState();
-  assert.equal(saved.welfareReserve, 500, "welfare is charged once per month");
-  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1800);
+  assert.equal(saved.welfareReserve, 350, "welfare is charged once per month");
+  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1950);
 });
 
 test("the welfare reserve pools fees from every member", async () => {
   assert.equal((await contribute(otherMember.id, { amount: 500, referenceNumber: "RCPT-1002" })).status, 201);
   const saved = persistedState();
-  assert.equal(saved.welfareReserve, 1000);
-  assert.equal(saved.users.find(item => item.id === otherMember.id).shareCapital, 0);
+  assert.equal(saved.welfareReserve, 700);
+  assert.equal(saved.users.find(item => item.id === otherMember.id).shareCapital, 150);
 });
 
 test("a payment below the welfare fee is rejected and changes nothing", async () => {
   const before = persistedState();
   const response = await contribute(thirdMember.id, { amount: 300, referenceNumber: "RCPT-1003" });
   assert.equal(response.status, 400);
-  assert.match((await response.json()).message, /KES 500 welfare fee/);
+  assert.match((await response.json()).message, /KES 350 welfare fee/);
   const after = persistedState();
   assert.equal(after.welfareReserve, before.welfareReserve);
   assert.equal(after.transactions.length, before.transactions.length);
@@ -179,8 +180,18 @@ test("reference number and date are required and must be well formed", async () 
   assert.equal(persistedState().transactions.filter(item => item.memberId === thirdMember.id).length, 0);
 });
 
+test("a late contribution uses the configured penalty amount", async () => {
+  const response = await contribute(thirdMember.id, { amount: 600, date: "2026-10-08", referenceNumber: "RCPT-1004" });
+  assert.equal(response.status, 201);
+  const transaction = (await response.json()).data;
+  assert.equal(transaction.welfareAmount, 350);
+  assert.equal(transaction.penaltyAmount, 125);
+  assert.equal(transaction.shareCapitalAmount, 125);
+  assert.equal(persistedState().penalties.at(-1).amount, 125);
+});
+
 test("a legacy file gains the penalties ledger and member share capital", async () => {
   const saved = persistedState();
-  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1800);
+  assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1950);
   assert.equal(Array.isArray(saved.penalties), true);
 });

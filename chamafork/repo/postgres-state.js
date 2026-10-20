@@ -29,7 +29,7 @@ function stateTemplate() {
     version: 2, chamas: [], users: [], transactions: [], loans: [], payouts: [],
     invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {},
     registers: [], auditLog: [], welfareReserve: 0, penalties: [],
-    settings: { defaultDeadlineDay: 5, meetingDates: {} }, dividendCycles: [], messages: [],
+    settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [],
   };
 }
 

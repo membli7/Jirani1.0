@@ -50,6 +50,7 @@ fs.writeFileSync(dataFile, JSON.stringify({
   registers: [],
   auditLog: [],
   welfareReserve: 0,
+  settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 5, meetingDates: {} },
   // "Paid Late" already has a late-payment penalty for August, so the assessment skips them.
   penalties: [{ id: "late-pen", memberId: "late", memberName: "Paid Late", amount: 200, reason: "Late contribution", status: "paid", transactionId: "t-late", paidTransactionId: "t-late", date: "2026-08-07", at: "2026-08-07T08:00:00.000Z" }],
 }));
@@ -126,7 +127,7 @@ test("penalties cannot be assessed before the month's deadline has passed", asyn
   assert.match((await response.json()).message, /2999-01-05/);
 });
 
-test("members who paid less than KES 500 by the deadline get an outstanding KES 200 penalty", async () => {
+test("members below the configured welfare amount get the configured penalty", async () => {
   const response = await post("/api/penalties/assess", cookies.chair, { month: "2026-08" });
   assert.equal(response.status, 201);
   const assessed = (await response.json()).data.assessed.map(item => item.memberId).sort();
@@ -139,7 +140,7 @@ test("members who paid less than KES 500 by the deadline get an outstanding KES 
 
   const saved = persistedState();
   const charge = saved.penalties.find(item => item.memberId === "none" && item.month === "2026-08");
-  assert.equal(charge.amount, 200);
+  assert.equal(charge.amount, 75);
   assert.equal(charge.status, "outstanding");
   assert.equal(charge.reason, "Missed monthly contribution");
   const entries = saved.auditLog.filter(item => item.type === "penalty.assessed");
@@ -159,8 +160,8 @@ test("an outstanding assessed penalty is settled by the member's next payment", 
   const response = await post("/api/contributions", cookies.treasurer, { memberId: "none", amount: 700, method: "Cash", note: "Catch-up payment", referenceNumber: "RCPT-NONE1", date: "2026-09-03" });
   assert.equal(response.status, 201);
   const transaction = (await response.json()).data;
-  assert.equal(transaction.penaltyAmount, 200);
-  assert.equal(transaction.welfareAmount, 500);
+  assert.equal(transaction.penaltyAmount, 75);
+  assert.equal(transaction.welfareAmount, 350);
   const charge = persistedState().penalties.find(item => item.memberId === "none" && item.month === "2026-08");
   assert.equal(charge.status, "paid");
   assert.equal(charge.paidTransactionId, transaction.id);

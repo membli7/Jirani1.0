@@ -10,6 +10,30 @@ const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
 const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
 const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
+const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
+const registerScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8");
+
+test("landing registration opens a complete first-chama setup page", () => {
+  assert.match(html, /id="landing-register" href="\/register\.html"/);
+  for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin"]) {
+    assert.match(registerHtml, new RegExp(`name="${field}"`));
+  }
+  assert.match(registerHtml, /id="register-chama-form"/);
+  assert.match(registerHtml, /id="register-deadline-day" name="deadlineDay" type="number" min="1" max="28" value="5" required/);
+  assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
+  assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
+  assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.1" defer/);
+  assert.match(registerScript, /fetch\("\/api\/setup"/);
+  assert.match(registerScript, /credentials: "same-origin"/);
+  assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
+  assert.match(registerScript, /formData\.welfareMonthlyFee = Number\(formData\.welfareMonthlyFee\)/);
+  assert.match(registerScript, /formData\.lateContributionPenalty = Number\(formData\.lateContributionPenalty\)/);
+  assert.match(registerScript, /formData\.loanMonthlyRatePercent = Number\(formData\.loanMonthlyRatePercent\)/);
+  assert.match(registerScript, /X-Requested-With": "chama"/);
+  assert.match(registerScript, /register-success/);
+  assert.match(registerScript, /registrationNotice\.textContent = error instanceof TypeError/);
+});
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);

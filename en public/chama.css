@@ -219,6 +219,10 @@ td { padding: 12px 13px; border-top: 1px solid #f0f2ef; font-size: 10px; white-s
 .button-primary:hover { background: #1c603c; }
 .button-primary:disabled { opacity: .6; cursor: wait; }
 .form-note { margin: -5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.register-rules { display: grid; gap: 10px; margin: 18px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.register-rules legend { padding: 0 6px; color: var(--navy); font-weight: 700; }
+.register-rules .field { margin-top: 0; }
+.register-rules .form-note { margin: 0; }
 .schedule-body { display: grid; gap: 0; padding: 0 15px 12px; }
 .schedule-item { display: flex; align-items: center; gap: 9px; padding: 11px 0; border-top: 1px solid #f0f2ef; }
 .schedule-item > div:nth-child(2) { flex: 1; min-width: 0; }

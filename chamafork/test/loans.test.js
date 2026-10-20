@@ -49,6 +49,7 @@ fs.writeFileSync(dataFile, JSON.stringify({
   auditLog: [],
   penalties: [],
   welfareReserve: 0,
+  settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 7.5, meetingDates: {} },
 }));
 
 function persistedState() {
@@ -153,30 +154,28 @@ after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("reducing balance: KES 1,000 over 2 months at 5% a month", async () => {
+test("reducing balance: KES 1,000 over 2 months at the configured 7.5% a month", async () => {
   const response = await requestLoan(cookies.borrower, { amount: 1000, months: 2, interestModel: "reducing", guarantorIds: ["g1", "g2"] });
   assert.equal(response.status, 201);
   const loan = await approveLoan((await response.json()).data.id);
   assert.equal(loan.status, "approved");
   assert.deepEqual(loan.guarantors, [{ memberId: "g1", pledged: 1000, held: 1000 }, { memberId: "g2", pledged: 0, held: 0 }]);
-  // Installment = 1000 × 0.05 / (1 − 1.05⁻²) = 537.80, rounded to 538.
-  assert.deepEqual(loan.schedule.map(row => row.installment), [538, 538]);
-  // Month 1 interest is 5% of 1,000 = 50, so principal is 488 and 512 remains.
-  // Month 2 interest is 5% of 512 = 25.6, rounded to 26, and the final installment clears 512.
-  assert.deepEqual(loan.schedule.map(row => row.interest), [50, 26]);
-  assert.deepEqual(loan.schedule.map(row => row.principal), [488, 512]);
-  assert.equal(loan.totalPayable, 1076);
-  assert.equal(loan.outstanding, 1076);
+  // At 7.5%, each equal installment is KES 557 after rounding.
+  assert.deepEqual(loan.schedule.map(row => row.installment), [557, 557]);
+  assert.deepEqual(loan.schedule.map(row => row.interest), [75, 39]);
+  assert.deepEqual(loan.schedule.map(row => row.principal), [482, 518]);
+  assert.equal(loan.totalPayable, 1114);
+  assert.equal(loan.outstanding, 1114);
 });
 
-test("flat rate: KES 1,000 over 2 months charges 5% of principal each month", async () => {
+test("flat rate: KES 1,000 over 2 months uses the configured 7.5% each month", async () => {
   const response = await requestLoan(cookies.richer, { amount: 1000, months: 2, interestModel: "flat", guarantorIds: ["g2", "g3"] });
   assert.equal(response.status, 201);
   const loan = await approveLoan((await response.json()).data.id);
-  assert.deepEqual(loan.schedule.map(row => row.interest), [50, 50]);
+  assert.deepEqual(loan.schedule.map(row => row.interest), [75, 75]);
   assert.deepEqual(loan.schedule.map(row => row.principal), [500, 500]);
-  assert.deepEqual(loan.schedule.map(row => row.installment), [550, 550]);
-  assert.equal(loan.totalPayable, 1100, "total interest is P × r × t = 1000 × 0.05 × 2 = 100");
+  assert.deepEqual(loan.schedule.map(row => row.installment), [575, 575]);
+  assert.equal(loan.totalPayable, 1150, "total interest is P × r × t = 1000 × 0.075 × 2 = 150");
 });
 
 test("borrowing above three times share capital is rejected", async () => {
@@ -227,29 +226,29 @@ test("repayments split interest first, then release pledges as principal falls",
   const first = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 538, method: "Cash", note: "First installment", referenceNumber: "RCPT-3001", date: "2026-10-05" });
   assert.equal(first.status, 201);
   const transaction = (await first.json()).data;
-  assert.equal(transaction.interestAmount, 50);
-  assert.equal(transaction.principalAmount, 488);
+  assert.equal(transaction.interestAmount, 75);
+  assert.equal(transaction.principalAmount, 463);
 
   const loan = loanById(loanId);
-  assert.equal(loan.outstanding, 538);
-  assert.equal(loan.schedule[0].paidInterest, 50);
-  assert.equal(loan.schedule[0].paidPrincipal, 488);
-  // 512 of principal remains, so g1's 1,000 pledge shrinks to 512.
-  assert.equal(memberHeld(loan, "g1"), 512);
-  assert.equal(unpledged("g1"), 488);
-  assert.ok(persistedState().auditLog.some(item => item.type === "pledge.released" && item.loanId === loanId && item.amount === 488));
+  assert.equal(loan.outstanding, 576);
+  assert.equal(loan.schedule[0].paidInterest, 75);
+  assert.equal(loan.schedule[0].paidPrincipal, 463);
+  // 537 of principal remains, so g1's 1,000 pledge shrinks to 537.
+  assert.equal(memberHeld(loan, "g1"), 537);
+  assert.equal(unpledged("g1"), 463);
+  assert.ok(persistedState().auditLog.some(item => item.type === "pledge.released" && item.loanId === loanId && item.amount === 463));
 });
 
 test("overpaying a loan is rejected", async () => {
   const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
   const response = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 600, method: "Cash", note: "Too much", referenceNumber: "RCPT-3002", date: "2026-10-05" });
   assert.equal(response.status, 400);
-  assert.equal(loanById(loanId).outstanding, 538);
+  assert.equal(loanById(loanId).outstanding, 576);
 });
 
 test("the final repayment closes the loan and releases every pledge", async () => {
   const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
-  const response = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 538, method: "Cash", note: "Final installment", referenceNumber: "RCPT-3003", date: "2026-11-05" });
+  const response = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 576, method: "Cash", note: "Final installment", referenceNumber: "RCPT-3003", date: "2026-11-05" });
   assert.equal(response.status, 201);
   const loan = loanById(loanId);
   assert.equal(loan.status, "repaid");

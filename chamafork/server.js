@@ -249,7 +249,21 @@ function internationalPhone(phone) {
   const normalized = normalizePhone(phone);
   return normalized ? normalized.replace(/\D/g, "") : null;
 }
-function emptyState() { return { version: 2, chamas: [], users: [], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: DEFAULT_DEADLINE_DAY, meetingDates: {} }, dividendCycles: [], messages: [] }; }
+function emptyState() { return { version: 2, chamas: [], users: [], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: DEFAULT_DEADLINE_DAY, welfareMonthlyFee: WELFARE_MONTHLY_FEE, lateContributionPenalty: LATE_CONTRIBUTION_PENALTY, loanMonthlyRatePercent: LOAN_MONTHLY_RATE * 100, meetingDates: {} }, dividendCycles: [], messages: [] }; }
+function settingAmount(key, fallback) {
+  const raw = state.settings?.[key];
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+}
+function configuredWelfareFee() { return settingAmount("welfareMonthlyFee", WELFARE_MONTHLY_FEE); }
+function configuredLatePenalty() { return settingAmount("lateContributionPenalty", LATE_CONTRIBUTION_PENALTY); }
+function configuredLoanMonthlyRate() {
+  const raw = state.settings?.loanMonthlyRatePercent;
+  if (raw === undefined || raw === null || raw === "") return LOAN_MONTHLY_RATE;
+  const percent = Number(raw);
+  return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? percent / 100 : LOAN_MONTHLY_RATE;
+}
 // A month's meeting date overrides the default deadline day, which applies to every other month.
 function scheduledMeetingDate(month) {
   const custom = state.settings?.meetingDates?.[month];
@@ -265,13 +279,13 @@ function scopeToChama(collection, chamaId, getChamaId = item => item?.chamaId) {
 }
 // Reducing balance: equal installments, interest on the remaining principal each month.
 // Flat rate: interest on the full principal each month, principal in equal parts.
-function repaymentSchedule(principal, months, model, startDate) {
+function repaymentSchedule(principal, months, model, startDate, monthlyRate) {
   const rows = []; let balance = principal;
-  const installment = Math.round(principal * LOAN_MONTHLY_RATE / (1 - (1 + LOAN_MONTHLY_RATE) ** -months));
-  const flatInterest = Math.round(principal * LOAN_MONTHLY_RATE);
+  const installment = monthlyRate === 0 ? Math.round(principal / months) : Math.round(principal * monthlyRate / (1 - (1 + monthlyRate) ** -months));
+  const flatInterest = Math.round(principal * monthlyRate);
   const flatPrincipal = Math.floor(principal / months);
   for (let number = 1; number <= months; number += 1) {
-    const interest = model === "flat" ? flatInterest : Math.round(balance * LOAN_MONTHLY_RATE);
+    const interest = model === "flat" ? flatInterest : Math.round(balance * monthlyRate);
     const principalDue = number === months ? balance : model === "flat" ? flatPrincipal : installment - interest;
     rows.push({ no: number, dueDate: addMonthsToDate(startDate, number), openingBalance: balance, principal: principalDue, interest, installment: principalDue + interest, paidPrincipal: 0, paidInterest: 0 });
     balance -= principalDue;
@@ -910,10 +924,28 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   const email = normalizeEmail(req.body?.email);
   const pin = clean(req.body?.pin);
+  const parseSetting = (key, fallback) => {
+    const value = req.body?.[key];
+    if (value === undefined) return fallback;
+    if (typeof value !== "number" && typeof value !== "string") return Number.NaN;
+    if (typeof value === "string" && !value.trim()) return Number.NaN;
+    return Number(value);
+  };
+  const deadlineDay = parseSetting("deadlineDay", DEFAULT_DEADLINE_DAY);
+  const welfareMonthlyFee = parseSetting("welfareMonthlyFee", WELFARE_MONTHLY_FEE);
+  const lateContributionPenalty = parseSetting("lateContributionPenalty", LATE_CONTRIBUTION_PENALTY);
+  const loanMonthlyRatePercent = parseSetting("loanMonthlyRatePercent", LOAN_MONTHLY_RATE * 100);
   if (!chamaName || chamaName.length > 100 || !name || name.length > 100 || !phone || !validEmail(email) || !validNewPin(pin)) return res.status(400).json({ message: "Enter the chama name, your name, a valid email address, a valid Kenyan phone number, and a 6-12 digit PIN." });
+  if (!Number.isInteger(deadlineDay) || deadlineDay < 1 || deadlineDay > 28) return res.status(400).json({ message: "Choose a monthly contribution deadline from day 1 to day 28." });
+  if (!Number.isSafeInteger(welfareMonthlyFee) || welfareMonthlyFee < 0 || !Number.isSafeInteger(lateContributionPenalty) || lateContributionPenalty < 0 || !Number.isFinite(loanMonthlyRatePercent) || loanMonthlyRatePercent < 0 || loanMonthlyRatePercent > 100) return res.status(400).json({ message: "Enter whole non-negative KES amounts and a monthly loan rate from 0% to 100%." });
   const updated = structuredClone(state);
   const chamaId = newId();
   if (!Array.isArray(updated.chamas)) updated.chamas = [];
+  if (!updated.settings || typeof updated.settings !== "object") updated.settings = { defaultDeadlineDay: DEFAULT_DEADLINE_DAY, meetingDates: {} };
+  updated.settings.defaultDeadlineDay = deadlineDay;
+  updated.settings.welfareMonthlyFee = welfareMonthlyFee;
+  updated.settings.lateContributionPenalty = lateContributionPenalty;
+  updated.settings.loanMonthlyRatePercent = loanMonthlyRatePercent;
   updated.chamas.push({ id: chamaId, name: chamaName, createdAt: now() });
   const user = { id: newId(), name, phone, email, role: "chairperson", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt: now(), chamaId };
   updated.users.push(user);
@@ -1380,10 +1412,10 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   const contributionMonth = date.slice(0, 7);
   const welfarePaid = scopeToChama(state.transactions, req.user.chamaId).some(item => item.memberId === member.id && item.contributionMonth === contributionMonth && item.welfareAmount > 0);
   const meetingDate = scheduledMeetingDate(contributionMonth);
-  const newPenalty = date > meetingDate ? LATE_CONTRIBUTION_PENALTY : 0;
+  const newPenalty = date > meetingDate ? configuredLatePenalty() : 0;
   const outstandingPenalties = scopeToChama(state.penalties, req.user.chamaId).filter(item => item.memberId === member.id && item.status === "outstanding");
   const penaltyDue = outstandingPenalties.reduce((sum, item) => sum + item.amount, 0) + newPenalty;
-  const welfare = welfarePaid ? 0 : WELFARE_MONTHLY_FEE;
+  const welfare = welfarePaid ? 0 : configuredWelfareFee();
   if (amount < penaltyDue + welfare) return res.status(400).json({ message: `This payment must cover ${penaltyDue ? `KES ${penaltyDue} in penalties and ` : ""}the KES ${welfare} welfare fee.` });
   const shareCapital = amount - penaltyDue - welfare;
   const updated = structuredClone(state); const savedMember = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === member.id);
@@ -1458,10 +1490,12 @@ app.post("/api/penalties/assess", requireAuth, requirePinChanged, requireRole("c
   const chamaPenalties = scopeToChama(updated.penalties, req.user.chamaId);
   for (const member of chamaMembers) {
     const paidByDeadline = chamaTransactions.filter(item => item.memberId === member.id && item.paymentType === "Monthly Contribution" && (item.contributionMonth || nairobiDate(item.at).slice(0, 7)) === month && transactionDate(item) <= deadline).reduce((sum, item) => sum + item.amount, 0);
-    if (paidByDeadline >= WELFARE_MONTHLY_FEE) continue;
+    if (paidByDeadline >= configuredWelfareFee()) continue;
     // A late-payment penalty for this month already covers the miss.
     if (chamaPenalties.some(item => item.memberId === member.id && (item.month === month || String(item.date || "").startsWith(month)))) continue;
-    const charge = { id: newId(), memberId: member.id, memberName: member.name, amount: LATE_CONTRIBUTION_PENALTY, reason: "Missed monthly contribution", month, status: "outstanding", transactionId: null, paidTransactionId: null, date: todayInNairobi(), at: now(), chamaId: req.user.chamaId };
+    const penaltyAmount = configuredLatePenalty();
+    if (penaltyAmount === 0) continue;
+    const charge = { id: newId(), memberId: member.id, memberName: member.name, amount: penaltyAmount, reason: "Missed monthly contribution", month, status: "outstanding", transactionId: null, paidTransactionId: null, date: todayInNairobi(), at: now(), chamaId: req.user.chamaId };
     updated.penalties.push(charge);
     updated.auditLog.push(auditEntry("penalty.assessed", charge.id, req.user, { memberId: member.id, memberName: member.name, amount: charge.amount, month, deadline, paidByDeadline }));
     assessed.push({ memberId: member.id, memberName: member.name, amount: charge.amount });
@@ -1577,7 +1611,7 @@ app.post("/api/loans/:id/decisions", requireAuth, requirePinChanged, requireRole
     const approvedOn = todayInNairobi();
     loan.status = "approved";
     loan.approvedOn = approvedOn;
-    loan.schedule = repaymentSchedule(loan.amount, loan.months, loan.interestModel || "reducing", approvedOn);
+    loan.schedule = repaymentSchedule(loan.amount, loan.months, loan.interestModel || "reducing", approvedOn, configuredLoanMonthlyRate());
     loan.totalPayable = loan.schedule.reduce((sum, row) => sum + row.installment, 0);
     loan.outstanding = loan.totalPayable;
     loan.resolvedAt = now();

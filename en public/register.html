@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register a new chama | Jirani Chama</title>
+    <link rel="stylesheet" href="/chama.css?v=20261020.1">
+</head>
+<body>
+    <header class="topbar auth-page-topbar">
+        <a class="brand" href="/" aria-label="Jirani Chama home">
+            <span class="brand-mark" aria-hidden="true">J</span>
+            <span>Jirani Chama <small>GROUP TREASURY</small></span>
+        </a>
+        <label class="language-control" for="language-switch">Language
+            <select id="language-switch" aria-label="Language">
+                <option value="en">English</option>
+                <option value="sw">Kiswahili</option>
+            </select>
+        </label>
+    </header>
+    <main id="auth-page" class="login-overlay">
+        <div class="login-content">
+            <section class="login-brand">
+                <p class="login-eyebrow">Jirani Chama</p>
+                <h1>Start a new chama</h1>
+                <p class="login-intro">Register your group and create the chairperson account. You will be signed in when setup is complete.</p>
+            </section>
+            <section class="auth-page-forms" aria-label="New chama registration">
+                <form id="register-chama-form" class="login-card">
+                    <h2>Chama and chairperson details</h2>
+                    <p>All fields are required. Your PIN must have 6 to 12 digits.</p>
+                    <p id="register-notice" class="login-notice" role="alert" aria-live="assertive" hidden></p>
+                    <label class="field" for="register-chama-name">Chama name
+                        <input id="register-chama-name" name="chamaName" type="text" maxlength="100" autocomplete="organization" required>
+                    </label>
+                    <label class="field" for="register-chairperson-name">Chairperson full name
+                        <input id="register-chairperson-name" name="name" type="text" maxlength="100" autocomplete="name" required>
+                    </label>
+                    <label class="field" for="register-chairperson-phone">Phone number
+                        <input id="register-chairperson-phone" name="phone" type="tel" autocomplete="tel" required>
+                    </label>
+                    <label class="field" for="register-chairperson-email">Email address
+                        <input id="register-chairperson-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                    </label>
+                    <fieldset class="register-rules">
+                        <legend>Financial rules</legend>
+                        <p class="form-note">These defaults can be changed for this chama. They are enforced by the server.</p>
+                        <label class="field" for="register-deadline-day">Monthly contribution due by day
+                            <input id="register-deadline-day" name="deadlineDay" type="number" min="1" max="28" value="5" required>
+                        </label>
+                        <label class="field" for="register-welfare-fee">Monthly welfare contribution (KES)
+                            <input id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required>
+                        </label>
+                        <label class="field" for="register-late-penalty">Late contribution penalty (KES)
+                            <input id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required>
+                        </label>
+                        <label class="field" for="register-loan-rate">Monthly loan interest (%)
+                            <input id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0.1" value="5" required>
+                        </label>
+                    </fieldset>
+                    <label class="field" for="register-chairperson-pin">Create PIN
+                        <input id="register-chairperson-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required>
+                    </label>
+                    <button class="button-primary" type="submit">Register chama</button>
+                    <p class="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html">Member login</a></p>
+                </form>
+                <section id="register-success" class="login-card" aria-live="polite" hidden>
+                    <h2>Chama registered</h2>
+                    <p>Your chairperson account is ready. Continue to your chama dashboard.</p>
+                    <a class="button-primary" href="/">Open dashboard</a>
+                </section>
+            </section>
+        </div>
+    </main>
+    <script src="/i18n.js?v=20261016.1" defer></script>
+    <script src="/register.js?v=20261020.1" defer></script>
+</body>
+</html>

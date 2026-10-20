@@ -90,12 +90,30 @@ describe("Jirani Chama server", () => {
     const setupStatus = await request("/api/setup/status");
     assert.equal(setupStatus.status, 200);
     assert.deepEqual(await json(setupStatus), { requiresSetup: true });
+
+    const registerPage = await request("/register.html");
+    assert.equal(registerPage.status, 200);
+    assert.match(await registerPage.text(), /id="register-chama-form"/);
+    const registerScript = await request("/register.js");
+    assert.equal(registerScript.status, 200);
+    assert.match(await registerScript.text(), /fetch\("\/api\/setup"/);
   });
 
   test("creates a chairperson session and serves the dashboard", async () => {
+    const invalidDeadline = await request("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456", deadlineDay: 29 }),
+    });
+    assert.equal(invalidDeadline.status, 400);
+    const invalidRules = await request("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456", deadlineDay: 10, welfareMonthlyFee: "", lateContributionPenalty: 75, loanMonthlyRatePercent: 101 }),
+    });
+    assert.equal(invalidRules.status, 400);
+
     const setup = await request("/api/setup", {
       method: "POST",
-      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456" }),
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456", deadlineDay: 10, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 7.5 }),
     });
     assert.equal(setup.status, 201);
     const duplicateSetup = await request("/api/setup", {
@@ -109,6 +127,7 @@ describe("Jirani Chama server", () => {
     const savedState = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
     assert.equal(savedState.chamas.length, 1);
     assert.equal(savedState.chamas[0].name, "Test Chama");
+    assert.deepEqual(savedState.settings, { defaultDeadlineDay: 10, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 7.5, meetingDates: {} });
     assert.equal(savedState.users[0].chamaId, savedState.chamas[0].id);
     cookie = setup.headers.getSetCookie?.()[0]?.split(";")[0] || setup.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie, "setup should establish a session cookie");
