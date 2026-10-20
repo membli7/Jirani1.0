@@ -1971,8 +1971,94 @@ body > .site-footer {
 .main-grid.is-single-view > .column > .panel { width: 100%; }
 
 @media (max-width: 600px) {
+  body:has(.topbar.is-authenticated) { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
   .topbar.is-authenticated { padding-right: 10px; padding-left: 10px; }
   .topbar.is-authenticated .top-actions { gap: 6px !important; }
-  .topbar.is-authenticated .dashboard-tabs { gap: 4px; }
+  .topbar.is-authenticated .dashboard-tabs {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1200;
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 -6px 20px rgba(31, 48, 40, .08);
+    backdrop-filter: blur(12px);
+  }
+  .dashboard-tab {
+    display: grid;
+    min-height: 58px;
+    justify-items: center;
+    align-content: center;
+    gap: 3px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 10px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .dashboard-tab svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .dashboard-tab.is-active { color: var(--green); background: var(--green-soft); }
+  .topbar.is-authenticated .brand { min-height: 38px; }
+  .topbar.is-authenticated .top-actions { width: auto; }
+  .topbar.is-authenticated .connection-status { display: inline-flex; }
   .menu-bar { top: 64px; width: 100vw; border-left: 0; }
+}
+
+/* Finance views use the tenant-scoped summary APIs and keep comparison bars below the detail. */
+.topbar.is-authenticated .dashboard-tabs { display: flex; align-items: center; gap: 6px; }
+.dashboard-tab { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 8px 13px; border: 1px solid transparent; border-radius: 10px; color: var(--muted); background: transparent; font: inherit; font-weight: 650; }
+.dashboard-tab svg { flex: 0 0 auto; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dashboard-tab:hover, .dashboard-tab:focus-visible { color: var(--green); background: var(--green-soft); }
+.dashboard-tab.is-active { border-color: #d4e7d8; color: var(--green); background: var(--green-soft); }
+.brand-mark { border-radius: 50%; overflow: hidden; }
+.brand-mark svg { width: 100%; height: 100%; }
+.topbar.is-authenticated .connection-status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa39d; }
+.topbar.is-authenticated .connection-status[data-status="live"] .connection-status-dot { background: #2f9b5e; box-shadow: 0 0 0 3px rgba(47, 155, 94, .14); }
+.topbar.is-authenticated .connection-status:not([data-status="live"]) .connection-status-dot { background: #9aa39d; box-shadow: none; }
+.finance-view-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.finance-table-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+#dashboard .finance-table-grid { display: none; }
+.finance-section { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.finance-section h3, .finance-chart-section h3 { margin: 0 0 12px; font-size: 16px; }
+.finance-section-copy { color: var(--muted); font-size: 13px; }
+.finance-table-wrap { max-height: 360px; overflow: auto; }
+.finance-data-table { width: 100%; border-collapse: collapse; }
+.finance-data-table th, .finance-data-table td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.finance-data-table th { position: sticky; top: 0; z-index: 1; background: #f8faf8; }
+.group-finance-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.finance-summary-card { display: grid; gap: 8px; min-height: 92px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.finance-summary-card span { color: var(--muted); font-size: 13px; }
+.finance-summary-card strong { font-size: clamp(17px, 2vw, 22px); overflow-wrap: anywhere; }
+.finance-chart-section { width: 100%; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.dashboard-chart { display: grid; gap: 16px; }
+.comparison-row { display: grid; gap: 7px; }
+.comparison-label { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 14px; }
+.comparison-label strong { text-align: right; font-variant-numeric: tabular-nums; }
+.comparison-track { height: 12px; overflow: hidden; border-radius: 99px; background: #eef2ee; }
+.comparison-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #70a982, #24734a); }
+.comparison-track span.is-negative { background: linear-gradient(90deg, #dc9a83, #b64c4c); }
+.finance-data-notice:not([hidden]) { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; color: #7d5316; background: #fff4df; }
+.audit-table-wrap, .cash-flow-table-wrap { max-height: min(60vh, 560px); overflow: auto; }
+.audit-table-wrap thead, .cash-flow-table-wrap thead { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+@media (max-width: 700px) {
+  .finance-table-grid { grid-template-columns: minmax(0, 1fr); }
+  .finance-table-wrap { overflow-x: auto; }
+  .finance-data-table { min-width: 460px; }
+  .finance-data-table, .finance-data-table thead, .finance-data-table tbody, .finance-data-table tr, .finance-data-table th, .finance-data-table td { display: revert; }
+  .finance-data-table thead { position: sticky; width: auto; height: auto; overflow: visible; clip: auto; }
+  .finance-data-table td::before { content: none; }
+  .audit-table-wrap { overflow: auto; }
+  .audit-table, .audit-table thead, .audit-table tbody, .audit-table tr, .audit-table th, .audit-table td { display: revert; }
+  .audit-table { min-width: 620px; width: 100%; border-collapse: collapse; }
+  .audit-table thead { position: sticky; top: 0; width: auto; height: auto; overflow: visible; clip: auto; }
+  .audit-table td::before { content: none; }
 }

@@ -90,7 +90,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.6" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261020\.7" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -179,6 +179,18 @@ test("authenticated dashboard navigation uses an accessible hamburger drawer", (
   assert.match(css, /\.menu-bar\.menu-open\s*\{\s*display:\s*flex !important/);
 });
 
+test("You and Group have separate financial views with mobile bottom navigation and comparable totals", () => {
+  assert.match(html, /id="dashboard-tabs"[\s\S]*?data-dashboard-tab="you"[\s\S]*?data-dashboard-tab="group"/);
+  assert.match(html, /id="you-chart"/);
+  assert.match(html, /id="group-chart"/);
+  assert.match(script, /api\("\/api\/profile\/summary"\)/);
+  assert.match(script, /api\("\/api\/summary"\)/);
+  assert.match(script, /function renderComparableChart\(/);
+  assert.match(script, /await loadFinancialViews\(\)/);
+  assert.match(script, /summary\.balance !== null && summary\.balance !== undefined/);
+  assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?bottom:\s*0;/);
+});
+
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);
   assert.match(html, /<tbody id="audit-list"/);
@@ -229,6 +241,5 @@ test("profile page loads its write helper and connects forms to authenticated pr
   assert.match(profileScript, /"X-Requested-With": "chama"/);
   assert.match(profileScript, /credentials: "same-origin"/);
   assert.doesNotMatch(profileScript, /\.innerHTML\s*=/);
-  assert.match(script, /for \(const action of \["#edit-profile", "#view-profile"\]\)/);
-  assert.match(script, /window\.location\.assign\("\/profile\.html"\)/);
+  assert.match(html, /id="profile-menu"[\s\S]*?href="\/profile\.html"[^>]*>My profile<\/a>/);
 });

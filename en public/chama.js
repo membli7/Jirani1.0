@@ -14,6 +14,11 @@ let streamRetryTimer;
 let pollingTimer;
 let activityTimer;
 let authenticated = false;
+let selectedDashboardView = "you";
+let activeAppPage = "overview";
+let auditEntries = [];
+let auditPage = 0;
+const auditPageSize = 25;
 let lastActivity = Date.now();
 let lastActivityPing = 0;
 const idleLimitMs = 15 * 60 * 1000;
@@ -155,7 +160,7 @@ function render() {
   renderAttendance(user);
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
-  showAppPage("overview");
+  showAppPage(activeAppPage);
 }
 function updateNavigationVisibility() {
   for (const link of menuBar.querySelectorAll("a[data-panel]")) {
@@ -167,13 +172,26 @@ function updateNavigationVisibility() {
     dropdown.hidden = links.length > 0 && links.every(link => link.hidden);
   }
 }
+function updateDashboardTabs() {
+  for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
+    const selected = tab.dataset.dashboardTab === selectedDashboardView;
+    tab.classList.toggle("is-active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+}
 function showAppPage(panelId) {
   const overview = panelId === "overview" || panelId === "dashboard";
-  const activeIds = overview ? new Set(["attendance-panel", "loans-panel"]) : new Set([panelId]);
+  if (panelId === "dashboard") selectedDashboardView = "you";
+  const financePanel = selectedDashboardView === "group" ? "dashboard" : "you-dashboard";
+  const activeIds = overview ? new Set([financePanel]) : new Set([panelId]);
+  activeAppPage = overview ? "overview" : panelId;
   const sectionIds = ["you-dashboard", "dashboard", "attendance-panel", "loans-panel"];
   for (const sectionId of sectionIds) {
     const section = document.getElementById(sectionId);
-    if (section) section.dataset.pageInactive = String(!activeIds.has(sectionId));
+    if (!section) continue;
+    if (sectionId === "you-dashboard" || sectionId === "dashboard") section.hidden = false;
+    section.dataset.pageInactive = String(!activeIds.has(sectionId));
   }
 
   const mainGrid = $(".main-grid");
@@ -195,6 +213,7 @@ function showAppPage(panelId) {
   for (const dropdown of menuBar.querySelectorAll(".nav-dropdown")) {
     dropdown.classList.toggle("active", !!dropdown.querySelector("a[aria-current='page']"));
   }
+  updateDashboardTabs();
   setNavigationOpen(false);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -339,11 +358,96 @@ async function loadAuditLog() {
   try {
     const { data = [] } = await api("/api/audit-log", { silentForbidden: true });
     auditNotice.hidden = true;
-    $("#audit-list").innerHTML = data.slice(0, 50).map(entry => `<tr><td>${esc(fmtDate(entry.at))} ${esc(fmtTime(entry.at))}</td><td>${esc(entry.by?.name || "Unknown")}${entry.by?.role ? ` (${esc(roleName(entry.by.role))})` : ""}</td><td>${esc(auditDescription(entry))}</td></tr>`).join("") || '<tr><td colspan="3" class="empty-state">No audit entries yet.</td></tr>';
+    auditEntries = Array.isArray(data) ? data : [];
+    renderAuditLogPage();
   } catch (error) {
-    $("#audit-list").innerHTML = "";
+    auditEntries = [];
+    renderAuditLogPage();
     auditNotice.textContent = error.status === 403 ? "You do not have permission to view the audit log." : "The audit log could not load. Try again.";
     auditNotice.hidden = false;
+  }
+}
+function renderAuditLogPage() {
+  const query = $("#audit-search")?.value.trim().toLocaleLowerCase() || "";
+  const matches = auditEntries.filter(entry => !query || [
+    entry.by?.name,
+    entry.by?.role,
+    entry.type,
+    auditDescription(entry),
+    entry.at,
+  ].some(value => String(value ?? "").toLocaleLowerCase().includes(query)));
+  const pageCount = Math.max(1, Math.ceil(matches.length / auditPageSize));
+  auditPage = Math.min(auditPage, pageCount - 1);
+  const pageEntries = matches.slice(auditPage * auditPageSize, (auditPage + 1) * auditPageSize);
+  $("#audit-list").innerHTML = pageEntries.map(entry => `<tr><td>${esc(fmtDate(entry.at))} ${esc(fmtTime(entry.at))}</td><td>${esc(entry.by?.name || "Unknown")}${entry.by?.role ? ` (${esc(roleName(entry.by.role))})` : ""}</td><td>${esc(auditDescription(entry))}</td></tr>`).join("") || '<tr><td colspan="3" class="empty-state">No audit entries match this filter.</td></tr>';
+  const label = $("#audit-page-info");
+  if (label) label.textContent = `${matches.length ? auditPage + 1 : 0} / ${matches.length ? pageCount : 0} · ${matches.length} entries`;
+  $("#audit-previous").disabled = auditPage === 0;
+  $("#audit-next").disabled = auditPage >= pageCount - 1;
+}
+function financeDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : esc(fmtDate(date));
+}
+function financeRows(selector, rows, columns, emptyMessage) {
+  const body = $(selector);
+  if (!body) return;
+  body.innerHTML = rows.length
+    ? rows.map(row => `<tr>${columns.map(([label], index) => `<td data-label="${esc(label)}">${row[index] ?? "—"}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${columns.length}" class="empty-state">${esc(emptyMessage)}</td></tr>`;
+}
+function renderComparableChart(selector, values) {
+  const container = $(selector);
+  if (!container) return;
+  const safeValues = values.map(([label, value]) => [label, Number.isFinite(Number(value)) ? Number(value) : 0]);
+  const max = Math.max(0, ...safeValues.map(([, value]) => Math.abs(value)));
+  container.innerHTML = safeValues.length ? safeValues.map(([label, value]) => {
+    const width = max > 0 ? Math.max(value !== 0 ? 2 : 0, Math.abs(value) / max * 100) : 0;
+    return `<div class="comparison-row"><div class="comparison-label"><span>${esc(label)}</span><strong>${money(value)}</strong></div><div class="comparison-track" aria-hidden="true"><span class="${value < 0 ? "is-negative" : ""}" style="width:${width.toFixed(1)}%"></span></div></div>`;
+  }).join("") : '<p class="empty-state">No financial totals available.</p>';
+}
+async function loadFinancialViews() {
+  const personalNotice = $("#you-data-notice");
+  const groupNotice = $("#group-data-notice");
+  const results = await Promise.allSettled([api("/api/profile/summary"), api("/api/summary")]);
+  const [personalResult, groupResult] = results;
+  if (personalResult.status === "fulfilled") {
+    const data = personalResult.value.data || {};
+    const contributions = Array.isArray(data.contributions) ? data.contributions : [];
+    const fines = Array.isArray(data.fines) ? data.fines : [];
+    const loans = [...(data.loans?.ongoing || []), ...(data.loans?.fullyPaid || [])];
+    const unpaidFines = fines.filter(item => item.status === "outstanding");
+    const openLoans = loans.filter(item => item.status === "approved");
+    const contributionTotal = contributions.filter(item => item.status !== "pending-member").reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const loanTotal = openLoans.reduce((sum, item) => sum + (Number(item.outstanding) || 0), 0);
+    const finesTotal = unpaidFines.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    financeRows("#you-contributions", contributions.filter(item => item.status !== "pending-member").map(item => [financeDate(item.at), money(item.amount), esc(item.note || item.paymentType || "Monthly contribution")]), [["Date"], ["Amount"], ["Note"]], "No contributions recorded.");
+    financeRows("#you-fines", fines.map(item => [financeDate(item.at || item.date), esc(item.reason || "Fine"), `${money(item.amount)}${item.status === "outstanding" ? " · Unpaid" : " · Paid"}`]), [["Date"], ["Reason"], ["Amount due"]], "No fines recorded.");
+    financeRows("#you-loans", loans.map(item => [financeDate(item.createdAt), esc(item.status), money(item.status === "approved" ? item.outstanding : 0)]), [["Date"], ["Status"], ["Balance due"]], "No loans recorded.");
+    const arrears = [];
+    if (loanTotal > 0) arrears.push(["Outstanding loans", money(loanTotal)]);
+    if (finesTotal > 0) arrears.push(["Unpaid fines", money(finesTotal)]);
+    financeRows("#you-arrears", arrears, [["Amount due"], ["Amount"]], "No arrears recorded.");
+    renderComparableChart("#you-chart", [["Contributions", contributionTotal], ["Outstanding loans", loanTotal], ["Unpaid fines", finesTotal]]);
+    if (personalNotice) personalNotice.hidden = true;
+  } else if (personalNotice) {
+    personalNotice.textContent = "Your financial details could not load. Try refreshing the page.";
+    personalNotice.hidden = false;
+  }
+  if (groupResult.status === "fulfilled") {
+    const summary = groupResult.value.data || {};
+    $("#group-contributions-total").textContent = money(summary.contributions);
+    $("#group-loans-total").textContent = money(summary.outstanding);
+    $("#group-balance-total").textContent = money(summary.balance);
+    $("#group-members-total").textContent = Number(summary.memberCount || 0).toLocaleString("en-KE");
+    const comparison = [["This month’s contributions", summary.contributions], ["Outstanding loans", summary.outstanding]];
+    if (summary.balance !== null && summary.balance !== undefined) comparison.push(["Group balance", summary.balance]);
+    renderComparableChart("#group-chart", comparison);
+    if (groupNotice) groupNotice.hidden = true;
+  } else if (groupNotice) {
+    groupNotice.textContent = "Group financial totals could not load. Try refreshing the page.";
+    groupNotice.hidden = false;
   }
 }
 async function refresh() {
@@ -354,6 +458,7 @@ async function refresh() {
     if (!selectedAttendanceDate) selectedAttendanceDate = meetingDateToday();
     $("#retry").hidden = true;
     render();
+    await loadFinancialViews();
     if (state.permissions.viewAuditLog) await loadAuditLog();
     connectEventStream();
   }
@@ -364,8 +469,12 @@ async function refresh() {
   }
 }
 function setConnectionStatus(status) {
-  const labels = { live: t("live"), reconnecting: t("reconnecting"), polling: t("polling"), offline: t("offline") };
-  const node = $("#connection-status"); if (!node) return; node.textContent = labels[status] || status; node.dataset.status = status;
+  const labels = { ready: t("checkingServer"), live: t("live"), reconnecting: t("reconnecting"), polling: t("polling"), offline: t("offline") };
+  const node = $("#connection-status"); if (!node) return;
+  const label = $("#connection-status-label");
+  if (label) label.textContent = labels[status] || status;
+  node.setAttribute("aria-label", labels[status] || status);
+  node.dataset.status = status;
 }
 function startPollingFallback() {
   if (pollingTimer) return;
@@ -682,6 +791,13 @@ menuBar.addEventListener("click", event => {
     showAppPage(panelLink.dataset.panel);
   }
 });
+for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
+  tab.addEventListener("click", () => {
+    selectedDashboardView = tab.dataset.dashboardTab;
+    showAppPage("overview");
+  });
+}
+$("#notification-button").addEventListener("click", () => showAppPage("chat-panel"));
 document.addEventListener("click", event => {
   if (event.target.closest("#menu-bar, #menu-toggle")) return;
   setNavigationOpen(false);
@@ -705,6 +821,6 @@ document.addEventListener("click", event => {
   profileMenu.hidden = true;
   profileMenuButton.setAttribute("aria-expanded", "false");
 });
-for (const action of ["#edit-profile", "#view-profile"]) {
-  $(action).addEventListener("click", () => window.location.assign("/profile.html"));
-}
+$("#audit-search").addEventListener("input", () => { auditPage = 0; renderAuditLogPage(); });
+$("#audit-previous").addEventListener("click", () => { auditPage = Math.max(0, auditPage - 1); renderAuditLogPage(); });
+$("#audit-next").addEventListener("click", () => { auditPage += 1; renderAuditLogPage(); });

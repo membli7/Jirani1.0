@@ -4,13 +4,19 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
-        <link rel="stylesheet" href="/chama.css?v=20261020.3">
+        <link rel="stylesheet" href="/chama.css?v=20261020.5">
     </head>
 <body>
  <header class="topbar">
      <div class="brand">
-         <span class="brand-mark">
-           <img src="/assets/jirani-logo.png" alt="Jirani Chama logo">
+         <span class="brand-mark" aria-hidden="true">
+           <svg viewBox="0 0 48 48" focusable="false">
+             <circle cx="18" cy="18" r="9" fill="none" stroke="#5365a8" stroke-width="4"></circle>
+             <circle cx="30" cy="18" r="9" fill="none" stroke="#c8553d" stroke-width="4"></circle>
+             <circle cx="18" cy="30" r="9" fill="none" stroke="#7d9a78" stroke-width="4"></circle>
+             <circle cx="30" cy="30" r="9" fill="none" stroke="#e0a526" stroke-width="4"></circle>
+             <circle cx="24" cy="24" r="5" fill="#f2e7d3" stroke="#fff" stroke-width="2"></circle>
+           </svg>
          </span>
          <span>Jirani Chama <small>GROUP TREASURY</small></span>
                <!--==================== Landing Page Navigation ================================================-->
@@ -24,29 +30,15 @@
      </div>
      <nav class="dashboard-tabs" id="dashboard-tabs" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews">
        <button class="dashboard-tab is-active" type="button" role="tab" data-dashboard-tab="you" aria-controls="you-dashboard" aria-selected="true" tabindex="0">
-         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="8" r="3.5"></circle>
-            <path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5"></path>
-        </svg>
+         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5"></path></svg>
          <span data-i18n="youTab">You</span>
        </button>
        <button class="dashboard-tab" type="button" role="tab" data-dashboard-tab="group" aria-controls="dashboard" aria-selected="false" tabindex="-1">
-         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="9" cy="8" r="3"></circle>
-            <circle cx="17" cy="9" r="2.5"></circle>
-            <path d="M3 20c.7-3.3 2.6-5 6-5s5.3 1.7 6 5M15 15c3.3-.3 5.2 1.3 6 4"></path>
-        </svg>
+         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"></circle><circle cx="17" cy="9" r="2.5"></circle><path d="M3 20c.7-3.3 2.6-5 6-5s5.3 1.7 6 5M15 15c3.3-.3 5.2 1.3 6 4"></path></svg>
          <span data-i18n="groupTab">Group</span>
        </button>
      </nav>
      <div class="top-actions">
-         <button id="notification-button" class="notification-button" type="button" aria-label="Messages" title="Messages">
-           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
-             <path d="M10 21h4"></path>
-           </svg>
-           <span id="notification-count" class="notification-count" aria-live="polite" hidden>0</span>
-         </button>
          <div class="profile-menu-wrap">
          <button id="profile-icon" class="profile-icon" type="button" aria-label="Profile" aria-expanded="false" aria-controls="profile-menu" title="Profile">
            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -55,10 +47,7 @@
            </svg>
          </button>
          <div id="profile-menu" class="profile-menu" hidden>
-           <button id="edit-profile" type="button">Edit profile</button>
-           <button id="view-profile" type="button">View profile</button>
-           <button id="create-new-group" type="button">Create new group</button>
-           <button type="button">Switch group</button>
+           <a href="/profile.html">My profile</a>
          </div>
          </div>
          <button
@@ -73,12 +62,7 @@
            <span class="ham-bar"></span>
            <span class="ham-bar"></span>
          </button>
-          <label class="language-control" for="language-switch" data-i18n="language">Language<select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
-              <option value="en" data-i18n="englishOption">English</option>
-              <option value="sw" data-i18n="swahili">Kiswahili</option>
-         </select>
-         </label>
-          <span id="connection-status" class="connection-status" role="status" aria-live="polite" data-i18n="checkingServer">Checking server…</span>
+          <span id="connection-status" class="connection-status" role="status" aria-live="polite" aria-label="Checking server" data-status="ready"><span class="connection-status-dot" aria-hidden="true"></span><span id="connection-status-label" class="screen-reader-only">Checking server…</span></span>
          <span id="identity"></span>
          <button id="logout" class="mini-btn" type="button" hidden>Sign out</button>
      </div>
@@ -116,6 +100,15 @@
         </div>
       </div>
       <a href="#chat-panel" data-panel="chat-panel">Group chat</a>
+      <div class="menu-tools">
+        <button id="notification-button" class="notification-button" type="button" aria-label="Messages" title="Messages">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+          <span>Messages</span>
+        </button>
+        <label class="language-control" for="language-switch" data-i18n="language">Language<select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
+          <option value="en" data-i18n="englishOption">English</option><option value="sw" data-i18n="swahili">Kiswahili</option>
+        </select></label>
+      </div>
       <div class="menu-account">
         <p id="menu-identity"></p>
         <button id="menu-logout" class="menu-logout" type="button" data-i18n="signOut">Sign out</button>
@@ -204,7 +197,7 @@
         </section>
       </div>
       <aside class="finance-chart-section" aria-labelledby="you-chart-title">
-        <h3 id="you-chart-title" data-i18n="yourContributionTrend">Your monthly contributions</h3>
+        <h3 id="you-chart-title">Your financial comparison (KES)</h3>
         <div class="dashboard-chart" id="you-chart"></div>
       </aside>
     </div>
@@ -216,6 +209,12 @@
     </div>
     <p class="finance-data-notice" id="group-data-notice" role="status" aria-live="polite" hidden></p>
     <div class="finance-view-layout">
+      <div class="group-finance-summary" id="group-finance-summary" aria-label="Group financial totals">
+        <article class="finance-summary-card"><span>This month’s contributions</span><strong id="group-contributions-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Outstanding loans</span><strong id="group-loans-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Group balance</span><strong id="group-balance-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Active members</span><strong id="group-members-total">Loading…</strong></article>
+      </div>
       <div class="finance-table-grid">
         <section class="finance-section" aria-labelledby="group-balance-title">
             <h3 id="group-balance-title" data-i18n="balance">Chama balance</h3>
@@ -340,7 +339,7 @@
         </section>
       </div>
       <aside class="finance-chart-section" aria-labelledby="group-chart-title">
-        <h3 id="group-chart-title" data-i18n="groupBalanceTrend">Group balance trend</h3>
+        <h3 id="group-chart-title">Group financial comparison (KES)</h3>
         <div class="dashboard-chart" id="group-chart"></div>
       </aside>
     </div>
@@ -608,12 +607,20 @@
         <div class="panel-heading">
             <div>
                 <h2 id="audit-title">Audit log</h2>
-                <p>Payments, cash flows, loan decisions, and officer changes, newest first. Entries are added when a change happens. The app has no way to edit or delete them. Showing the latest 50.</p>
+                <p>Payments, loan decisions, and officer changes, newest first. Filter and page through entries; audit records cannot be edited or deleted.</p>
             </div>
         </div>
         <p id="audit-notice" class="notice" role="status" hidden></p>
-        <div class="table-wrap">
-            <table>
+        <div class="audit-controls">
+          <label class="audit-search" for="audit-search">Filter audit entries<input id="audit-search" type="search" placeholder="Name, action, or date" autocomplete="off"></label>
+          <div class="audit-pagination" role="navigation" aria-label="Audit log pages">
+            <button id="audit-previous" class="mini-btn" type="button" disabled>Previous</button>
+            <span id="audit-page-info" role="status" aria-live="polite">0 / 0 · 0 entries</span>
+            <button id="audit-next" class="mini-btn" type="button" disabled>Next</button>
+          </div>
+        </div>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Audit log entries. Scroll within this area to review older entries." tabindex="0">
+            <table class="audit-table audit-log-table">
                 <thead>
                     <tr>
                         <th>When</th>
@@ -628,8 +635,8 @@
             <div><h3 data-i18n="cashFlowTableTitle">Recent cash flows</h3></div>
         </div>
         <p id="audit-cash-flows-notice" class="notice" role="status" hidden></p>
-        <div class="table-wrap">
-            <table>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries in the audit log. Scroll within this area to review entries." tabindex="0">
+            <table class="audit-table cash-flow-table">
                 <thead>
                     <tr>
                         <th data-i18n="flow">Flow</th>
@@ -655,8 +662,8 @@
             </div>
         </div>
         <p id="cash-flows-notice" class="notice" role="status" hidden></p>
-        <div class="table-wrap">
-            <table>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries. Scroll within this area to review entries." tabindex="0">
+            <table class="audit-table cash-flow-table">
                 <thead>
                     <tr>
                         <th data-i18n="flow">Flow</th>
@@ -1066,7 +1073,7 @@
  <script src="/write-requests.js?v=20261016.1" defer>
 
  </script>
- <script src="/chama.js?v=20261020.6" defer>
+ <script src="/chama.js?v=20261020.7" defer>
 
  </script>
  <!--==================================================================== DEMO FOOTER: replace demo@example.com with the real contact email before launch ===========================================-->
