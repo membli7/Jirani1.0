@@ -101,7 +101,7 @@ Browser behaviour has not been tested. The front-end tests check that the expect
 - **Payments:** no M-Pesa, bank reconciliation, or STK push. Cash only.
 - **Messages:** the app does not send SMS, email, or in-app noticeboard messages. Invitation codes are shown once on screen unless Africa's Talking is configured, and the code path to send them has not been tested end to end.
 - **Security:** no two-factor authentication, no CSRF audit, and no tamper-evident audit chain. Login is by phone number and PIN, with lockouts after repeated failures.
-- **Data:** a single JSON file, not PostgreSQL. No backups, no Docker, and no cloud deployment are configured.
+- **Data:** `DATA_BACKEND` selects JSON or PostgreSQL; it defaults to JSON for development, while production startup requires PostgreSQL. The PostgreSQL snapshot writer allows only one server process per database. See [production readiness limits](docs/docs/production-readiness.md) for the verified local state and infrastructure items that still need deployment evidence.
 - **Legacy loans:** approved loans created before the schedule change have no schedule, so they carry no interest. They repay against principal only.
 - **Penalties:** the penalty-first rule works for outstanding penalties. Assessment only runs when someone calls the endpoint, so nothing is penalised automatically.
 - **Dividend preview:** it shows the combined pool, not the penalty and interest split.
