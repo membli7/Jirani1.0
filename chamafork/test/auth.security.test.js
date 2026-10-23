@@ -110,7 +110,9 @@ test("production redirects HTTP to HTTPS and marks session cookies Secure", asyn
   const redirect = await fetch(`${server.baseUrl}/api/health`, { redirect: "manual", headers: { Host: "attacker.example" } });
   assert.equal(redirect.status, 301);
   assert.equal(redirect.headers.get("location"), "https://chama.example.test/api/health");
-  const response = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
+  const blockedOrigin = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https", Origin: "https://attacker.example" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
+  assert.equal(blockedOrigin.status, 403);
+  const response = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https", Origin: "https://chama.example.test" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("set-cookie"), /; secure/i);
   assert.equal(response.headers.get("strict-transport-security"), "max-age=31536000");
@@ -118,6 +120,18 @@ test("production redirects HTTP to HTTPS and marks session cookies Secure", asyn
   assert.equal(metrics.status, 404);
   const metricsAuthorized = await fetch(`${server.baseUrl}/metrics`, { headers: { Authorization: "Bearer test-metrics-bearer-token-long-enough-123456" } });
   assert.equal(metricsAuthorized.status, 200);
+});
+
+test("write requests reject a missing custom header and a cross-site Origin", async () => {
+  const server = await startAuthServer();
+  const post = headers => fetch(`${server.baseUrl}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ phone: server.phone, pin: "123456" }),
+  });
+  assert.equal((await post({})).status, 400);
+  assert.equal((await post({ "X-Requested-With": "chama", Origin: "http://attacker.example" })).status, 403);
+  assert.equal((await post({ "X-Requested-With": "chama", Origin: server.baseUrl })).status, 200);
 });
 
 test("OTP requests enforce a destination phone cooldown even when delivery is unavailable", async () => {
