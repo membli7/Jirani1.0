@@ -119,3 +119,14 @@ test("production redirects HTTP to HTTPS and marks session cookies Secure", asyn
   const metricsAuthorized = await fetch(`${server.baseUrl}/metrics`, { headers: { Authorization: "Bearer test-metrics-bearer-token-long-enough-123456" } });
   assert.equal(metricsAuthorized.status, 200);
 });
+
+test("OTP requests enforce a destination phone cooldown even when delivery is unavailable", async () => {
+  const server = await startAuthServer();
+  const requestCode = () => fetch(`${server.baseUrl}/api/otp/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama" },
+    body: JSON.stringify({ phone: server.phone }),
+  });
+  assert.equal((await requestCode()).status, 503);
+  assert.equal((await requestCode()).status, 429);
+});

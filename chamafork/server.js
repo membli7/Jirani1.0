@@ -8,6 +8,7 @@ const express = require("express");
 const compression = require("compression");
 const session = require("express-session");
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
 const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security/https-origin");
 const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
@@ -1842,8 +1843,26 @@ const OTP_RATE_LIMIT = sharedRateLimit("otp", {
   max: 10,
   message: { message: "Too many OTP requests. Please try again later." },
 });
+function otpDestinationKey(req) {
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) return `ip:${ipKeyGenerator(req.ip)}`;
+  const digest = crypto.createHmac("sha256", SESSION_SECRET).update(phone).digest("hex");
+  return `phone:${digest}`;
+}
+const OTP_SEND_COOLDOWN = sharedRateLimit("otp-send-cooldown", {
+  windowMs: 60 * 1000,
+  max: 1,
+  keyGenerator: otpDestinationKey,
+  message: { message: "If that phone number is registered, a sign-in code may be sent." },
+});
+const OTP_SEND_DAILY_LIMIT = sharedRateLimit("otp-send-daily", {
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: otpDestinationKey,
+  message: { message: "If that phone number is registered, a sign-in code may be sent." },
+});
 
-app.post("/api/otp/request", OTP_RATE_LIMIT, (req, res, next) => {
+app.post("/api/otp/request", OTP_RATE_LIMIT, OTP_SEND_COOLDOWN, OTP_SEND_DAILY_LIMIT, (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   if (!phone) return res.status(400).json({ message: "Enter a valid Kenyan mobile phone number." });
   if (!africaTalkingSmsConfigured()) return res.status(503).json({ message: "Phone-code sign-in is unavailable until secure SMS delivery is configured." });
