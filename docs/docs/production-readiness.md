@@ -2,6 +2,13 @@
 
 Evidence checked on 2026-10-20 for this checkout. This note records local observations; it is not proof of a production deployment.
 
+## Latest local verification (2026-10-23)
+
+- The full `chamafork` test suite passed: 131 passed, 0 failed, and 1 skipped. The skipped tenant foreign-key integration test was also run separately against a newly created temporary PostgreSQL database: 1 passed, 0 failed. The temporary database was dropped afterward; the existing `chama` database was not modified.
+- `npm audit --audit-level=low` reported no known dependency vulnerabilities.
+- A fresh production-configuration review still found this machine's local environment unsuitable for production: PostgreSQL and Redis connections are plaintext, and required production origin, proxy, TLS, and metrics-secret settings are not configured. These are local-development observations, not production environment evidence.
+- This verification did not test external routing, certificate renewal, firewall rules, production secrets, scheduled backups, or a production restore. Those remain deployment gates.
+
 ## Verified in the current environment
 
 - The application supports JSON and PostgreSQL. `DATA_BACKEND` defaults to JSON when unset; the current local `.env` selects PostgreSQL.
