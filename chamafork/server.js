@@ -817,6 +817,9 @@ function metricsAuthorized(req) {
 app.get("/metrics", (req, res) => metricsAuthorized(req) ? metricsHandler(req, res) : res.status(404).end());
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'");
+  if (req.secure && (process.env.NODE_ENV === "production" || process.env.FORCE_HTTPS_REDIRECT === "1")) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000");
+  }
   if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store");
   else if (["/", "/index.html", "/chama.js", "/chama.css", "/i18n.js", "/write-requests.js"].includes(req.path) || /^\/profile[^/]*\.(?:js|html)$/.test(req.path)) {
     const version = req.query.v;

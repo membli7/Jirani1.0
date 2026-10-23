@@ -113,6 +113,7 @@ test("production redirects HTTP to HTTPS and marks session cookies Secure", asyn
   const response = await fetch(`${server.baseUrl}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "X-Forwarded-Proto": "https" }, body: JSON.stringify({ phone: server.phone, pin: "123456" }) });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("set-cookie"), /; secure/i);
+  assert.equal(response.headers.get("strict-transport-security"), "max-age=31536000");
   const metrics = await fetch(`${server.baseUrl}/metrics`);
   assert.equal(metrics.status, 404);
   const metricsAuthorized = await fetch(`${server.baseUrl}/metrics`, { headers: { Authorization: "Bearer test-metrics-bearer-token-long-enough-123456" } });
