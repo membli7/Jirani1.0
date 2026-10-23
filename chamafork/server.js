@@ -13,7 +13,7 @@ const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
-const { parseAllowedOrigins, validateProductionConfig } = require("./security/production-config");
+const { createTrustedProxyPredicate, parseAllowedOrigins, validateProductionConfig } = require("./security/production-config");
 const { addNotifications, applyDueElections, electionView, isElection, resultFor } = require("./leadership-elections");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const {
@@ -77,8 +77,12 @@ const pinRecoveryLimiter = sharedRateLimit("pin-recovery", { windowMs: 15 * 60 *
 const loginLimiter = sharedRateLimit("login", { windowMs: 15 * 60 * 1000, max: 100, message: { message: "Too many login attempts. Please try again later." } });
 
 const app = express();
-app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
+const trustedProxyTrust = process.env.NODE_ENV === "production" ? createTrustedProxyPredicate(process.env.TRUSTED_PROXY_IPS) : null;
+app.set("trust proxy", trustedProxyTrust
+  ? trustedProxyTrust
+  : process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8000);
+const APP_BIND_HOST = process.env.APP_BIND_HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : undefined);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));
 const DATA_BACKEND = process.env.DATA_BACKEND || "postgres";
@@ -1942,7 +1946,7 @@ async function start() {
   if (redisCache && !redisCache.isOpen) await redisCache.connect();
   await processDueLeadershipElections();
   scheduleLeadershipElectionCheck();
-  const server = app.listen(PORT, () => logger.info(`Jirani Chama backend running at http://localhost:${PORT}`));
+  const server = app.listen(PORT, APP_BIND_HOST, () => logger.info(`Jirani Chama backend running at http://localhost:${PORT}`));
   server.once("close", () => {
     if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
     leadershipElectionTimer = null;

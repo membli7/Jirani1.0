@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { parseAllowedOrigins, strongSecret, validateProductionConfig } = require("../security/production-config");
+const { createTrustedProxyPredicate, isPrivateIp, parseAllowedOrigins, parseTrustedProxyIps, strongSecret, validateProductionConfig } = require("../security/production-config");
 
 const good = {
   NODE_ENV: "production",
@@ -15,6 +15,7 @@ const good = {
   REDIS_URL: "rediss://redis.example.test",
   SESSION_STORE: "redis",
   TRUST_PROXY: "1",
+  TRUSTED_PROXY_IPS: "127.0.0.1,::1",
   PGSSL: "verify-full",
 };
 
@@ -37,6 +38,18 @@ test("production startup requires secure origins, strong secrets, PostgreSQL, Re
 test("origin parsing rejects paths and non-HTTPS origins", () => {
   assert.deepEqual(parseAllowedOrigins("https://chama.example.test, https://app.example.test/"), ["https://chama.example.test", "https://app.example.test"]);
   assert.throws(() => parseAllowedOrigins("https://chama.example.test/dashboard"), /HTTPS scheme and host/);
+});
+
+test("production trusts only explicit private proxies and rejects public proxy or bind addresses", () => {
+  assert.deepEqual(parseTrustedProxyIps("127.0.0.1,::ffff:127.0.0.1,10.0.0.8"), ["127.0.0.1", "10.0.0.8"]);
+  const trustsProxy = createTrustedProxyPredicate("127.0.0.1,10.0.0.8");
+  assert.equal(trustsProxy("::ffff:127.0.0.1"), true);
+  assert.equal(trustsProxy("203.0.113.4"), false);
+  assert.equal(isPrivateIp("0.0.0.0"), false);
+  assert.equal(isPrivateIp("203.0.113.4"), false);
+  assert.throws(() => parseTrustedProxyIps("203.0.113.4"), /exact loopback or private/);
+  assert.throws(() => validateProductionConfig({ ...good, APP_BIND_HOST: "0.0.0.0" }), /APP_BIND_HOST must be/);
+  assert.throws(() => validateProductionConfig({ ...good, TRUSTED_PROXY_IPS: "" }), /TRUSTED_PROXY_IPS must list/);
 });
 
 test("secret strength rejects short and placeholder values", () => {

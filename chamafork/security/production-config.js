@@ -1,6 +1,37 @@
 "use strict";
 
 const { parseCanonicalHttpsOrigin } = require("./https-origin");
+const net = require("node:net");
+
+function normalizeIp(value) {
+  const ip = String(value || "").trim().toLowerCase();
+  return ip.startsWith("::ffff:") && net.isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
+}
+
+function isPrivateIp(value) {
+  const ip = normalizeIp(value);
+  if (ip === "localhost" || ip === "::1") return true;
+  const version = net.isIP(ip);
+  if (version === 4) {
+    const octets = ip.split(".").map(Number);
+    return octets[0] === 10 || octets[0] === 127 || octets[0] === 192 && octets[1] === 168 ||
+      octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31 || octets[0] === 169 && octets[1] === 254;
+  }
+  return version === 6 && (/^(fc|fd)/.test(ip) || /^fe[89ab]/.test(ip));
+}
+
+function parseTrustedProxyIps(value) {
+  const entries = String(value || "").split(",").map(item => normalizeIp(item)).filter(Boolean);
+  if (!entries.length || entries.some(ip => !isPrivateIp(ip))) {
+    throw new Error("TRUSTED_PROXY_IPS must list exact loopback or private proxy IP addresses.");
+  }
+  return [...new Set(entries)];
+}
+
+function createTrustedProxyPredicate(value) {
+  const trusted = new Set(parseTrustedProxyIps(value));
+  return address => trusted.has(normalizeIp(address));
+}
 
 function strongSecret(value) {
   if (typeof value !== "string" || Buffer.byteLength(value, "utf8") < 32) return false;
@@ -37,9 +68,12 @@ function validateProductionConfig(env = process.env) {
   try { redisProtocol = new URL(env.REDIS_URL).protocol; } catch {}
   if (redisProtocol !== "rediss:" || env.SESSION_STORE !== "redis") errors.push("Production requires a TLS-protected rediss:// REDIS_URL and SESSION_STORE=redis for shared sessions and rate limits.");
   if (env.TRUST_PROXY !== "1") errors.push("Production TLS termination requires TRUST_PROXY=1 behind the trusted public HTTPS proxy.");
+  try { parseTrustedProxyIps(env.TRUSTED_PROXY_IPS); }
+  catch (error) { errors.push(error.message); }
+  if (env.APP_BIND_HOST && !isPrivateIp(env.APP_BIND_HOST)) errors.push("APP_BIND_HOST must be a loopback or private IP address in production.");
   if (env.PGSSL !== "verify-full") errors.push("Production requires PGSSL=verify-full to validate the database TLS certificate.");
   if (!strongSecret(env.METRICS_BEARER_TOKEN)) errors.push("METRICS_BEARER_TOKEN must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
   if (errors.length) throw new Error(`Unsafe production configuration: ${errors.join(" ")}`);
 }
 
-module.exports = { parseAllowedOrigins, strongSecret, validateProductionConfig };
+module.exports = { createTrustedProxyPredicate, isPrivateIp, normalizeIp, parseAllowedOrigins, parseTrustedProxyIps, strongSecret, validateProductionConfig };
