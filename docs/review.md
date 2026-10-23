@@ -1,14 +1,15 @@
-# Security audit — 2026-10-20
+# Security audit — initial review 2026-10-20; hardening follow-up 2026-10-23
 
 ## Scope and method
 
-Read-only source review of the `review-fixes` checkout covering authentication and sessions, request protections, authorization, tenant scoping, PostgreSQL persistence and RLS, uploads, exports, messaging, election records, operational configuration, and available automated tests. No production database was queried or modified, and no migrations were run. This is a code review, not a penetration test, live deployment verification, or dependency vulnerability scan.
+The initial review was a read-only source review of the `review-fixes` checkout covering authentication and sessions, request protections, authorization, tenant scoping, PostgreSQL persistence and RLS, uploads, exports, messaging, election records, operational configuration, and available automated tests. A 2026-10-23 follow-up hardened F-02 through F-05 and added regression tests. No production database was queried or modified, and no migrations were run. This remains a code review, not a penetration test, live deployment verification, or dependency vulnerability scan.
 
 ## Summary
 
 - The application has server-side role checks on financial and administrative writes, tenant-scoped response construction, PostgreSQL RLS policies, a single-writer advisory lock, session regeneration at setup/login, `HttpOnly`/`SameSite=Strict` cookies, production HTTPS redirects, and a same-origin write-request gate.
-- A secret-ballot disclosure through the legacy leadership endpoint was confirmed and fixed in this change set. A regression test verifies that endpoint does not return election records.
-- Production deployment details (proxy network boundary, PostgreSQL runtime role flags, actual TLS, and package CVEs) were not independently verified.
+- A secret-ballot disclosure through the legacy leadership endpoint was confirmed and fixed. Regression tests verify that it does not return election records.
+- The follow-up adds HSTS, rejects PostgreSQL runtime roles with RLS bypass flags at startup, restricts production proxy trust and listener binding, and caps OTP sends by destination phone.
+- Code-level CSRF, write serialization, and route authorization controls were reviewed and covered by regression tests. The proxy network boundary, actual TLS, and package CVEs were not independently verified.
 
 ## Findings
 
@@ -18,41 +19,36 @@ Read-only source review of the `review-fixes` checkout covering authentication a
 
 Evidence: `chamafork/server.js` near the legacy leadership GET route and `chamafork/test/server.integration.test.js` in the election/runoff scenario.
 
-### F-02 — No HSTS response header — Medium
+### F-02 — No HSTS response header — Medium — Fixed
 
-The server sets a restrictive Content Security Policy and redirects HTTP to a configured canonical HTTPS origin in production, but no `Strict-Transport-Security` header is set in application responses. If the TLS edge does not add HSTS, first-visit downgrade attacks remain possible.
+The server now sets `Strict-Transport-Security: max-age=31536000` on requests it recognizes as HTTPS in production. It does not add `includeSubDomains` because subdomain HTTPS coverage was not verified.
 
-Recommendation: configure HSTS at the trusted TLS proxy after confirming HTTPS is consistently available for the host and any intended subdomains.
+Evidence: `chamafork/server.js` security-header middleware.
 
-Evidence: `chamafork/server.js` security-header middleware around line 800.
+### F-03 — PostgreSQL RLS bypass capability — High if misconfigured; runtime guard added
 
-### F-03 — PostgreSQL RLS bypass capability is not verified — High if misconfigured; deployment status unverified
+The server now checks the connected PostgreSQL role's `rolsuper` and `rolbypassrls` flags before it loads tenant data and refuses to start if either is true or the role cannot be verified. PostgreSQL superusers and roles with `BYPASSRLS` can bypass row policies. No live production role was inspected in this review.
 
-The migration helper grants the configured runtime role data privileges and enables/forces RLS policies in the migrations. It does not verify that the runtime role is neither a superuser nor `BYPASSRLS`. PostgreSQL superusers and roles with `BYPASSRLS` can bypass row policies, which would undermine tenant isolation.
+Evidence: `chamafork/db/postgres.js` runtime-role check; `chamafork/server.js` startup sequence.
 
-Recommendation: use a dedicated least-privilege runtime role, and verify `rolsuper = false` and `rolbypassrls = false` for the configured role in deployment checks. This audit did not inspect the live database role.
+### F-04 — Proxy trust depends on network isolation — Application hardened; deployment status unverified
 
-Evidence: `chamafork/db/migrate.js` around lines 21-30; `chamafork/db/002_app_tables.sql` around lines 226-230.
+Production now binds to `127.0.0.1` by default and accepts forwarded protocol metadata only from exact proxy IPs listed in `TRUSTED_PROXY_IPS`. An optional `APP_BIND_HOST` may select a private interface; wildcard and public addresses fail production configuration validation. Configure exact private proxy addresses and firewall the Node port if using a separate interface. No deployment firewall, proxy address, or live network reachability was verified.
 
-### F-04 — Proxy trust depends on network isolation — Medium if app port is directly reachable; deployment status unverified
+Evidence: `chamafork/server.js` proxy trust and listener setup; `chamafork/security/production-config.js` production validation.
 
-Production requires `TRUST_PROXY=1`, and the app trusts one proxy hop for `req.secure`. The HTTP redirect then relies on that value. If clients can reach the Node listener directly, a client-supplied forwarded-protocol header may be treated as proxy metadata. The application listens without an explicit interface binding; network reachability was not tested.
+### F-05 — OTP requests are limited by source, not destination phone — Fixed
 
-Recommendation: firewall the app port so only the trusted TLS proxy can reach it, or bind the app to a private interface and configure an explicit trusted proxy range.
+OTP requests now have a one-per-minute cooldown and a ten-per-24-hour cap keyed to an HMAC of the destination phone. Production uses the shared Redis rate-limit store. The existing per-IP limit remains in place.
 
-Evidence: `chamafork/server.js` around lines 80 and 1916; `chamafork/security/production-config.js` around line 39.
-
-### F-05 — OTP requests are limited by source, not destination phone — Medium when SMS is enabled
-
-OTP requests have a shared per-IP rate limit and codes are short-lived and hashed in the session. There is no per-phone send cooldown/cap in the request handler. If SMS delivery is enabled, distributed sources could repeatedly send codes to one phone and incur provider cost or nuisance.
-
-Recommendation: add a shared per-phone cooldown and daily send cap before enabling SMS in production.
-
-Evidence: `chamafork/server.js` around lines 1802-1825.
+Evidence: `chamafork/server.js` OTP request limiters.
 
 ## Verification and limits
 
-- `npm test`: 125 passed, 0 failed, 1 skipped. The skipped tenant foreign-key test requires a disposable PostgreSQL test database; none was configured for this run.
+- `npm test`: 131 passed, 0 failed, 1 skipped after the fixes. The skipped tenant foreign-key test requires a disposable PostgreSQL test database; none was configured for this run.
+- `npm audit --audit-level=low`: 0 known vulnerabilities reported for the locked dependency tree.
 - The test runner needed child-process permission on Windows because the sandbox otherwise returns `spawn EPERM` before executing tests.
 - `node --check` passed for the changed server, election helper, browser script, and integration tests; `git diff --check` passed.
-- No live PostgreSQL/Redis configuration, proxy/firewall, browser production build, or dependency advisory feed was checked. Do not treat the unverified deployment findings above as confirmed incidents.
+- No live PostgreSQL/Redis configuration, proxy/firewall, or browser production build was checked. Database role safety and proxy network isolation remain deployment checks.
+
+Production now requires `TRUSTED_PROXY_IPS`; deployers must set the exact private IP address of the reverse proxy. Deployments using a separate private interface must set `APP_BIND_HOST` and restrict access to the Node port at the network boundary.
