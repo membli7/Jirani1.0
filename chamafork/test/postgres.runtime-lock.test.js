@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const { test } = require("node:test");
-const { acquireRuntimeLock } = require("../db/postgres");
+const { acquireRuntimeLock, assertLeastPrivilegeRuntimeRole } = require("../db/postgres");
 
 function mockPool(locked = true) {
   const client = new EventEmitter();
@@ -41,4 +41,24 @@ test("lost PostgreSQL lock fails closed before application writes", async () => 
   pool.client.emit("error", new Error("connection lost"));
   assert.throws(() => lock.assertHeld(), /lock was lost/);
   await lock.release();
+});
+
+test("PostgreSQL startup rejects a superuser or BYPASSRLS runtime role", async () => {
+  for (const role of [
+    { rolsuper: true, rolbypassrls: false },
+    { rolsuper: false, rolbypassrls: true },
+    { rolsuper: null, rolbypassrls: false },
+  ]) {
+    const pool = mockPool();
+    pool.client.query = async () => ({ rows: [role] });
+    await assert.rejects(assertLeastPrivilegeRuntimeRole(pool), /must not be SUPERUSER or BYPASSRLS/);
+    assert.equal(pool.released, true);
+  }
+});
+
+test("PostgreSQL startup accepts a least-privilege runtime role", async () => {
+  const pool = mockPool();
+  pool.client.query = async () => ({ rows: [{ rolsuper: false, rolbypassrls: false }] });
+  await assert.doesNotReject(assertLeastPrivilegeRuntimeRole(pool));
+  assert.equal(pool.released, true);
 });

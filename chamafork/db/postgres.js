@@ -49,6 +49,20 @@ async function acquireRuntimeLock(pool) {
   };
 }
 
+async function assertLeastPrivilegeRuntimeRole(pool) {
+  if (!pool) throw new Error("DATABASE_URL is required to verify the PostgreSQL runtime role.");
+  const client = await pool.connect();
+  try {
+    const result = await client.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user");
+    const role = result.rows[0];
+    if (!role || role.rolsuper !== false || role.rolbypassrls !== false) {
+      throw new Error("PostgreSQL runtime role must exist and must not be SUPERUSER or BYPASSRLS.");
+    }
+  } finally {
+    client.release();
+  }
+}
+
 function validTenantId(chamaId) {
   return typeof chamaId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(chamaId);
 }
@@ -71,4 +85,4 @@ async function withTenant(pool, chamaId, work) {
   }
 }
 
-module.exports = { acquireRuntimeLock, createPostgresPool, validTenantId, withTenant };
+module.exports = { acquireRuntimeLock, assertLeastPrivilegeRuntimeRole, createPostgresPool, validTenantId, withTenant };

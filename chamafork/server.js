@@ -28,7 +28,7 @@ const {
   redisCacheHitRate,
   setOperationalMetricsProvider,
 } = require("./observability");
-const { acquireRuntimeLock, createPostgresPool } = require("./db/postgres");
+const { acquireRuntimeLock, assertLeastPrivilegeRuntimeRole, createPostgresPool } = require("./db/postgres");
 const postgresState = require("./repo/postgres-state");
 
 // ---------------------------------------------------------------------------
@@ -426,6 +426,7 @@ function initializeStorage() {
       if (!fs.existsSync(PROFILE_DETAILS_FILE)) await persistProfileDetails(profileDetails);
       if (DATA_BACKEND === "postgres") {
         if (!postgresPool) throw new Error("DATABASE_URL must be set for DATA_BACKEND=postgres.");
+        await assertLeastPrivilegeRuntimeRole(postgresPool);
         postgresRuntimeLock = await acquireRuntimeLock(postgresPool);
         if (process.env.NODE_ENV === "test" && Object.hasOwn(process.env, "CHAMA_DATA_FILE")) {
           state = loadState();
