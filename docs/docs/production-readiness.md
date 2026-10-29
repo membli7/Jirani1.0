@@ -5,8 +5,8 @@ Evidence checked on 2026-10-20 for this checkout. This note records local observ
 ## Local launch follow-up (2026-10-29)
 
 - At verification start, the checkout was clean on `review-fixes` at `9f56b47`. The live local app answered `/` and `/api/health` on `127.0.0.1:8000`; served frontend files matched this checkout.
-- The existing process was listening on `0.0.0.0:8000`, because the previous development default omitted an explicit bind address. It reported no active sessions or SSE connections when checked. The code now defaults to `127.0.0.1`; a disposable JSON-backed startup confirmed that listener and a successful health response. Restart the existing process to apply the fix to port 8000.
-- `npm test`: 132 passed, 0 failed, 1 skipped after the bind-default and example-environment tests. `npm audit --audit-level=low`: 0 known vulnerabilities.
+- The existing process initially listened on `0.0.0.0:8000`, because the previous development default omitted an explicit bind address. It reported no active sessions or SSE connections when checked. The code now defaults to `127.0.0.1`; both a disposable JSON-backed startup and the restarted app confirmed that listener. The restarted app returns HTTP 200 on `localhost:8000` and `/api/health`.
+- `npm test`: 133 passed, 0 failed, 1 skipped after the bind-default and example-environment tests. `npm audit --audit-level=low`: 0 known vulnerabilities.
 - The checked-in `.env.example` now supports local startup with JSON, in-process sessions, and proxy trust disabled. Production remains gated by HTTPS/proxy, PostgreSQL and Redis TLS, secret configuration, and the external backup/restore and firewall checks listed below.
 
 ## Latest local verification (2026-10-23)

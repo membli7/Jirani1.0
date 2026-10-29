@@ -44,9 +44,9 @@ OTP requests now have a one-per-minute cooldown and a ten-per-24-hour cap keyed 
 
 Evidence: `chamafork/server.js` OTP request limiters.
 
-### F-06 — Local development listener exposed on every interface — Medium — Fixed in code; running process requires restart
+### F-06 — Local development listener exposed on every interface — Medium — Fixed
 
-When `NODE_ENV` and `APP_BIND_HOST` were unset, the server passed no host to `app.listen`, which bound to `0.0.0.0:8000` on this Windows host. The app's README directs local users to `localhost`, so this unintentionally exposed the unauthenticated setup/login surface and any active app data to other reachable interfaces. The default now binds to `127.0.0.1`; an explicit `APP_BIND_HOST` remains available, and production validation still rejects public bind addresses. A disposable JSON-backed startup returned HTTP 200 on both `127.0.0.1` and `localhost` and reported `127.0.0.1` as its listener. The already-running process still uses its old wildcard bind until it is restarted.
+When `NODE_ENV` and `APP_BIND_HOST` were unset, the server passed no host to `app.listen`, which bound to `0.0.0.0:8000` on this Windows host. The app's README directs local users to `localhost`, so this unintentionally exposed the unauthenticated setup/login surface and any active app data to other reachable interfaces. The default now binds to `127.0.0.1`; an explicit `APP_BIND_HOST` remains available, and production validation still rejects public bind addresses. A disposable JSON-backed startup returned HTTP 200 on both `127.0.0.1` and `localhost`; the live app was restarted and confirmed healthy on `127.0.0.1:8000` only.
 
 Evidence: `chamafork/server.js` listener setup; `chamafork/security/production-config.js`; `chamafork/test/production-config.test.js`.
 
