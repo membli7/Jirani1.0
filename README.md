@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# Jirani1.0
-=======
 # Jirani Chama — MVP
 
 A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, the data is a single JSON file, and the front end is one HTML page with vanilla JavaScript.
@@ -118,4 +115,3 @@ Browser behaviour has not been tested. The front-end tests check that the expect
 - `TASKS.md`: the decisions and task list that drove the sprint.
 
 `en public/README.md` predates this file and still describes bootstrap environment variables that the server does not read. Use this README instead.
->>>>>>> 7f95bca (Add README for the MVP: features, setup, roles, tests, and limits)
