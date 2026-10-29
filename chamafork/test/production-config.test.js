@@ -1,8 +1,11 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { test } = require("node:test");
-const { createTrustedProxyPredicate, isPrivateIp, parseAllowedOrigins, parseTrustedProxyIps, strongSecret, validateProductionConfig } = require("../security/production-config");
+const dotenv = require("dotenv");
+const { createTrustedProxyPredicate, isPrivateIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig } = require("../security/production-config");
 
 const good = {
   NODE_ENV: "production",
@@ -50,6 +53,21 @@ test("production trusts only explicit private proxies and rejects public proxy o
   assert.throws(() => parseTrustedProxyIps("203.0.113.4"), /exact loopback or private/);
   assert.throws(() => validateProductionConfig({ ...good, APP_BIND_HOST: "0.0.0.0" }), /APP_BIND_HOST must be/);
   assert.throws(() => validateProductionConfig({ ...good, TRUSTED_PROXY_IPS: "" }), /TRUSTED_PROXY_IPS must list/);
+});
+
+test("the app binds to localhost by default and honors an explicit bind address", () => {
+  assert.equal(resolveAppBindHost({ NODE_ENV: "development" }), "127.0.0.1");
+  assert.equal(resolveAppBindHost({ APP_BIND_HOST: "10.0.0.8" }), "10.0.0.8");
+  assert.equal(resolveAppBindHost({ APP_BIND_HOST: "  " }), "127.0.0.1");
+});
+
+test("the example environment selects safe local development services", () => {
+  const example = dotenv.parse(fs.readFileSync(path.join(__dirname, "..", ".env.example")));
+  assert.equal(example.DATA_BACKEND, "json");
+  assert.equal(example.SESSION_STORE, "memory");
+  assert.equal(example.REDIS_URL, "");
+  assert.equal(example.TRUST_PROXY, "0");
+  assert.equal(resolveAppBindHost(example), "127.0.0.1");
 });
 
 test("secret strength rejects short and placeholder values", () => {

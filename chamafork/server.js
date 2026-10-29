@@ -14,7 +14,7 @@ const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
-const { createTrustedProxyPredicate, parseAllowedOrigins, validateProductionConfig } = require("./security/production-config");
+const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { addNotifications, applyDueElections, electionView, isElection, resultFor } = require("./leadership-elections");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const {
@@ -83,7 +83,7 @@ app.set("trust proxy", trustedProxyTrust
   ? trustedProxyTrust
   : process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8000);
-const APP_BIND_HOST = process.env.APP_BIND_HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : undefined);
+const APP_BIND_HOST = resolveAppBindHost(process.env);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));
 const DATA_BACKEND = process.env.DATA_BACKEND || "postgres";

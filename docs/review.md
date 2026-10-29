@@ -10,6 +10,7 @@ The initial review was a read-only source review of the `review-fixes` checkout 
 - A secret-ballot disclosure through the legacy leadership endpoint was confirmed and fixed. Regression tests verify that it does not return election records.
 - The follow-up adds HSTS, rejects PostgreSQL runtime roles with RLS bypass flags at startup, restricts production proxy trust and listener binding, and caps OTP sends by destination phone.
 - Code-level CSRF, write serialization, and route authorization controls were reviewed and covered by regression tests. The proxy network boundary, actual TLS, and package CVEs were not independently verified.
+- Local development binds to loopback by default, uses JSON and in-process sessions in the example environment, and does not trust forwarded proxy headers unless explicitly configured.
 
 ## Findings
 
@@ -42,6 +43,12 @@ Evidence: `chamafork/server.js` proxy trust and listener setup; `chamafork/secur
 OTP requests now have a one-per-minute cooldown and a ten-per-24-hour cap keyed to an HMAC of the destination phone. Production uses the shared Redis rate-limit store. The existing per-IP limit remains in place.
 
 Evidence: `chamafork/server.js` OTP request limiters.
+
+### F-06 — Local development listener exposed on every interface — Medium — Fixed in code; running process requires restart
+
+When `NODE_ENV` and `APP_BIND_HOST` were unset, the server passed no host to `app.listen`, which bound to `0.0.0.0:8000` on this Windows host. The app's README directs local users to `localhost`, so this unintentionally exposed the unauthenticated setup/login surface and any active app data to other reachable interfaces. The default now binds to `127.0.0.1`; an explicit `APP_BIND_HOST` remains available, and production validation still rejects public bind addresses. A disposable JSON-backed startup returned HTTP 200 on both `127.0.0.1` and `localhost` and reported `127.0.0.1` as its listener. The already-running process still uses its old wildcard bind until it is restarted.
+
+Evidence: `chamafork/server.js` listener setup; `chamafork/security/production-config.js`; `chamafork/test/production-config.test.js`.
 
 ## Verification and limits
 

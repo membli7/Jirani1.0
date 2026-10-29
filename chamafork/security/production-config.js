@@ -33,6 +33,10 @@ function createTrustedProxyPredicate(value) {
   return address => trusted.has(normalizeIp(address));
 }
 
+function resolveAppBindHost(env = process.env) {
+  return String(env.APP_BIND_HOST || "").trim() || "127.0.0.1";
+}
+
 function strongSecret(value) {
   if (typeof value !== "string" || Buffer.byteLength(value, "utf8") < 32) return false;
   if (/(change.?me|example|password|admin|development|test|secret)/i.test(value)) return false;
@@ -76,4 +80,4 @@ function validateProductionConfig(env = process.env) {
   if (errors.length) throw new Error(`Unsafe production configuration: ${errors.join(" ")}`);
 }
 
-module.exports = { createTrustedProxyPredicate, isPrivateIp, normalizeIp, parseAllowedOrigins, parseTrustedProxyIps, strongSecret, validateProductionConfig };
+module.exports = { createTrustedProxyPredicate, isPrivateIp, normalizeIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig };

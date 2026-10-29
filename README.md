@@ -1,6 +1,6 @@
 # Jirani Chama — MVP
 
-A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, the data is a single JSON file, and the front end is one HTML page with vanilla JavaScript.
+A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript.
 
 This README describes the state at the end of the sprint. Anything not listed under "What it does" is not built.
 

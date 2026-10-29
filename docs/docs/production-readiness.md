@@ -2,6 +2,13 @@
 
 Evidence checked on 2026-10-20 for this checkout. This note records local observations; it is not proof of a production deployment.
 
+## Local launch follow-up (2026-10-29)
+
+- At verification start, the checkout was clean on `review-fixes` at `9f56b47`. The live local app answered `/` and `/api/health` on `127.0.0.1:8000`; served frontend files matched this checkout.
+- The existing process was listening on `0.0.0.0:8000`, because the previous development default omitted an explicit bind address. It reported no active sessions or SSE connections when checked. The code now defaults to `127.0.0.1`; a disposable JSON-backed startup confirmed that listener and a successful health response. Restart the existing process to apply the fix to port 8000.
+- `npm test`: 132 passed, 0 failed, 1 skipped after the bind-default and example-environment tests. `npm audit --audit-level=low`: 0 known vulnerabilities.
+- The checked-in `.env.example` now supports local startup with JSON, in-process sessions, and proxy trust disabled. Production remains gated by HTTPS/proxy, PostgreSQL and Redis TLS, secret configuration, and the external backup/restore and firewall checks listed below.
+
 ## Latest local verification (2026-10-23)
 
 - The full `chamafork` test suite passed: 131 passed, 0 failed, and 1 skipped. The skipped tenant foreign-key integration test was also run separately against a newly created temporary PostgreSQL database: 1 passed, 0 failed. The temporary database was dropped afterward; the existing `chama` database was not modified.
