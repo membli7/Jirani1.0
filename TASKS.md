@@ -64,7 +64,7 @@ Attendance tracking scope decision (resolved): restore and test attendance end t
 **Rationale for your answer**: (optional notes on why you chose yes/no)
 
 ## Step 4: larger UX work (Codex, after steps 2 and 3 are merged)
-- [ ] New Chairperson setup checklist
+- [x] New Chairperson setup checklist; completion is derived from active officers and valid invitations, while skip/dismiss state is stored per Chairperson in the browser.
 - [x] Leadership election lifecycle and dashboard panel implemented; see decisions dated 2026-10-20.
 - [ ] Manual mobile layout review at common phone sizes (responsive navigation and stacked cards are implemented).
 - [ ] Kiswahili translation completeness and wording review (language support is implemented).

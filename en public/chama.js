@@ -75,6 +75,48 @@ function loanStatusLabel(status) {
   if (["pending", "requested", "waiting for decisions"].includes(normalized)) return "Pending";
   return ({ approved: "Approved", rejected: "Rejected", repaid: "Repaid", closed: "Closed" })[normalized] || status;
 }
+function chairpersonChecklistItems(members, invitations, overviewReviewed) {
+  const hasRole = role => members.some(member => member.role === role && member.status === "active") ||
+    invitations.some(invitation => invitation.requestedRole === role && !invitation.usedAt && !invitation.revocation && Date.parse(invitation.expiresAt) > Date.now());
+  const hasMember = members.some(member => member.role === "member" && member.status === "active") ||
+    invitations.some(invitation => invitation.requestedRole === "member" && !invitation.usedAt && !invitation.revocation && Date.parse(invitation.expiresAt) > Date.now());
+  return [
+    { key: "secretary", label: "setupInviteSecretary", complete: hasRole("secretary"), panel: "invite-panel" },
+    { key: "treasurer", label: "setupInviteTreasurer", complete: hasRole("treasurer"), panel: "invite-panel" },
+    { key: "members", label: "setupAddMembers", complete: hasMember, panel: "invite-panel" },
+    { key: "overview", label: "setupReviewOverview", complete: overviewReviewed, panel: "dashboard" }
+  ];
+}
+function setupChecklistStorageKey(userId) { return `jirani-setup-checklist:${userId}`; }
+function readSetupChecklistState(userId) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(setupChecklistStorageKey(userId)) || "{}");
+    return { dismissed: saved.dismissed === true, overviewReviewed: saved.overviewReviewed === true, skipped: saved.skipped && typeof saved.skipped === "object" ? saved.skipped : {} };
+  } catch { return { dismissed: false, overviewReviewed: false, skipped: {} }; }
+}
+function saveSetupChecklistState(userId, checklistState) {
+  try { localStorage.setItem(setupChecklistStorageKey(userId), JSON.stringify(checklistState)); } catch { /* Checklist remains usable when browser storage is unavailable. */ }
+}
+function renderChairpersonSetupChecklist(user, members, invitations) {
+  const openButton = $("#setup-checklist-open");
+  const section = $("#chairperson-setup-checklist");
+  if (!openButton || !section) return;
+  const isChairperson = user.role === "chairperson";
+  openButton.hidden = !isChairperson;
+  section.hidden = !isChairperson;
+  if (!isChairperson) return;
+  const saved = readSetupChecklistState(user.id);
+  section.hidden = saved.dismissed;
+  openButton.textContent = t("setupChecklistShow");
+  openButton.hidden = !saved.dismissed;
+  const items = chairpersonChecklistItems(members, invitations, saved.overviewReviewed);
+  $("#setup-checklist-items").innerHTML = items.map(item => {
+    const skipped = saved.skipped[item.key] === true;
+    const stateLabel = item.complete ? t("setupChecklistComplete") : skipped ? t("setupChecklistSkipped") : t("setupChecklistNeeded");
+    const action = item.complete ? "" : `<div class="setup-checklist-item-actions"><a class="mini-btn" href="#${esc(item.panel)}" data-setup-panel="${esc(item.panel)}"${item.key === "overview" ? ' data-setup-review="true"' : ""}>${t(item.key === "overview" ? "setupChecklistReview" : "setupChecklistOpen")}</a>${skipped ? `<button class="mini-btn" type="button" data-setup-restore="${esc(item.key)}">${t("setupChecklistUndoSkip")}</button>` : `<button class="mini-btn" type="button" data-setup-skip="${esc(item.key)}">${t("setupChecklistSkip")}</button>`}</div>`;
+    return `<li class="setup-checklist-item"><span class="setup-checklist-item-copy"><strong>${t(item.label)}</strong><span class="setup-checklist-item-state">${stateLabel}</span></span>${action}</li>`;
+  }).join("");
+}
 function fmtDate(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(new Date(value)); }
 function fmtTime(value) { return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Nairobi" }).format(new Date(value)); }
 function meetingDateToday() {
@@ -98,6 +140,7 @@ function render() {
   $("#logout").hidden = false;
   $("#role-label").textContent = `${roleName(user.role)} dashboard`;
   $("#greeting").textContent = `Welcome, ${user.name}`;
+  renderChairpersonSetupChecklist(user, members, invitations);
   const balance = $("#balance");
   const contributions = $("#contributions");
   const outstanding = $("#outstanding");
@@ -864,6 +907,34 @@ for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
   });
 }
 $("#notification-button").addEventListener("click", () => showAppPage("chat-panel"));
+document.addEventListener("click", event => {
+  if (!state?.user || state.user.role !== "chairperson") return;
+  const saved = readSetupChecklistState(state.user.id);
+  if (event.target.closest("#setup-checklist-open")) {
+    saved.dismissed = false;
+    saveSetupChecklistState(state.user.id, saved);
+    renderChairpersonSetupChecklist(state.user, state.members, state.invitations || []);
+    return;
+  }
+  if (event.target.closest("#setup-checklist-dismiss")) saved.dismissed = true;
+  else {
+    const skip = event.target.closest("[data-setup-skip]");
+    const restore = event.target.closest("[data-setup-restore]");
+    const panelLink = event.target.closest("a[data-setup-panel]");
+    if (skip) saved.skipped[skip.dataset.setupSkip] = true;
+    else if (restore) delete saved.skipped[restore.dataset.setupRestore];
+    else if (panelLink) {
+      event.preventDefault();
+      if (panelLink.dataset.setupReview) saved.overviewReviewed = true;
+      showAppPage(panelLink.dataset.setupPanel);
+    } else return;
+  }
+  saveSetupChecklistState(state.user.id, saved);
+  renderChairpersonSetupChecklist(state.user, state.members, state.invitations || []);
+});
+window.addEventListener("languagechange", () => {
+  if (state?.user) renderChairpersonSetupChecklist(state.user, state.members, state.invitations || []);
+});
 document.addEventListener("click", event => {
   if (event.target.closest("#menu-bar, #menu-toggle")) return;
   setNavigationOpen(false);

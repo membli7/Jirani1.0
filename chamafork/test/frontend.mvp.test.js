@@ -43,6 +43,25 @@ test("loan status labels use the agreed title case and group pending decision st
   assert.match(script, /esc\(loanStatusLabel\(loan\.status\)\)/);
 });
 
+test("Chairperson setup checklist reflects active members and valid invitations", () => {
+  const source = script.match(/function chairpersonChecklistItems\(members, invitations, overviewReviewed\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "checklist completion helper is present");
+  const sandbox = { Date };
+  vm.runInNewContext(`${source}; this.chairpersonChecklistItems = chairpersonChecklistItems;`, sandbox);
+  const invitation = (requestedRole, overrides = {}) => ({ requestedRole, expiresAt: new Date(Date.now() + 60_000).toISOString(), usedAt: null, revocation: null, ...overrides });
+  const items = sandbox.chairpersonChecklistItems(
+    [{ role: "chairperson", status: "active" }],
+    [invitation("secretary"), invitation("treasurer", { revocation: { at: new Date().toISOString() } }), invitation("member")],
+    true
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(items.map(({ key, complete }) => [key, complete]))), [
+    ["secretary", true], ["treasurer", false], ["members", true], ["overview", true]
+  ]);
+  assert.match(html, /id="chairperson-setup-checklist"[^>]*hidden/);
+  assert.match(script, /openButton\.hidden = !isChairperson/);
+  assert.ok((i18n.match(/setupChecklistTitle:/g) || []).length === 2, "checklist title is available in English and Kiswahili");
+});
+
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
   assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true">J<\/span>/);

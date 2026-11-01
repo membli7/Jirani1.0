@@ -22,6 +22,13 @@
     font-weight: 650; 
     text-decoration: none; 
 }
+.setup-checklist { margin: 0 0 18px; }
+.setup-checklist-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 14px 17px 17px; list-style: none; }
+.setup-checklist-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.setup-checklist-item-copy { display: grid; gap: 4px; min-width: 0; }
+.setup-checklist-item-state { color: var(--muted); font-size: 10px; }
+.setup-checklist-item-actions { display: flex; align-items: center; gap: 6px; }
+@media (max-width: 600px) { .setup-checklist-items { grid-template-columns: 1fr; padding-right: 12px; padding-left: 12px; } }
 
 /* Profile page */
 .profile-shell {
