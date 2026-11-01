@@ -39,6 +39,7 @@ before(async () => {
     cwd: path.join(__dirname, ".."),
     env: {
       ...process.env,
+      NODE_ENV: "test",
       DATA_BACKEND: "json",
       PORT: String(testPort),
       SESSION_SECRET: "integration-test-session-secret",

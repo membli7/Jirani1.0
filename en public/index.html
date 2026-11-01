@@ -527,7 +527,7 @@
         <div class="panel-heading">
             <div>
                 <h2>Invite a member</h2>
-                <p>The activation code is sent by SMS when configured; otherwise share it privately. <span data-i18n="inviteInitialLeaderDescription">During initial setup, the Chairperson can invite a Secretary and Treasurer together. Later officer assignments need another officer's confirmation.</span></p>
+                <p><span>The activation code is sent by SMS when configured; otherwise share it privately.</span> <span>During initial setup, the Chairperson can invite a Secretary and Treasurer together. After setup, officers are selected through secret-ballot elections.</span> <span>The Chairperson or Secretary can invite Members directly.</span></p>
             </div>
         </div>
         <form id="initial-officials-form" class="form-body" hidden>
@@ -589,7 +589,7 @@
         <div class="panel-heading">
             <div>
                 <h2>Officer assignments</h2>
-                <p>The Chairperson proposes an assignment; a different officer confirms it. The first assignment can be approved by the Chairperson to set up the group.</p>
+                <p>After setup, the Secretary proposes officer candidates. Eligible group accounts vote by secret ballot; the Chairperson opens and closes voting and verifies the result. Verified changes take effect after 24 hours.</p>
             </div>
         </div>
         <form id="leadership-form" class="form-body">
@@ -1077,6 +1077,7 @@
  <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
     <form method="dialog" id="cash-confirm-form">
         <h2 id="cash-confirm-title" data-i18n="confirmCashEntry">Confirm cash entry</h2>
+        <p>This records cash already received; it does not transfer money.</p>
         <p id="cash-confirm-summary"></p>
         <div class="dialog-actions">
             <button value="cancel" class="mini-btn" type="submit" data-i18n="cancel">Cancel</button>

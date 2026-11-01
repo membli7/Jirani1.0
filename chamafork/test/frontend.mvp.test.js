@@ -16,6 +16,20 @@ const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8
 const registerScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8");
 const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
 const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
+const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
+
+test("launch-critical invitation, election, and cash copy is accurate in English and Kiswahili", () => {
+  for (const message of [
+    "The Chairperson or Secretary can invite Members directly.",
+    "After setup, officers are selected through secret-ballot elections.",
+    "After setup, the Secretary proposes officer candidates. Eligible group accounts vote by secret ballot; the Chairperson opens and closes voting and verifies the result. Verified changes take effect after 24 hours.",
+    "This records cash already received; it does not transfer money."
+  ]) {
+    assert.ok(html.includes(message), `expected English UI copy: ${message}`);
+    const escaped = message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(i18n, new RegExp(`"${escaped}":\\s*"[^"]+"`), `expected Kiswahili translation for: ${message}`);
+  }
+});
 
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);

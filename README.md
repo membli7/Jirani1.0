@@ -1,6 +1,6 @@
 # Jirani Chama — MVP
 
-A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript.
+A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript and English/Kiswahili language support. Translation coverage still needs a review.
 
 This README describes the state at the end of the sprint. Anything not listed under "What it does" is not built.
 
@@ -28,6 +28,12 @@ This README describes the state at the end of the sprint. Anything not listed un
 - The pool is interest and paid penalties dated within the cycle, minus admin expenses.
 - Each active member's share is pro-rata to share capital, rounded to whole shillings. Leftover shillings go to the largest remainders, with ties going to the member ID that sorts first, so payouts add up to the pool exactly.
 - Calculate changes nothing. Commit recalculates and rejects the request if the payouts differ from the current figures, adds each dividend to share capital, and is refused for cycles that overlap a cycle already paid out.
+
+**Attendance**
+- The Secretary can record and revise meeting attendance registers. Edits are retained in the audit trail.
+
+**Leadership elections**
+- After initial setup, the Secretary proposes 2–20 active ordinary members for an officer seat. The Chairperson opens voting and manually closes it; each eligible chama account may cast one secret ballot. The Chairperson verifies the result, and the role change takes effect 24 hours later. A tie for the highest vote opens a runoff among tied candidates; no quorum threshold applies.
 
 **Audit log** (`GET /api/audit-log`; Chairperson or Treasurer)
 - Records payments, contributions, penalties, loan requests, decisions, repayments, pledge releases, officer changes, meeting-date changes, backfill, and dividend batches.
@@ -69,12 +75,8 @@ On first run with no data, the screen offers first-time setup. This creates the 
 There are no default accounts and no default PINs. Set them up as follows.
 
 1. **Chairperson:** create the account with the first-time setup screen.
-2. **Members:** the Chairperson or Secretary invites each person (name, phone, requested role). The invitation shows a one-time activation code. The person enters their phone number, the code, and a PIN of their own choosing on the activation screen. Activated accounts start as Members.
-3. **Officers:** officers are assigned from the dashboard's "Officer assignments" panel, which the Chairperson uses. Assign in this order:
-   1. **Secretary first.** With no other officers, the Chairperson's first assignment takes effect immediately.
-   2. **Treasurer second.** Because the Secretary is now an officer, this assignment waits for another officer's confirmation, so the Secretary confirms it.
-
-   Assigning the Treasurer first leaves no way to appoint the Secretary, because only a Chairperson or Secretary can confirm, and the Chairperson cannot confirm their own proposal.
+2. **Members:** the Chairperson or Secretary invites each person with a name, Kenyan phone number, and email address. The invitation shows a one-time activation code. The person enters their phone number, the code, and a PIN of their own choosing on the activation screen. Activated accounts start as Members.
+3. **Officers:** direct assignment is limited to initial setup. After setup, the Secretary proposes 2–20 active ordinary members for an officer role; the Chairperson opens voting and closes it manually; eligible group accounts vote once by secret ballot; then the Chairperson verifies the result. A verified role change takes effect after 24 hours. A tie for the highest vote opens a runoff among the tied candidates; there is no quorum threshold.
 4. **Logging in:** each account signs in with its phone number and PIN at the sign-in screen. Use a separate browser profile or private window for each role. Accounts with a temporary PIN must change it before they can use the dashboard.
 
 Suggested test order: Chairperson, then Secretary, then Treasurer, then a few members. Then record a few contributions, request a loan with two guarantors, approve it, repay it, assess penalties after a month's deadline, and run a dividend preview.
@@ -87,23 +89,23 @@ From `chamafork`:
 npm test
 ```
 
-This runs the Node.js built-in test runner (`node --test`) over `chamafork/test/`. Each suite starts its own server with its own temporary data file, so it does not touch `data.json`. The suite contains 82 tests.
+This runs the Node.js built-in test runner (`node --test`) over `chamafork/test/`. Each integration suite starts its own server with temporary data. On 2026-11-01, 134 tests passed and one PostgreSQL tenant-foreign-key integration test was skipped because `TENANT_FK_TEST_DATABASE_URL` was not configured. Test mode ignores `chamafork/.env` and uses in-process sessions so local PostgreSQL and Redis settings cannot leak into test runs.
 
 Browser behaviour has not been tested. The front-end tests check that the expected HTML and script text is present. They do not click through the UI.
 
 ## Known limits (not built or not verified)
 
 - **Browser testing:** the UI has not been exercised in a browser. Please open the dashboard as each role before relying on it.
-- **Language:** the interface is English only. The Swahili pass is not done.
+- **Language:** English and Kiswahili are available in the interface. Translation completeness and wording have not been reviewed end to end.
 - **Payments:** no M-Pesa, bank reconciliation, or STK push. Cash only.
-- **Messages:** the app does not send SMS, email, or in-app noticeboard messages. Invitation codes are shown once on screen unless Africa's Talking is configured, and the code path to send them has not been tested end to end.
-- **Security:** no two-factor authentication, no CSRF audit, and no tamper-evident audit chain. Login is by phone number and PIN, with lockouts after repeated failures.
+- **Messages:** general chat, broadcast, and email delivery are not available. Invitation codes can be delivered through Africa's Talking when configured; live provider delivery has not been verified. Otherwise the one-time code is shown in the app.
+- **Security:** no two-factor authentication or tamper-evident audit chain. Same-origin write protections, role checks, and write serialization have source review and regression coverage; this is not an independent penetration test or deployment verification.
 - **Data:** `DATA_BACKEND` selects JSON or PostgreSQL; it defaults to JSON for development, while production startup requires PostgreSQL. The PostgreSQL snapshot writer allows only one server process per database. See [production readiness limits](docs/docs/production-readiness.md) for the verified local state and infrastructure items that still need deployment evidence.
 - **Legacy loans:** approved loans created before the schedule change have no schedule, so they carry no interest. They repay against principal only.
 - **Penalties:** the penalty-first rule works for outstanding penalties. Assessment only runs when someone calls the endpoint, so nothing is penalised automatically.
 - **Dividend preview:** it shows the combined pool, not the penalty and interest split.
 - **Document vault, minutes, noticeboard, goals, and welfare disbursements:** not built.
-- **Voting and polling:** not built. Officers are assigned by the Chairperson and confirmed by another officer.
+- **Leadership elections:** post-setup officer changes use secret-ballot elections. General-purpose polls are not built.
 - **Roles:** only Chairperson, Secretary, Treasurer, and Member exist. Vice-Chairperson and Welfare Officer are not built.
 
 ## Repository layout

@@ -2,6 +2,15 @@
 
 Evidence checked on 2026-10-20 for this checkout. This note records local observations; it is not proof of a production deployment.
 
+## Local test and startup follow-up (2026-11-01)
+
+- The integration-test subprocesses loaded `chamafork/.env`, which selected the local Redis session store and caused server startup timeouts before test assertions ran. Test mode now skips `.env` loading, forces in-process sessions, and disables Redis. The attendance and main-server integration tests now set `NODE_ENV=test` explicitly.
+- Focused verification: attendance and main-server integration tests passed, 9 passed and 0 failed.
+- Full verification from `chamafork`: `npm test` passed with 134 passed, 0 failed, and 1 skipped. The skipped tenant-foreign-key database integration requires `TENANT_FK_TEST_DATABASE_URL`; no existing database was used.
+- A disposable JSON-backed local server returned HTTP 200 from `/api/health` on `127.0.0.1:18766`. Its data and profile files were directed to the system temporary folder; it was stopped after the check.
+- The checkout is on `review-fixes` with local work not pushed to `origin/review-fixes`. No push or deployment was performed.
+- The local `.env` still selects PostgreSQL and Redis without TLS; it is not a production configuration. No production host, public HTTPS route, firewall, backup, restore, or real-user workflow was checked.
+
 ## Local launch follow-up (2026-10-29)
 
 - At verification start, the checkout was clean on `review-fixes` at `9f56b47`. The live local app answered `/` and `/api/health` on `127.0.0.1:8000`; served frontend files matched this checkout.

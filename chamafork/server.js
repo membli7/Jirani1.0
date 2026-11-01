@@ -16,7 +16,13 @@ const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { addNotifications, applyDueElections, electionView, isElection, resultFor } = require("./leadership-elections");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+if (process.env.NODE_ENV === "test") {
+  // Tests use explicit disposable storage and must not connect to services in the local .env.
+  process.env.REDIS_URL = "";
+  process.env.SESSION_STORE = "memory";
+} else {
+  require("dotenv").config({ path: path.join(__dirname, ".env") });
+}
 const {
   logger,
   latencyMiddleware,
