@@ -31,6 +31,18 @@ test("launch-critical invitation, election, and cash copy is accurate in English
   }
 });
 
+test("loan status labels use the agreed title case and group pending decision states", () => {
+  const source = script.match(/function loanStatusLabel\(status\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "loan status label helper is present");
+  const sandbox = {};
+  vm.runInNewContext(`${source}; this.loanStatusLabel = loanStatusLabel;`, sandbox);
+  for (const [status, expected] of [
+    ["pending", "Pending"], ["Requested", "Pending"], ["Waiting for decisions", "Pending"],
+    ["approved", "Approved"], ["rejected", "Rejected"], ["repaid", "Repaid"], ["closed", "Closed"]
+  ]) assert.equal(sandbox.loanStatusLabel(status), expected);
+  assert.match(script, /esc\(loanStatusLabel\(loan\.status\)\)/);
+});
+
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
   assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true">J<\/span>/);

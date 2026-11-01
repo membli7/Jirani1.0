@@ -49,7 +49,7 @@
 - [x] Paybill callback and reconciliation are out of scope; do not show Paybill status or promise automatic payments.
 - [x] Invitation copy says an activation code is sent by SMS only when configured; otherwise share it privately. No in-app reminder delivery is claimed.
 - [x] Cash confirmation says it records cash already received and does not transfer money.
-- [ ] Standardize status labels (Pending, Approved, Rejected, Repaid, Closed)
+- [x] Standardize loan status labels (Pending, Approved, Rejected, Repaid, Closed)
 
 ## Step 2b: Decision — Attendance tracking
 

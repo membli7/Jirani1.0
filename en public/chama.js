@@ -70,6 +70,11 @@ function setLoginNotice(node, message) {
 function notice(message, error = false) { const node = $("#notice"); node.textContent = message; node.classList.toggle("error", error); node.setAttribute("aria-live", error ? "assertive" : "polite"); node.setAttribute("role", error ? "alert" : "status"); }
 function setButton(form, disabled) { form.querySelector("button[type=submit]").disabled = disabled; }
 function roleName(role) { return role ? role[0].toUpperCase() + role.slice(1) : ""; }
+function loanStatusLabel(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (["pending", "requested", "waiting for decisions"].includes(normalized)) return "Pending";
+  return ({ approved: "Approved", rejected: "Rejected", repaid: "Repaid", closed: "Closed" })[normalized] || status;
+}
 function fmtDate(value) { return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(new Date(value)); }
 function fmtTime(value) { return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Nairobi" }).format(new Date(value)); }
 function meetingDateToday() {
@@ -158,7 +163,7 @@ function render() {
       ? `<div class="loan-decision"><label for="loan-reason-${esc(loan.id)}">Decision reason</label><textarea id="loan-reason-${esc(loan.id)}" aria-label="Reason for loan decision" data-reason-for="${esc(loan.id)}" minlength="5" maxlength="500" placeholder="Reason (required)"></textarea><div class="loan-decision-actions"><button class="mini-btn" data-loan="${esc(loan.id)}" data-decision="approve">Approve</button><button class="mini-btn danger" data-loan="${esc(loan.id)}" data-decision="reject">Reject</button></div></div>`
       : "";
     const statusClass = loan.status === "approved" ? "success" : loan.status === "rejected" ? "inactive" : "pending";
-    return `<article class="loan-card"><div class="loan-card-heading"><div><h3>${esc(loan.memberName)} · ${money(loan.amount)}</h3><span class="schedule-sub">${loan.months} month${loan.months === 1 ? "" : "s"} · Requested ${esc(fmtDate(loan.createdAt))}</span></div><span class="status-pill ${statusClass}">${esc(loan.status)}</span></div><p class="loan-progress">${esc(loan.progressMessage)}</p><ol class="loan-approval-trail" aria-label="Approval trail for ${esc(loan.memberName)}">${steps}</ol>${action}</article>`;
+    return `<article class="loan-card"><div class="loan-card-heading"><div><h3>${esc(loan.memberName)} · ${money(loan.amount)}</h3><span class="schedule-sub">${loan.months} month${loan.months === 1 ? "" : "s"} · Requested ${esc(fmtDate(loan.createdAt))}</span></div><span class="status-pill ${statusClass}">${esc(loanStatusLabel(loan.status))}</span></div><p class="loan-progress">${esc(loan.progressMessage)}</p><ol class="loan-approval-trail" aria-label="Approval trail for ${esc(loan.memberName)}">${steps}</ol>${action}</article>`;
   }).join("") || '<div class="empty-state">No loans available.</div>';
   populateSelects(members, loans, guarantorMembers);
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
