@@ -88,7 +88,7 @@ const trustedProxyTrust = process.env.NODE_ENV === "production" ? createTrustedP
 app.set("trust proxy", trustedProxyTrust
   ? trustedProxyTrust
   : process.env.TRUST_PROXY === "1" ? 1 : false);
-const PORT = Number(process.env.PORT || 8000);
+const PORT = Number(process.env.PORT || 8001);
 const APP_BIND_HOST = resolveAppBindHost(process.env);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));

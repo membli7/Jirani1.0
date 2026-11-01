@@ -7,7 +7,7 @@ The dashboard assets in this folder are served by `../chamafork/server.js`.
 1. Copy `../chamafork/.env.example` to `../chamafork/.env` and set a long `SESSION_SECRET`.
 2. For the first run only, set `CHAMA_BOOTSTRAP_NAME`, `CHAMA_BOOTSTRAP_PHONE`, and a 4–12 digit `CHAMA_BOOTSTRAP_PIN`. This creates the first chairperson. Remove the bootstrap PIN after that account has signed in and changed it.
 3. Set Africa's Talking credentials to enable SMS invitation delivery. Without provider credentials, share the one-time activation code privately.
-4. From the repository root, run `npm start` (or from `../chamafork`, run `npm start`), then open `http://localhost:8000`.
+4. From the repository root, run `npm start` (or from `../chamafork`, run `npm start`), then open `http://localhost:8001`.
 
 ## Write API contract
 

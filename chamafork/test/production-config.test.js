@@ -63,6 +63,9 @@ test("the app binds to localhost by default and honors an explicit bind address"
 
 test("the example environment selects safe local development services", () => {
   const example = dotenv.parse(fs.readFileSync(path.join(__dirname, "..", ".env.example")));
+  const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  assert.equal(example.PORT, "8001");
+  assert.match(serverSource, /const PORT = Number\(process\.env\.PORT \|\| 8001\)/);
   assert.equal(example.DATA_BACKEND, "json");
   assert.equal(example.SESSION_STORE, "memory");
   assert.equal(example.REDIS_URL, "");

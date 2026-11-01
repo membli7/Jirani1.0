@@ -56,7 +56,7 @@ Requirements: Node.js 20 or newer (tested on Node 24), on Windows PowerShell or 
    Copy-Item .env.example .env
    ```
 
-   `PORT` defaults to 8000. `CHAMA_DATA_FILE` optionally moves the data file; by default it is `chamafork/data.json`. The Africa's Talking settings are optional. Without them, invitation codes are shown once on screen instead of being sent by SMS.
+   `PORT` defaults to 8001. `CHAMA_DATA_FILE` optionally moves the data file; by default it is `chamafork/data.json`. The Africa's Talking settings are optional. Without them, invitation codes are shown once on screen instead of being sent by SMS.
 
 3. Start the server:
 
@@ -66,7 +66,7 @@ Requirements: Node.js 20 or newer (tested on Node 24), on Windows PowerShell or 
 
    Or from the repository root, `npm start` runs the same thing.
 
-4. Open `http://localhost:8000`.
+4. Open `http://localhost:8001`.
 
 On first run with no data, the screen offers first-time setup. This creates the first Chairperson, using a name, a Kenyan phone number, and a 6–12 digit PIN.
 
