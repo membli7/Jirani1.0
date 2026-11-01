@@ -3,44 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Edit profile | Jirani Chama</title>
+  <title data-i18n="editProfileTitle">Edit profile | Jirani Chama</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/api/profile/photo/32">
   <link rel="apple-touch-icon" sizes="180x180" href="/api/profile/photo/180">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/chama.css?v=20261020.6">
 </head>
 <body class="profile-page">
+  <header class="topbar auth-page-topbar">
+    <a class="brand" href="/" aria-label="Jirani Chama home">
+      <span class="brand-mark" aria-hidden="true">J</span>
+      <span>Jirani Chama <small>GROUP TREASURY</small></span>
+    </a>
+    <label class="language-control" for="language-switch" data-i18n="language">Language
+      <select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
+        <option value="en" data-i18n="englishOption">English</option>
+        <option value="sw" data-i18n="swahili">Kiswahili</option>
+      </select>
+    </label>
+  </header>
   <main class="profile-shell">
-    <a class="panel-link" href="/">← Back to dashboard</a>
+    <a class="panel-link" href="/" data-i18n="backDashboard">← Back to dashboard</a>
     <section class="panel profile-card" aria-labelledby="profile-title">
-      <h1 id="profile-title">Edit profile</h1>
-      <p>Update your contact details and upload one photo. Jirani Chama creates the browser, iPhone, Android, and large fallback icon sizes for you.</p>
+      <h1 id="profile-title" data-i18n="editProfileTitle">Edit profile</h1>
+      <p data-i18n="profileIntro">Update your contact details and upload one photo. Jirani Chama creates the browser, iPhone, Android, and large fallback icon sizes for you.</p>
       <form id="profile-details-form" class="profile-details-form">
         <fieldset id="profile-details-fields" disabled>
-          <legend class="sr-only">Profile details</legend>
+          <legend class="sr-only" data-i18n="profileDetails">Profile details</legend>
           <div class="profile-fields">
-          <label class="field" for="profile-first-name">First name<input id="profile-first-name" name="firstName" maxlength="50" required></label>
-          <label class="field" for="profile-last-name">Last name<input id="profile-last-name" name="lastName" maxlength="50" required></label>
-          <label class="field" for="profile-nickname">Nickname <span class="field-help">(optional; shown in group chat)</span><input id="profile-nickname" name="nickname" maxlength="50"></label>
-          <label class="field" for="profile-phone">Phone number<input id="profile-phone" name="phone" type="tel" autocomplete="tel" required></label>
-          <label class="field" for="profile-email">Email<input id="profile-email" name="email" type="email" autocomplete="email" required></label>
+          <label class="field" for="profile-first-name" data-i18n="firstName">First name<input id="profile-first-name" name="firstName" maxlength="50" required></label>
+          <label class="field" for="profile-last-name" data-i18n="lastName">Last name<input id="profile-last-name" name="lastName" maxlength="50" required></label>
+          <label class="field" for="profile-nickname" data-i18n="nickname">Nickname <span class="field-help" data-i18n="optionalShownChat">(optional; shown in group chat)</span><input id="profile-nickname" name="nickname" maxlength="50"></label>
+          <label class="field" for="profile-phone" data-i18n="phoneNumber">Phone number<input id="profile-phone" name="phone" type="tel" autocomplete="tel" required></label>
+          <label class="field" for="profile-email" data-i18n="email">Email<input id="profile-email" name="email" type="email" autocomplete="email" required></label>
           </div>
         </fieldset>
-        <button id="change-details" class="mini-btn" type="button">Change details</button>
-        <button id="save-details" class="button-primary" type="submit" hidden>Save details</button>
+        <button id="change-details" class="mini-btn" type="button" data-i18n="changeDetails">Change details</button>
+        <button id="save-details" class="button-primary" type="submit" hidden data-i18n="saveDetails">Save details</button>
         <p id="profile-details-status" class="form-notice" role="status" aria-live="polite"></p>
       </form>
-      <div class="profile-photo-preview" id="profile-photo-preview" aria-label="Current profile photo preview">👤</div>
+      <div class="profile-photo-preview" id="profile-photo-preview" aria-label="Current profile photo preview" data-i18n-aria-label="currentPhotoPreview">👤</div>
       <label class="profile-upload" for="profile-photo">
         <span class="upload-icon" aria-hidden="true">⇧</span>
-        <span>Choose a profile photo</span>
+        <span data-i18n="chooseProfilePhoto">Choose a profile photo</span>
         <input id="profile-photo" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon" required>
       </label>
-      <p class="field-help">Choose a PNG, JPEG, WebP, GIF, SVG, or icon image. It will be converted to PNG icons in your browser before upload.</p>
+      <p class="field-help" data-i18n="profileAcceptedTypes">Choose a PNG, JPEG, WebP, GIF, SVG, or icon image. It will be converted to PNG icons in your browser before upload.</p>
       <p id="profile-status" class="form-notice" role="status" aria-live="polite"></p>
     </section>
   </main>
+  <script src="/i18n.js?v=20261101.1" defer></script>
   <script src="/write-requests.js" defer></script>
-  <script src="/profile.js?v=20261020.2" defer></script>
+  <script src="/profile.js?v=20261101.1" defer></script>
 </body>
 </html>

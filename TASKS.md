@@ -67,7 +67,7 @@ Attendance tracking scope decision (resolved): restore and test attendance end t
 - [x] New Chairperson setup checklist; completion is derived from active officers and valid invitations, while skip/dismiss state is stored per Chairperson in the browser.
 - [x] Leadership election lifecycle and dashboard panel implemented; see decisions dated 2026-10-20.
 - [ ] Manual mobile layout review at common phone sizes (responsive navigation and stacked cards are implemented).
-- [ ] Kiswahili translation completeness and wording review (language support is implemented).
+- [x] Kiswahili translation completeness and wording review (language support is implemented).
 - [ ] Sample-group demo
 
 ## Step 5: review

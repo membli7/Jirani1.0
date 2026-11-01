@@ -64,12 +64,12 @@ async function checkBackendConnection({ selectInitialScreen = false } = {}) {
 }
 function setLoginNotice(node, message) {
   if (!node) return;
-  node.textContent = message;
+  node.textContent = window.jiraniI18n?.translateText(message) || message;
   node.hidden = !message;
 }
-function notice(message, error = false) { const node = $("#notice"); node.textContent = message; node.classList.toggle("error", error); node.setAttribute("aria-live", error ? "assertive" : "polite"); node.setAttribute("role", error ? "alert" : "status"); }
+function notice(message, error = false) { const node = $("#notice"); node.textContent = window.jiraniI18n?.translateText(message) || message; node.classList.toggle("error", error); node.setAttribute("aria-live", error ? "assertive" : "polite"); node.setAttribute("role", error ? "alert" : "status"); }
 function setButton(form, disabled) { form.querySelector("button[type=submit]").disabled = disabled; }
-function roleName(role) { return role ? role[0].toUpperCase() + role.slice(1) : ""; }
+function roleName(role) { return window.jiraniI18n?.roleName(role) || (role ? role[0].toUpperCase() + role.slice(1) : ""); }
 function loanStatusLabel(status) {
   const normalized = String(status || "").toLowerCase();
   if (["pending", "requested", "waiting for decisions"].includes(normalized)) return "Pending";
@@ -138,8 +138,8 @@ function render() {
   $("#identity").textContent = `${user.name} (${roleName(user.role)})`;
   $("#menu-identity").textContent = `${user.name} (${roleName(user.role)})`;
   $("#logout").hidden = false;
-  $("#role-label").textContent = `${roleName(user.role)} dashboard`;
-  $("#greeting").textContent = `Welcome, ${user.name}`;
+  $("#role-label").textContent = `${roleName(user.role)} ${t("dashboard")}`;
+  $("#greeting").textContent = `${t("welcome")}, ${user.name}`;
   renderChairpersonSetupChecklist(user, members, invitations);
   const balance = $("#balance");
   const contributions = $("#contributions");
@@ -148,7 +148,7 @@ function render() {
   if (contributions) contributions.textContent = money(summary.contributions);
   if (outstanding) outstanding.textContent = money(summary.outstanding);
   [$("#balance"), $("#contributions"), $("#outstanding")].forEach(node => node?.classList.remove("skeleton"));
-  $("#transaction-copy").textContent = user.role === "member" ? "Only your confirmed entries are shown." : "All confirmed group entries.";
+  $("#transaction-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Only your confirmed entries are shown." : "All confirmed group entries.");
   $("#members-panel").hidden = user.role === "member";
   $("#payment-panel").hidden = !permissions.recordPayments;
   $("#invite-panel").hidden = !permissions.manageMembers;
@@ -190,7 +190,7 @@ function render() {
     return `<tr><td data-label="Name">${esc(invitation.name)}${history}</td><td data-label="Phone">${esc(invitation.phone)}</td><td data-label="Role">${esc(roleName(invitation.requestedRole))}</td><td data-label="Status"><span class="status-pill ${statusClass}">${status}</span></td><td data-label="Actions">${undoButton}</td></tr>`;
   }) : [];
   $("#members").innerHTML = [...memberRows, ...invitationRows].join("") || '<tr><td colspan="5" class="empty-state">No members or invitations available.</td></tr>';
-  $("#loan-copy").textContent = user.role === "member" ? "Your requests and eligible independent approvals." : "Three roles review each request; the Secretary fills a Chairperson or Treasurer borrower’s approval seat.";
+  $("#loan-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Your requests and eligible independent approvals." : "Three roles review each request; the Secretary fills a Chairperson or Treasurer borrower’s approval seat.");
   const visibleLoans = [...new Map([...loans, ...approvalQueue].map(loan => [loan.id, loan])).values()];
   $("#loans").innerHTML = visibleLoans.map(loan => {
     const steps = loan.approvalSteps.map(step => {
@@ -215,6 +215,7 @@ function render() {
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
   showAppPage(activeAppPage);
+  window.jiraniI18n?.apply();
 }
 function updateNavigationVisibility() {
   for (const link of menuBar.querySelectorAll("a[data-panel]")) {
@@ -333,7 +334,8 @@ function renderAttendance(user) {
 function updateAttendanceCount() {
   const choices = [...$("#attendance-members").querySelectorAll("[data-attendance-member]")];
   const present = choices.filter(input => input.checked).length;
-  $("#attendance-count").textContent = `${present} present · ${choices.length - present} absent · ${choices.length} members`;
+  const translate = value => window.jiraniI18n?.translateText(value) || value;
+  $("#attendance-count").textContent = `${present} ${translate("present")} · ${choices.length - present} ${translate("absent")} · ${choices.length} ${translate("members")}`;
   choices.forEach(input => { input.closest(".attendance-row").querySelector("[data-attendance-status]").textContent = input.checked ? "Present" : "Absent"; });
 }
 function populateSelects(members, loans, guarantors = []) {

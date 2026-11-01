@@ -2,6 +2,7 @@
 
 const registrationForm = document.querySelector("#register-chama-form");
 const registrationNotice = document.querySelector("#register-notice");
+const translateRegistrationText = value => window.jiraniI18n?.translateText(value) || value;
 
 registrationForm.addEventListener("submit", async event => {
   event.preventDefault();
@@ -54,9 +55,9 @@ registrationForm.addEventListener("submit", async event => {
 
     window.location.assign("/");
   } catch (error) {
-    registrationNotice.textContent = error instanceof TypeError
+    registrationNotice.textContent = translateRegistrationText(error instanceof TypeError
       ? "Cannot reach the server. Check that it is running, then try again."
-      : error.message;
+      : error.message);
     registrationNotice.hidden = false;
   } finally {
     submitButton.disabled = false;
@@ -76,9 +77,9 @@ if (new URLSearchParams(window.location.search).get("new-chama") === "1") {
       document.querySelector("#new-chama-existing-instance").hidden = false;
     })
     .catch(error => {
-      registrationNotice.textContent = error instanceof TypeError
+      registrationNotice.textContent = translateRegistrationText(error instanceof TypeError
         ? "Cannot reach the server. Check that it is running, then try again."
-        : error.message;
+        : error.message);
       registrationNotice.hidden = false;
     });
 }

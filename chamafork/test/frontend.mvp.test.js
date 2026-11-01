@@ -31,6 +31,68 @@ test("launch-critical invitation, election, and cash copy is accurate in English
   }
 });
 
+test("Kiswahili switch translates keyed text and attributes, then restores English", () => {
+  const makeElement = ({ key, text, attributes = {} }) => {
+    const textNode = text === undefined ? null : { nodeType: 3, nodeValue: text };
+    const element = {
+      dataset: key ? { i18n: key } : {},
+      childNodes: textNode ? [textNode] : [],
+      textContent: text || "",
+      attributes: { ...attributes },
+      querySelectorAll: () => [],
+      getAttribute(name) {
+        if (name.startsWith("data-i18n-")) return this.dataset[`i18n${name.slice(10).replace(/(^|-)([a-z])/g, (_, _dash, char) => char.toUpperCase())}`] || null;
+        return this.attributes[name] ?? null;
+      },
+      setAttribute(name, value) { this.attributes[name] = value; }
+    };
+    return { element, textNode };
+  };
+  const keyed = makeElement({ key: "date", text: "Date" });
+  const placeholder = makeElement({ attributes: { placeholder: "e.g. Cash received at the weekly meeting" } });
+  placeholder.element.dataset.i18nPlaceholder = "cashNotePlaceholder";
+  const accessible = makeElement({ attributes: { "aria-label": "Financial views" } });
+  accessible.element.dataset.i18nAriaLabel = "financialViews";
+  const elements = [keyed.element, placeholder.element, accessible.element];
+  const root = { lang: "en", querySelectorAll: selector => selector.includes("data-i18n") ? elements : [] };
+  const document = {
+    documentElement: root,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    createTreeWalker: () => ({ nextNode: () => false }),
+    addEventListener: () => {}
+  };
+  const storage = new Map();
+  const window = { dispatchEvent: () => {} };
+  const sandbox = { window, document, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, NodeFilter: { SHOW_TEXT: 4 }, CustomEvent: function CustomEvent() {} };
+  vm.runInNewContext(i18n, sandbox);
+
+  window.jiraniI18n.setLanguage("sw");
+  assert.equal(keyed.textNode.nodeValue, "Tarehe");
+  assert.equal(placeholder.element.getAttribute("placeholder"), "mf. Pesa taslimu iliyopokelewa kwenye mkutano wa wiki");
+  assert.equal(accessible.element.getAttribute("aria-label"), "Mionekano ya fedha");
+  assert.equal(window.jiraniI18n.translateText("View profile"), "Tazama wasifu");
+  assert.equal(window.jiraniI18n.roleName("treasurer"), "Mweka Hazina");
+  const pageFiles = ["index.html", "profile.html", "register.html", "member-login.html"];
+  const hookKeys = [...new Set(pageFiles.flatMap(file => [...fs.readFileSync(path.join(frontend, file), "utf8").matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"/g)].map(match => match[1])))];
+  for (const key of hookKeys) assert.notEqual(window.jiraniI18n.t(key), key, `missing translation for keyed hook: ${key}`);
+  window.jiraniI18n.setLanguage("en");
+  assert.equal(keyed.textNode.nodeValue, "Date");
+  assert.equal(placeholder.element.getAttribute("placeholder"), "e.g. Cash received at the weekly meeting");
+  assert.equal(accessible.element.getAttribute("aria-label"), "Financial views");
+});
+
+test("profile and sign-in pages load the shared language switch", () => {
+  assert.match(profileHtml, /id="language-switch"/);
+  assert.match(profileHtml, /src="\/i18n\.js\?v=20261101\.1"/);
+  assert.match(memberLoginHtml, /src="\/i18n\.js\?v=20261101\.1"/);
+  assert.match(registerHtml, /src="\/i18n\.js\?v=20261101\.1"/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261101\.1"/);
+  assert.match(authPagesScript, /translateAuthText\(error instanceof TypeError/);
+  assert.match(registerScript, /translateRegistrationText\(error instanceof TypeError/);
+  assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
+});
+
 test("loan status labels use the agreed title case and group pending decision states", () => {
   const source = script.match(/function loanStatusLabel\(status\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "loan status label helper is present");
@@ -88,7 +150,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
   assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
   assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261020\.4" defer/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261101\.1" defer/);
   assert.match(registerScript, /fetch\("\/api\/setup"/);
   assert.match(registerScript, /credentials: "same-origin"/);
   assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
@@ -99,7 +161,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerScript, /response\.status === 409/);
   assert.match(registerScript, /fetch\("\/api\/login"/);
   assert.match(registerScript, /window\.location\.assign\("\/"\)/);
-  assert.match(registerScript, /registrationNotice\.textContent = error instanceof TypeError/);
+  assert.match(registerScript, /registrationNotice\.textContent = translateRegistrationText\(error instanceof TypeError/);
 });
 
 test("member invitations send the required email address", () => {
@@ -144,7 +206,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261020\.10" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261101\.1" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -341,7 +403,7 @@ test("loan form sends two guarantors and repayments send reference and date", ()
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
   assert.match(profileHtml, /src="\/write-requests\.js" defer/);
-  assert.match(profileHtml, /src="\/profile\.js\?v=20261020\.2" defer/);
+  assert.match(profileHtml, /src="\/profile\.js\?v=20261101\.1" defer/);
   assert.match(profileScript, /fetch\("\/api\/profile"/);
   assert.match(profileScript, /path: "\/api\/profile"/);
   assert.match(profileScript, /\/api\/profile\/photo\/\$\{size\}/);

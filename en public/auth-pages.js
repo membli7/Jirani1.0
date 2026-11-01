@@ -5,6 +5,7 @@ const loginNotice = document.querySelector("#login-notice");
 const activationForm = document.querySelector("#activation-form");
 const activationNotice = document.querySelector("#activation-notice");
 const forgotPinView = document.querySelector("#forgot-pin-view");
+const translateAuthText = value => window.jiraniI18n?.translateText(value) || value;
 
 if (new URLSearchParams(window.location.search).get("switch-chama") === "1") {
   document.querySelector("#login-page-title")?.replaceChildren("Switch chama");
@@ -61,15 +62,15 @@ loginForm?.addEventListener("submit", async event => {
         option.textContent = chama.name;
         chamaField.append(option);
       }
-      loginNotice.textContent = "Select your chama, then sign in again.";
+      loginNotice.textContent = translateAuthText("Select your chama, then sign in again.");
       loginNotice.hidden = false;
       return;
     }
     window.location.assign("/");
   } catch (error) {
-    loginNotice.textContent = error instanceof TypeError
+    loginNotice.textContent = translateAuthText(error instanceof TypeError
       ? "Cannot reach the server. Check that it is running, then try again."
-      : error.message;
+      : error.message);
     loginNotice.hidden = false;
   } finally {
     submitButton.disabled = false;
@@ -88,12 +89,12 @@ activationForm?.addEventListener("submit", async event => {
     activationForm.reset();
     activationForm.hidden = true;
     loginForm.hidden = false;
-    loginNotice.textContent = result.message || "Account activated. Please sign in.";
+    loginNotice.textContent = translateAuthText(result.message || "Account activated. Please sign in.");
     loginNotice.hidden = false;
   } catch (error) {
-    activationNotice.textContent = error instanceof TypeError
+    activationNotice.textContent = translateAuthText(error instanceof TypeError
       ? "Cannot reach the server. Check that it is running, then try again."
-      : error.message;
+      : error.message);
     activationNotice.hidden = false;
   } finally {
     submitButton.disabled = false;

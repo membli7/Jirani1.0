@@ -183,8 +183,8 @@ describe("Jirani Chama server", () => {
   test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
     const page = await request("/profile.html");
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /src="\/profile\.js\?v=20261020\.2"/);
-    const script = await request("/profile.js?v=20261020.2");
+    assert.match(await page.text(), /src="\/profile\.js\?v=20261101\.1"/);
+    const script = await request("/profile.js?v=20261101.1");
     assert.equal(script.status, 200);
     assert.match(await script.text(), /\/api\/profile\/photo\/\$\{size\}/);
 

@@ -16,7 +16,7 @@
   const viewOnly = profileMode === "view";
 
   function showStatus(element, message, isError = false) {
-    element.textContent = message;
+    element.textContent = window.jiraniI18n?.translateText(message) || message;
     element.classList.toggle("error", isError);
   }
 
@@ -120,7 +120,8 @@
         body: png,
       });
       await readJson(response);
-      showStatus(photoStatus, `Uploading profile icons… ${sizes.indexOf(size) + 1}/${sizes.length}`);
+      const progress = window.jiraniI18n?.translateText("Uploading profile icons…") || "Uploading profile icons…";
+      showStatus(photoStatus, `${progress} ${sizes.indexOf(size) + 1}/${sizes.length}`);
     }
     photoPreview.replaceChildren();
     const image = document.createElement("img");
@@ -140,17 +141,17 @@
   });
 
   const currentPhoto = document.createElement("img");
-  currentPhoto.alt = "Current profile photo";
+  currentPhoto.alt = window.jiraniI18n?.translateText("Current profile photo") || "Current profile photo";
   currentPhoto.src = "/api/profile/photo/180";
   currentPhoto.addEventListener("load", () => photoPreview.replaceChildren(currentPhoto), { once: true });
 
   if (viewOnly) {
-    document.title = "View profile | Jirani Chama";
-    document.querySelector("#profile-title").textContent = "View profile";
+    document.title = window.jiraniI18n?.translateText("View profile") || "View profile | Jirani Chama";
+    document.querySelector("#profile-title").textContent = window.jiraniI18n?.translateText("View profile") || "View profile";
     changeButton.hidden = true;
     photoInput.disabled = true;
     document.querySelector(".profile-upload").hidden = true;
-    document.querySelector(".profile-card > p").textContent = "Your contact details and profile photo.";
+    document.querySelector(".profile-card > p").textContent = window.jiraniI18n?.translateText("Your contact details and profile photo.") || "Your contact details and profile photo.";
   } else if (profileMode === "edit") {
     fields.disabled = false;
     saveButton.hidden = false;
