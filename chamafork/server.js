@@ -662,9 +662,10 @@ function loanApprovalView(loan, viewer, source = state) {
 function permissionsFor(user, usersInChama = scopeToChama(state.users, user.chamaId)) {
   const chamaId = user.chamaId;
   const anotherOfficer = usersInChama.some(item => item.status === "active" && item.id !== user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
-  const pendingLeaderInvitation = scopeToChama(state.invitations, chamaId).some(item => ["secretary", "treasurer"].includes(item.requestedRole) && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
+  const pendingLeaderRoles = new Set(scopeToChama(state.invitations, chamaId).filter(item => ["secretary", "treasurer"].includes(item.requestedRole) && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now()).map(item => item.requestedRole));
   const priorLeadershipChange = scopeToChama(state.leadershipChanges, chamaId).some(item => item.type === "appointment");
-  const directInviteLeader = user.role === "chairperson" && !anotherOfficer && !pendingLeaderInvitation && !priorLeadershipChange;
+  const allLeaderSlotsFilled = pendingLeaderRoles.has("secretary") && pendingLeaderRoles.has("treasurer");
+  const directInviteLeader = user.role === "chairperson" && !anotherOfficer && !allLeaderSlotsFilled && !priorLeadershipChange;
   return {
     manageMembers: ["chairperson", "secretary"].includes(user.role),
     manageLeadership: ["chairperson", "secretary"].includes(user.role),
@@ -1374,7 +1375,7 @@ app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairp
     if (req.user.role !== "chairperson") return res.status(403).json({ message: "Only the Chairperson can invite the first leader directly." });
     const chamaUsers = scopeToChama(state.users, req.user.chamaId);
     const anotherOfficer = chamaUsers.some(item => item.status === "active" && item.id !== req.user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
-    const pendingLeaderInvitation = scopeToChama(state.invitations, req.user.chamaId).some(item => ["secretary", "treasurer"].includes(item.requestedRole) && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
+    const pendingLeaderInvitation = scopeToChama(state.invitations, req.user.chamaId).some(item => item.requestedRole === role && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
     const priorLeadershipChange = scopeToChama(state.leadershipChanges, req.user.chamaId).some(item => item.type === "appointment");
     if (anotherOfficer || pendingLeaderInvitation || priorLeadershipChange) return res.status(409).json({ message: "Direct leader invitations are available only for the first leader during initial setup. Invite a Member, then use the leadership assignment process." });
   }

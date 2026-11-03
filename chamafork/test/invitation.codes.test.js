@@ -66,6 +66,32 @@ function activate(server, phone, code, pin = "123456") {
 function persisted(server) { return JSON.parse(fs.readFileSync(server.dataFile, "utf8")); }
 after(async () => { for (const server of servers) await server.stop(); });
 
+test("Chairperson can invite both Secretary and Treasurer directly during initial setup", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-bootstrap-test-"));
+  const dataFile = path.join(directory, "data.json");
+  fs.writeFileSync(dataFile, JSON.stringify({ version: 2, users: [user("chair", "Chair Only", "+254711000090", "chairperson")], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
+  const server = { directory, dataFile, port: 32000 + (process.pid % 15000) + servers.length, baseUrl: "", child: null };
+  server.baseUrl = `http://127.0.0.1:${server.port}`;
+  server.start = () => startProcess(server);
+  server.stop = async () => { await stopProcess(server); fs.rmSync(directory, { recursive: true, force: true }); };
+  servers.push(server);
+  await server.start();
+
+  const chairCookie = await login(server, "+254711000090");
+
+  // Invite secretary directly
+  const { response: r1, body: b1 } = await createInvitation(server, chairCookie, "0799000001", "secretary");
+  assert.equal(r1.status, 201, `Secretary invite failed: ${JSON.stringify(b1)}`);
+
+  // Invite treasurer directly — must be allowed even though a secretary invite is pending
+  const { response: r2, body: b2 } = await createInvitation(server, chairCookie, "0799000002", "treasurer");
+  assert.equal(r2.status, 201, `Treasurer invite failed: ${JSON.stringify(b2)}`);
+
+  // A second secretary invite must be blocked (duplicate role pending)
+  const { response: r3, body: b3 } = await createInvitation(server, chairCookie, "0799000003", "secretary");
+  assert.equal(r3.status, 409, `Duplicate secretary invite should be rejected: ${JSON.stringify(b3)}`);
+});
+
 test("Secretary can invite a Member directly without Chairperson approval", async () => {
   const server = await startServer();
   const secretaryCookie = await login(server, "+254711000002");
