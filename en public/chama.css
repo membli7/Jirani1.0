@@ -2147,6 +2147,36 @@ body {
     radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .12), transparent 38%),
     radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .09), transparent 36%);
 }
+.login-overlay {
+  position: relative;
+  isolation: isolate;
+  background-image: none;
+}
+.login-overlay::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: clamp(520px, 72vh, 720px);
+  background-image: linear-gradient(90deg, rgba(243, 241, 235, .88), rgba(243, 241, 235, .60) 54%, rgba(243, 241, 235, .24)), url("/assets/chama-hero-background.webp");
+  background-position: center, center 42%;
+  background-size: cover;
+  content: "";
+  pointer-events: none;
+}
+.login-overlay > * {
+  position: relative;
+  z-index: 1;
+}
+.login-overlay .landing-sections-container {
+  padding-top: 32px !important;
+  padding-bottom: 32px !important;
+  border-radius: 20px;
+  background-image: linear-gradient(rgba(243, 241, 235, .84), rgba(243, 241, 235, .84)), url("/assets/chama-community-background.webp");
+  background-position: center;
+  background-size: cover;
+}
 .comparison-row { display: grid; gap: 7px; }
 .comparison-label { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 14px; }
 .comparison-label strong { text-align: right; font-variant-numeric: tabular-nums; }
