@@ -2094,12 +2094,12 @@ body > .site-footer {
 .topbar.is-authenticated .connection-status ~ #logout { display: none !important; }
 .topbar.is-authenticated { background: rgba(245, 247, 244, .9); }
 body:has(#app:not([hidden])) {
-  background-color: #f5f7f4;
+  background-color: #f3f1eb;
   background-image:
-    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .09), transparent 36%),
-    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .075), transparent 34%),
-    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .1), transparent 38%),
-    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .075), transparent 36%);
+    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .12), transparent 36%),
+    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .09), transparent 34%),
+    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .12), transparent 38%),
+    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .09), transparent 36%);
   background-attachment: fixed;
 }
 .finance-view-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
@@ -2118,6 +2118,35 @@ body:has(#app:not([hidden])) {
 .finance-summary-card strong { font-size: clamp(17px, 2vw, 22px); overflow-wrap: anywhere; }
 .finance-chart-section { width: 100%; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
 .dashboard-chart { display: grid; gap: 16px; }
+
+/* Use a quiet blend of the logo colors for every page surface. */
+:root {
+  background-color: #f3f1eb;
+  background-image:
+    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .12), transparent 36%),
+    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .09), transparent 34%),
+    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .12), transparent 38%),
+    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .09), transparent 36%);
+}
+
+body {
+  background-color: #f3f1eb;
+  background-image:
+    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .12), transparent 36%),
+    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .09), transparent 34%),
+    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .12), transparent 38%),
+    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .09), transparent 36%);
+  background-attachment: fixed;
+}
+
+.login-overlay {
+  background-color: #f3f1eb;
+  background-image:
+    radial-gradient(ellipse at 4% 12%, rgba(83, 101, 168, .12), transparent 36%),
+    radial-gradient(ellipse at 96% 18%, rgba(200, 85, 61, .09), transparent 34%),
+    radial-gradient(ellipse at 12% 92%, rgba(125, 154, 120, .12), transparent 38%),
+    radial-gradient(ellipse at 92% 88%, rgba(224, 165, 38, .09), transparent 36%);
+}
 .comparison-row { display: grid; gap: 7px; }
 .comparison-label { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 14px; }
 .comparison-label strong { text-align: right; font-variant-numeric: tabular-nums; }
@@ -2154,8 +2183,6 @@ body:has(#app:not([hidden])) {
   .election-card-heading, .election-ballot { align-items: stretch; flex-direction: column; }
   .election-card-heading .status-pill { align-self: flex-start; }
 }
-
-
 
 
 

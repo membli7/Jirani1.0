@@ -93,6 +93,17 @@ test("profile and sign-in pages load the shared language switch", () => {
   assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
 });
 
+test("all page backgrounds use a subdued blend of the logo colors", () => {
+  for (const color of [
+    "rgba(83, 101, 168, .12)",
+    "rgba(200, 85, 61, .09)",
+    "rgba(125, 154, 120, .12)",
+    "rgba(224, 165, 38, .09)"
+  ]) assert.match(css, new RegExp(color.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(css, /body\s*\{[\s\S]*?background-color:\s*#f3f1eb/);
+  assert.match(css, /\.login-overlay\s*\{[\s\S]*?background-color:\s*#f3f1eb/);
+});
+
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
   assert.match(html, /id="simulated-payment-section"/);
   assert.match(html, /Use fake TEST-\* values only\. This does not connect to M-Pesa or any payment provider\./);
