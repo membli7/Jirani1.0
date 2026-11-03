@@ -2125,6 +2125,11 @@ body:has(#app:not([hidden])) {
 .comparison-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #70a982, #24734a); }
 .comparison-track span.is-negative { background: linear-gradient(90deg, #dc9a83, #b64c4c); }
 .finance-data-notice:not([hidden]) { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; color: #7d5316; background: #fff4df; }
+.simulated-payment-section { display: grid; gap: 12px; margin-top: 18px; }
+.simulated-payment-section h3, .simulated-payment-section p { margin-top: 0; }
+.simulated-payment-table-wrap { max-height: min(55vh, 520px); overflow: auto; }
+.simulated-payment-table { min-width: 820px; }
+.simulated-payment-payload { max-width: 360px; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .audit-table-wrap, .cash-flow-table-wrap { max-height: min(60vh, 560px); overflow: auto; }
 .audit-table-wrap thead, .cash-flow-table-wrap thead { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .menu-bar { height: auto; bottom: auto; max-height: min(72vh, 640px); }

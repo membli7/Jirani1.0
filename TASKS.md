@@ -51,6 +51,12 @@
 - [x] Cash confirmation says it records cash already received and does not transfer money.
 - [x] Standardize loan status labels (Pending, Approved, Rejected, Repaid, Closed)
 
+## Simulated payment workflow (2026-11-01)
+- [x] Phase 2: add a local-only simulated payment inbox using TEST-prefixed transaction and phone identifiers; each new item is Unverified and stores its fake payload without changing a balance.
+- [x] No data/schema change and no live callback, payment-provider connection, automatic match, approval, or ledger posting.
+- [ ] Phase 3: suggest possible matches and require explicit Treasurer member/type/amount confirmation before any ledger change.
+- [ ] Phase 4: duplicate/reversal/correction safeguards and full action audit.
+
 ## Step 2b: Decision — Attendance tracking
 
 Attendance tracking scope decision (resolved): restore and test attendance end to end.

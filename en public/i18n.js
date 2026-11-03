@@ -376,7 +376,22 @@
     repayment: ["Loan Repayment", "Malipo ya mkopo"], fine: ["Fine", "Faini"], inviteName: ["Name", "Jina"],
     invitePhone: ["Kenyan phone", "Simu ya Kenya"], type: ["Type", "Aina"], actions: ["Actions", "Vitendo"],
     landingHeading: ["Simple, trusted ", "Akiba rahisi na ya kuaminika "], landingSubtitle: ["Keep contributions, loans, and group decisions together in one secure place.", "Simamia michango, mikopo na maamuzi ya kikundi pamoja mahali salama."],
-    groupSavings: ["group savings", "ya kikundi"]
+    groupSavings: ["group savings", "ya kikundi"],
+    simulatedInboxTitle: ["Simulated payment inbox (local test only)", "Kikasha cha malipo ya kuigiza (jaribio la ndani pekee)"],
+    simulatedInboxCopy: ["Use fake TEST-* values only. This does not connect to M-Pesa or any payment provider. Saving a simulation never changes a balance.", "Tumia thamani bandia zinazoanza na TEST- pekee. Hii haiunganishwi na M-Pesa wala mtoa huduma yeyote wa malipo. Kuhifadhi jaribio hakubadilishi salio."],
+    simulatedTransactionId: ["Test transaction ID", "Kitambulisho cha muamala wa jaribio"],
+    fakePhoneIdentifier: ["Fake phone identifier", "Kitambulisho bandia cha simu"],
+    simulatedAmount: ["Amount (KES)", "Kiasi (KES)"],
+    simulatedReference: ["Reference", "Kumbukumbu"],
+    simulatedTimestamp: ["Payment timestamp", "Tarehe na saa ya malipo"],
+    createSimulation: ["Add unverified test payment", "Ongeza malipo ya jaribio ambayo hayajathibitishwa"],
+    receivedAt: ["Received", "Imepokelewa"], rawTestPayload: ["Test payload", "Data ghafi ya jaribio"],
+    unverified: ["Unverified", "Haijathibitishwa"],
+    noSimulatedPayments: ["No simulated payments yet.", "Bado hakuna malipo ya kuigiza."],
+    simulationSaved: ["Simulated payment saved as Unverified; no balance was changed.", "Malipo ya kuigiza yamehifadhiwa bila kuthibitishwa; hakuna salio lililobadilika."],
+    simulationDuplicate: ["That simulated transaction ID is already in the inbox.", "Kitambulisho hicho cha muamala wa jaribio tayari kiko kwenye kikasha."],
+    simulationIdentifiersOnly: ["Use TEST-prefixed transaction IDs and fake phone identifiers only.", "Tumia vitambulisho vya miamala na simu bandia vinavyoanza na TEST- pekee."],
+    simulationInputInvalid: ["Enter a positive amount up to KES 10,000,000, a reference up to 80 characters, and a valid timestamp.", "Weka kiasi chanya kisichozidi KES 10,000,000, kumbukumbu isiyozidi herufi 80 na tarehe na saa halali."]
   };
   for (const [key, [english, swahili]] of Object.entries(keyedTranslations)) {
     if (!dictionary.en[key]) dictionary.en[key] = english;

@@ -93,6 +93,17 @@ test("profile and sign-in pages load the shared language switch", () => {
   assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
 });
 
+test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
+  assert.match(html, /id="simulated-payment-section"/);
+  assert.match(html, /Use fake TEST-\* values only\. This does not connect to M-Pesa or any payment provider\./);
+  for (const field of ["transactionId", "phoneNumber", "amount", "reference", "timestamp"]) {
+    assert.match(html, new RegExp(`name="${field}"`));
+  }
+  assert.match(html, /id="simulated-payment-rows"/);
+  assert.match(script, /renderSimulatedPaymentInbox\(state\.simulatedPayments \|\| \[\]\)/);
+  assert.match(script, /api\("\/api\/payments\/simulate"/);
+});
+
 test("loan status labels use the agreed title case and group pending decision states", () => {
   const source = script.match(/function loanStatusLabel\(status\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "loan status label helper is present");
@@ -206,7 +217,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261101\.1" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261101\.2" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {

@@ -12,6 +12,7 @@ const { ipKeyGenerator } = require("express-rate-limit");
 const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security/https-origin");
 const { createSessionBackend } = require("./session-store");
 const { makeRedisClient } = require("./redis-client");
+const nodemailer = require("nodemailer");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
@@ -90,6 +91,7 @@ app.set("trust proxy", trustedProxyTrust
   : process.env.TRUST_PROXY === "1" ? 1 : false);
 const PORT = Number(process.env.PORT || 8001);
 const APP_BIND_HOST = resolveAppBindHost(process.env);
+const SIMULATED_PAYMENTS_ENABLED = process.env.NODE_ENV !== "production" && ["127.0.0.1", "::1", "localhost"].includes(APP_BIND_HOST);
 const APP_CANONICAL_ORIGIN = parseCanonicalHttpsOrigin(process.env.APP_CANONICAL_ORIGIN);
 const APP_ALLOWED_ORIGINS = new Set(parseAllowedOrigins(process.env.APP_ALLOWED_ORIGINS));
 const DATA_BACKEND = process.env.DATA_BACKEND || "postgres";
@@ -103,6 +105,7 @@ const PROFILE_DETAILS_FILE = process.env.CHAMA_PROFILE_DETAILS_FILE || path.join
 const PROFILE_ICON_SIZES = new Set([32, 180, 192, 512]);
 const ROLES = new Set(["chairperson", "secretary", "treasurer", "member"]);
 const PAYMENT_TYPES = new Set(["Monthly Contribution", "Loan Repayment", "Fine"]);
+const SIMULATED_PAYMENT_STATUSES = new Set(["Unverified", "Suggested", "Approved", "Unmatched", "Duplicate", "Reversed", "Rejected"]);
 const LOAN_APPROVAL_ROLES = new Set(["chairperson", "secretary", "treasurer"]);
 const REQUIRED_LOAN_APPROVALS = 3;
 const WELFARE_MONTHLY_FEE = 500;
@@ -391,7 +394,7 @@ setOperationalMetricsProvider(() => {
   let callbackQueueDepth = 0;
   let oldestReceivedAt = null;
   for (const callback of Array.isArray(state.pendingMpesas) ? state.pendingMpesas : []) {
-    if (!callback || callback.processed === true) continue;
+    if (!callback || callback.processed === true || callback.simulated === true) continue;
     callbackQueueDepth += 1;
     const receivedAt = Date.parse(callback.receivedAt);
     if (Number.isFinite(receivedAt) && (oldestReceivedAt === null || receivedAt < oldestReceivedAt)) {
@@ -678,6 +681,7 @@ function permissionsFor(user, usersInChama = scopeToChama(state.users, user.cham
     assessPenalties: ["chairperson", "secretary"].includes(user.role),
     manageDividends: ["chairperson", "treasurer"].includes(user.role),
     directInviteLeader,
+    simulatePayments: user.role === "treasurer" && SIMULATED_PAYMENTS_ENABLED,
     decideLoans: LOAN_APPROVAL_ROLES.has(user.role),
     requestLoans: true,
   };
@@ -799,6 +803,36 @@ function sendSms(phone, message) {
   if (!to) return Promise.reject(new Error("Invalid Kenyan phone number."));
   const body = new URLSearchParams({ username, to: `+${to}`, message, ...(from ? { from } : {}) }).toString();
   return providerRequest(new URL("https://api.africastalking.com/version1/messaging"), { apiKey, "Content-Type": "application/x-www-form-urlencoded", "Content-Length": Buffer.byteLength(body), Accept: "application/json" }, body, "SMS");
+}
+function emailConfigured() {
+  if (process.env.SMTP_TRANSPORT === "json") return true;
+  const host = clean(process.env.SMTP_HOST);
+  const user = clean(process.env.SMTP_USER);
+  const pass = clean(process.env.SMTP_PASS);
+  return !!host && !!user && !!pass;
+}
+let _emailTransporter = null;
+function getEmailTransporter() {
+  if (_emailTransporter) return _emailTransporter;
+  if (process.env.SMTP_TRANSPORT === "json") {
+    _emailTransporter = nodemailer.createTransport({ jsonTransport: true });
+    return _emailTransporter;
+  }
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const secure = process.env.SMTP_SECURE === "true" || port === 465;
+  _emailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+  return _emailTransporter;
+}
+async function sendEmail(to, subject, text) {
+  if (!emailConfigured()) throw new Error("Email delivery is not configured.");
+  if (!to || !validEmail(to)) throw new Error("Invalid recipient email address.");
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  return getEmailTransporter().sendMail({ from, to, subject, text });
 }
 app.disable("x-powered-by");
 app.use(compression());
@@ -1347,14 +1381,19 @@ app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairp
   if (scopeToChama(state.users, req.user.chamaId).some(item => normalizeEmail(item.email) === email) || scopeToChama(state.invitations, req.user.chamaId).some(item => normalizeEmail(item.email) === email && !item.usedAt && !invitationRevocation(item) && item.expiresAt > now())) return res.status(409).json({ message: "That email address already has an account or active invitation in this chama." });
   if (scopeToChama(state.users, req.user.chamaId).some(item => item.phone === phone) || scopeToChama(state.invitations, req.user.chamaId).some(item => item.phone === phone && !item.usedAt && !invitationRevocation(item) && item.expiresAt > now())) return res.status(409).json({ message: "That phone number already has an account or active invitation." });
   const code = String(crypto.randomInt(100000, 1000000)); const invitation = { id: newId(), name, phone, email, requestedRole: role, idempotencyKey: req.idempotency.key, codeHash: hashCode(code), attemptsRemaining: invitationAttemptLimit, usedCodeHash: null, invitedBy: req.user.id, invitedAt: now(), expiresAt: new Date(Date.now() + codeLifetimeMs).toISOString(), usedAt: null, chamaId: req.user.chamaId };
-  let deliveryChannel = "sms";
-  try { await sendSms(phone, `Jirani Chama invitation: your activation code is ${code}. It expires in 24 hours. Do not share it.`); }
-  catch (error) { if (error.message !== "Africa's Talking is not configured.") return res.status(502).json({ message: `Invitation was not created: ${error.message}` }); deliveryChannel = "manual"; }
+  let deliveryChannel = "email";
+  try {
+    const emailInfo = await sendEmail(email, "Jirani Chama Invitation", `Jirani Chama invitation: your activation code is ${code}. It expires in 24 hours. Do not share it.`);
+    if (process.env.SMTP_TRANSPORT === "json" && emailInfo?.message && process.env.SMTP_LOG_FILE) {
+      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, emailInfo.message + "\n"); } catch {}
+    }
+  }
+  catch (error) { if (error.message !== "Email delivery is not configured.") return res.status(502).json({ message: `Invitation was not created: ${error.message}` }); deliveryChannel = "manual"; }
   const updated = structuredClone(state); updated.invitations.push(invitation);
   const { codeHash, usedCodeHash, ...savedInvitation } = invitation;
   const message = deliveryChannel === "manual"
-    ? "Invitation created. SMS is not configured. Share this activation code privately; it expires in 24 hours."
-    : "Invitation sent by SMS.";
+    ? "Invitation created. Email delivery is not configured. Share this activation code privately; it expires in 24 hours."
+    : "Invitation sent by email.";
   const body = { message, deliveryChannel, invitation: savedInvitation, ...(deliveryChannel === "manual" ? { activationCode: code } : {}) };
   const replayBody = deliveryChannel === "manual"
     ? { message: "Invitation exists. The activation code is only shown once.", deliveryChannel, invitation: savedInvitation }
@@ -1835,6 +1874,88 @@ app.get("/api/audit-log", requireAuth, requirePinChanged, requireRole("chairpers
 
 // ---------------------------------------------------------------------------
 // M-Pesa settlement callbacks stay disabled until request authentication and exact amount matching exist.
+function simulatedPaymentView(payment) {
+  return {
+    id: payment.id,
+    transactionId: payment.transactionId,
+    phoneNumber: payment.phoneNumber,
+    amount: payment.amount,
+    reference: payment.reference,
+    timestamp: payment.timestamp,
+    receivedAt: payment.receivedAt,
+    status: SIMULATED_PAYMENT_STATUSES.has(payment.status) ? payment.status : "Unverified",
+    rawPayload: payment.payload || {},
+  };
+}
+
+app.get("/api/payments/inbox", requireAuth, requirePinChanged, requireRole("treasurer"), (req, res) => {
+  if (!SIMULATED_PAYMENTS_ENABLED) return res.status(404).json({ message: "Not found." });
+  const data = scopeToChama(state.pendingMpesas, req.user.chamaId, item => item.chamaId)
+    .filter(payment => payment.simulated === true && SIMULATED_PAYMENT_STATUSES.has(payment.status))
+    .slice()
+    .sort((left, right) => String(right.receivedAt).localeCompare(String(left.receivedAt)))
+    .map(simulatedPaymentView);
+  return res.json({ data });
+});
+
+app.post("/api/payments/simulate", requireAuth, requirePinChanged, requireRole("treasurer"), (req, res, next) => {
+  if (!SIMULATED_PAYMENTS_ENABLED) return res.status(404).json({ message: "Not found." });
+  return next();
+}, idempotent(async (req, res, next) => {
+  const transactionId = clean(req.body?.transactionId).toUpperCase();
+  const phoneNumber = clean(req.body?.phoneNumber).toUpperCase();
+  const amountInput = req.body?.amount;
+  const amount = Number(amountInput);
+  const reference = clean(req.body?.reference);
+  const timestampInput = clean(req.body?.timestamp);
+  const timestampValue = Date.parse(timestampInput);
+  const validAmountFormat = typeof amountInput === "number"
+    ? Number.isFinite(amountInput)
+    : typeof amountInput === "string" && /^(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/.test(amountInput);
+  const validTimestampFormat = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(timestampInput);
+  const hasTwoDecimalPlacesAtMost = Number.isFinite(amount) && Math.abs(amount * 100 - Math.round(amount * 100)) < 1e-7;
+  if (!/^TEST-[A-Z0-9](?:[A-Z0-9-]{2,60})$/.test(transactionId) || !/^TEST-[A-Z0-9](?:[A-Z0-9-]{2,60})$/.test(phoneNumber)) {
+    return res.status(400).json({ message: "Use TEST-prefixed transaction IDs and fake phone identifiers only." });
+  }
+  if (!validAmountFormat || !Number.isFinite(amount) || amount <= 0 || amount > 10000000 || !hasTwoDecimalPlacesAtMost || !reference || reference.length > 80 || !validTimestampFormat || !Number.isFinite(timestampValue)) {
+    return res.status(400).json({ message: "Enter a positive amount up to KES 10,000,000, a reference up to 80 characters, and a valid timestamp." });
+  }
+  const existing = scopeToChama(state.pendingMpesas, req.user.chamaId, item => item.chamaId)
+    .find(payment => payment.simulated === true && payment.transactionId === transactionId);
+  if (existing) return res.status(409).json({ message: "That simulated transaction ID is already in the inbox." });
+  const timestamp = new Date(timestampValue).toISOString();
+  const receivedAt = now();
+  const payload = {
+    testOnly: true,
+    Body: {
+      stkCallback: {
+        CheckoutRequestID: `SIM-${transactionId}`,
+        ResultCode: 0,
+        CallbackMetadata: {
+          Item: [
+            { Name: "Amount", Value: amount },
+            { Name: "MpesaReceiptNumber", Value: transactionId },
+            { Name: "TransactionDate", Value: timestamp },
+            { Name: "PhoneNumber", Value: phoneNumber },
+            { Name: "AccountReference", Value: reference },
+          ],
+        },
+      },
+    },
+  };
+  const payment = {
+    id: newId(), chamaId: req.user.chamaId, callbackKey: `SIMULATED:${transactionId}`,
+    transactionId, phoneNumber, amount, reference, timestamp, receivedAt,
+    simulated: true, status: "Unverified", payload,
+  };
+  if (!SIMULATED_PAYMENT_STATUSES.has(payment.status)) return res.status(500).json({ message: "Invalid simulated-payment status." });
+  const updated = structuredClone(state);
+  if (!Array.isArray(updated.pendingMpesas)) updated.pendingMpesas = [];
+  updated.pendingMpesas.push(payment);
+  const body = { message: "Simulated payment saved as Unverified; no balance was changed.", data: simulatedPaymentView(payment) };
+  return commit(req, res, next, updated, 201, body);
+}));
+
 app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "M-Pesa callback settlement is disabled until requests can be authenticated and matched." }));
 
 // OTP phone-auth (Phase 1)
@@ -1871,7 +1992,7 @@ const OTP_SEND_DAILY_LIMIT = sharedRateLimit("otp-send-daily", {
 app.post("/api/otp/request", OTP_RATE_LIMIT, OTP_SEND_COOLDOWN, OTP_SEND_DAILY_LIMIT, (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   if (!phone) return res.status(400).json({ message: "Enter a valid Kenyan mobile phone number." });
-  if (!africaTalkingSmsConfigured()) return res.status(503).json({ message: "Phone-code sign-in is unavailable until secure SMS delivery is configured." });
+  if (!emailConfigured()) return res.status(503).json({ message: "Phone-code sign-in is unavailable until secure email delivery is configured." });
   // Find at least one active account for this phone.
   const accounts = state.users.filter(u => u.phone === phone && u.status === "active");
   // Respond identically whether or not the phone is registered (no enumeration).
@@ -1886,8 +2007,15 @@ app.post("/api/otp/request", OTP_RATE_LIMIT, OTP_SEND_COOLDOWN, OTP_SEND_DAILY_L
   req.session.save(err => {
     if (err) return next(err);
     // Never log one-time codes. Only return the generic response after dispatch.
-    sendSms(phone, `Your Jirani Chama activation code is ${otp}. It expires in 10 minutes. Do not share it.`)
-      .then(() => res.json(genericOk))
+    const recipient = accounts.find(u => validEmail(u.email)) || accounts[0];
+    const recipientEmail = recipient?.email;
+    sendEmail(recipientEmail, "Jirani Chama Sign-In Code", `Your Jirani Chama sign-in code is ${otp}. It expires in 10 minutes. Do not share it.`)
+      .then(info => {
+        if (process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
+          try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+        }
+        res.json(genericOk);
+      })
       .catch(() => {
         delete req.session.otpHash;
         delete req.session.otpPhone;

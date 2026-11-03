@@ -151,6 +151,7 @@ function render() {
   $("#transaction-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Only your confirmed entries are shown." : "All confirmed group entries.");
   $("#members-panel").hidden = user.role === "member";
   $("#payment-panel").hidden = !permissions.recordPayments;
+  $("#simulated-payment-section").hidden = !permissions.simulatePayments;
   $("#invite-panel").hidden = !permissions.manageMembers;
   $("#leadership-panel").hidden = !permissions.manageLeadership;
   $("#audit-panel").hidden = !permissions.viewAuditLog;
@@ -212,6 +213,7 @@ function render() {
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
   renderElections(leadershipElections, user, notifications);
   renderAttendance(user);
+  renderSimulatedPaymentInbox(state.simulatedPayments || []);
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
   showAppPage(activeAppPage);
@@ -226,6 +228,16 @@ function updateNavigationVisibility() {
     const links = [...dropdown.querySelectorAll("a[data-panel]")];
     dropdown.hidden = links.length > 0 && links.every(link => link.hidden);
   }
+}
+function renderSimulatedPaymentInbox(payments = []) {
+  const body = $("#simulated-payment-rows");
+  if (!body) return;
+  body.innerHTML = payments.map(payment => {
+    const payload = esc(JSON.stringify(payment.rawPayload || {}, null, 2));
+    const status = window.jiraniI18n?.translateText(payment.status) || payment.status;
+    const received = `${fmtDate(payment.receivedAt)} ${fmtTime(payment.receivedAt)}`;
+    return `<tr><td data-label="${esc(t("simulatedTransactionId"))}">${esc(payment.transactionId)}</td><td data-label="${esc(t("fakePhoneIdentifier"))}">${esc(payment.phoneNumber)}</td><td data-label="${esc(t("amountKes"))}">${money(payment.amount)}</td><td data-label="${esc(t("simulatedReference"))}">${esc(payment.reference)}</td><td data-label="${esc(t("receivedAt"))}">${esc(received)}</td><td data-label="${esc(t("status"))}"><span class="status-pill pending">${esc(status)}</span></td><td data-label="${esc(t("rawTestPayload"))}"><details><summary>${esc(t("rawTestPayload"))}</summary><pre class="simulated-payment-payload">${payload}</pre></details></td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty-state" data-i18n="noSimulatedPayments">${esc(t("noSimulatedPayments"))}</td></tr>`;
 }
 function updateDashboardTabs() {
   for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
@@ -537,6 +549,7 @@ async function loadFinancialViews() {
 async function refresh() {
   try {
     state = await api("/api/dashboard");
+    state.simulatedPayments = state.permissions.simulatePayments ? (await api("/api/payments/inbox")).data || [] : [];
     attendanceData = await api("/api/attendance");
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
     if (!selectedAttendanceDate) selectedAttendanceDate = meetingDateToday();
@@ -740,6 +753,32 @@ $("#payment-form").addEventListener("submit", async event => {
   } catch (error) {
     notice(error.uncertain ? writeRequests.unconfirmedMessage("Transactions") : error.message, true);
   } finally { setButton(form, false); }
+});
+$("#simulated-payment-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  setButton(form, true);
+  try {
+    const values = Object.fromEntries(new FormData(form));
+    values.amount = Number(values.amount);
+    values.timestamp = new Date(values.timestamp).toISOString();
+    await api("/api/payments/simulate", {
+      method: "POST",
+      body: values,
+      write: form,
+      validateResponse: result => result?.data?.status === "Unverified" && result.data.transactionId === values.transactionId.toUpperCase() && result.data.rawPayload?.testOnly === true,
+    });
+    form.reset();
+    state.simulatedPayments = (await api("/api/payments/inbox")).data || [];
+    renderSimulatedPaymentInbox(state.simulatedPayments);
+    window.jiraniI18n?.apply();
+    notice("Simulated payment saved as Unverified; no balance was changed.");
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    setButton(form, false);
+  }
 });
 $("#loan-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
