@@ -1377,7 +1377,8 @@ app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairp
     const chamaUsers = scopeToChama(state.users, req.user.chamaId);
     const roleAlreadyActive = chamaUsers.some(item => item.status === "active" && item.role === role);
     const pendingLeaderInvitation = scopeToChama(state.invitations, req.user.chamaId).some(item => item.requestedRole === role && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
-    const priorLeadershipChange = scopeToChama(state.leadershipChanges, req.user.chamaId).some(item => item.type === "appointment");
+    const priorLeadershipChange = scopeToChama(state.leadershipChanges, req.user.chamaId)
+      .some(item => item.type === "appointment" && item.role === role);
     if (roleAlreadyActive || pendingLeaderInvitation || priorLeadershipChange) return res.status(409).json({ message: "Direct leader invitations are available only for the first leader during initial setup. Invite a Member, then use the leadership assignment process." });
   }
   if (scopeToChama(state.users, req.user.chamaId).some(item => normalizeEmail(item.email) === email) || scopeToChama(state.invitations, req.user.chamaId).some(item => normalizeEmail(item.email) === email && !item.usedAt && !invitationRevocation(item) && item.expiresAt > now())) return res.status(409).json({ message: "That email address already has an account or active invitation in this chama." });
