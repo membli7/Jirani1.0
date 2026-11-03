@@ -663,9 +663,10 @@ function permissionsFor(user, usersInChama = scopeToChama(state.users, user.cham
   const chamaId = user.chamaId;
   const anotherOfficer = usersInChama.some(item => item.status === "active" && item.id !== user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
   const pendingLeaderRoles = new Set(scopeToChama(state.invitations, chamaId).filter(item => ["secretary", "treasurer"].includes(item.requestedRole) && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now()).map(item => item.requestedRole));
+  const activeLeaderRoles = new Set(usersInChama.filter(item => item.status === "active" && item.id !== user.id && ["secretary", "treasurer"].includes(item.role)).map(item => item.role));
   const priorLeadershipChange = scopeToChama(state.leadershipChanges, chamaId).some(item => item.type === "appointment");
-  const allLeaderSlotsFilled = pendingLeaderRoles.has("secretary") && pendingLeaderRoles.has("treasurer");
-  const directInviteLeader = user.role === "chairperson" && !anotherOfficer && !allLeaderSlotsFilled && !priorLeadershipChange;
+  const allLeaderSlotsFilled = ["secretary", "treasurer"].every(r => pendingLeaderRoles.has(r) || activeLeaderRoles.has(r));
+  const directInviteLeader = user.role === "chairperson" && !allLeaderSlotsFilled && !priorLeadershipChange;
   return {
     manageMembers: ["chairperson", "secretary"].includes(user.role),
     manageLeadership: ["chairperson", "secretary"].includes(user.role),
@@ -1374,10 +1375,10 @@ app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairp
   if (["secretary", "treasurer"].includes(role)) {
     if (req.user.role !== "chairperson") return res.status(403).json({ message: "Only the Chairperson can invite the first leader directly." });
     const chamaUsers = scopeToChama(state.users, req.user.chamaId);
-    const anotherOfficer = chamaUsers.some(item => item.status === "active" && item.id !== req.user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
+    const roleAlreadyActive = chamaUsers.some(item => item.status === "active" && item.role === role);
     const pendingLeaderInvitation = scopeToChama(state.invitations, req.user.chamaId).some(item => item.requestedRole === role && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
     const priorLeadershipChange = scopeToChama(state.leadershipChanges, req.user.chamaId).some(item => item.type === "appointment");
-    if (anotherOfficer || pendingLeaderInvitation || priorLeadershipChange) return res.status(409).json({ message: "Direct leader invitations are available only for the first leader during initial setup. Invite a Member, then use the leadership assignment process." });
+    if (roleAlreadyActive || pendingLeaderInvitation || priorLeadershipChange) return res.status(409).json({ message: "Direct leader invitations are available only for the first leader during initial setup. Invite a Member, then use the leadership assignment process." });
   }
   if (scopeToChama(state.users, req.user.chamaId).some(item => normalizeEmail(item.email) === email) || scopeToChama(state.invitations, req.user.chamaId).some(item => normalizeEmail(item.email) === email && !item.usedAt && !invitationRevocation(item) && item.expiresAt > now())) return res.status(409).json({ message: "That email address already has an account or active invitation in this chama." });
   if (scopeToChama(state.users, req.user.chamaId).some(item => item.phone === phone) || scopeToChama(state.invitations, req.user.chamaId).some(item => item.phone === phone && !item.usedAt && !invitationRevocation(item) && item.expiresAt > now())) return res.status(409).json({ message: "That phone number already has an account or active invitation." });

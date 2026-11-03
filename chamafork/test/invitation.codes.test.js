@@ -79,17 +79,28 @@ test("Chairperson can invite both Secretary and Treasurer directly during initia
 
   const chairCookie = await login(server, "+254711000090");
 
-  // Invite secretary directly
+  // Invite secretary directly (pending invite)
   const { response: r1, body: b1 } = await createInvitation(server, chairCookie, "0799000001", "secretary");
   assert.equal(r1.status, 201, `Secretary invite failed: ${JSON.stringify(b1)}`);
 
-  // Invite treasurer directly — must be allowed even though a secretary invite is pending
-  const { response: r2, body: b2 } = await createInvitation(server, chairCookie, "0799000002", "treasurer");
-  assert.equal(r2.status, 201, `Treasurer invite failed: ${JSON.stringify(b2)}`);
+  // Secretary activates — they are now an active officer
+  const activateSecretary = await activate(server, "0799000001", b1.activationCode);
+  assert.equal(activateSecretary.status, 201, "Secretary activation failed");
 
-  // A second secretary invite must be blocked (duplicate role pending)
+  // Chair must still be able to invite treasurer even though secretary is now active
+  const { response: r2, body: b2 } = await createInvitation(server, chairCookie, "0799000002", "treasurer");
+  assert.equal(r2.status, 201, `Treasurer invite failed after secretary activated: ${JSON.stringify(b2)}`);
+
+  // A second secretary invite must be blocked (role already active)
   const { response: r3, body: b3 } = await createInvitation(server, chairCookie, "0799000003", "secretary");
   assert.equal(r3.status, 409, `Duplicate secretary invite should be rejected: ${JSON.stringify(b3)}`);
+
+  // Treasurer activates — both officers now active; further leader invites must be blocked
+  const activateTreasurer = await activate(server, "0799000002", b2.activationCode);
+  assert.equal(activateTreasurer.status, 201, "Treasurer activation failed");
+
+  const { response: r4, body: b4 } = await createInvitation(server, chairCookie, "0799000004", "treasurer");
+  assert.equal(r4.status, 409, `Treasurer re-invite after setup should be rejected: ${JSON.stringify(b4)}`);
 });
 
 test("Secretary can invite a Member directly without Chairperson approval", async () => {
