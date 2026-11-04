@@ -103,6 +103,14 @@ describe("Jirani Chama server", () => {
     assert.equal(setupStatus.status, 200);
     assert.deepEqual(await json(setupStatus), { requiresSetup: true });
 
+    const manifest = await request("/manifest.webmanifest");
+    assert.equal(manifest.status, 200);
+    assert.match(manifest.headers.get("content-type"), /application\/manifest\+json/);
+    assert.deepEqual(await json(manifest), {
+      name: "Jirani Chama", short_name: "Jirani Chama", start_url: "/", display: "standalone",
+      icons: [{ src: "/brand-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+    });
+
     const registerPage = await request("/register.html");
     assert.equal(registerPage.status, 200);
     assert.match(await registerPage.text(), /id="register-chama-form"/);
@@ -197,8 +205,8 @@ describe("Jirani Chama server", () => {
   test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
     const page = await request("/profile.html");
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /src="\/profile\.js\?v=20261101\.1"/);
-    const script = await request("/profile.js?v=20261101.1");
+    assert.match(await page.text(), /src="\/profile\.js\?v=20261104\.2"/);
+    const script = await request("/profile.js?v=20261104.2");
     assert.equal(script.status, 200);
     assert.match(await script.text(), /\/api\/profile\/photo\/\$\{size\}/);
 

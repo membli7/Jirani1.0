@@ -32,12 +32,19 @@
   }
 
   async function loadProfile() {
+    const sessionResponse = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    const session = await readJson(sessionResponse);
+    if (!session.authenticated) {
+      window.location.assign("/");
+      return;
+    }
     const response = await fetch("/api/profile", { credentials: "same-origin", cache: "no-store" });
     const body = await readJson(response);
     if (!body.data) throw new Error("The server did not return profile details.");
     for (const name of ["firstName", "lastName", "nickname", "phone", "email"]) {
       detailsForm.elements.namedItem(name).value = body.data[name] || "";
     }
+    currentPhoto.src = "/api/profile/photo/180";
   }
 
   changeButton.addEventListener("click", () => {
@@ -142,7 +149,6 @@
 
   const currentPhoto = document.createElement("img");
   currentPhoto.alt = window.jiraniI18n?.translateText("Current profile photo") || "Current profile photo";
-  currentPhoto.src = "/api/profile/photo/180";
   currentPhoto.addEventListener("load", () => photoPreview.replaceChildren(currentPhoto), { once: true });
 
   if (viewOnly) {

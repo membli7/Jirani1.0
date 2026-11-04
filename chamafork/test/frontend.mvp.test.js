@@ -111,13 +111,15 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
-test("landing support presents clear routes for members and new groups", () => {
-  const support = html.match(/<section id="contact"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(html, /href="#contact" class="topbar-nav-link" data-i18n="supportNav">Support<\/a>/);
-  assert.match(support, /Support for members and new groups/);
-  assert.match(support, /href="\/member-login\.html" data-i18n="signInToYourGroup"/);
-  assert.match(support, /href="\/register\.html" data-i18n="createChama"/);
-  assert.match(support, /message your chairperson or secretary in your group’s chat/);
+test("landing contact section has clear routes for members and new groups", () => {
+  const contact = html.match(/<section id="contact"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(html, /href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch<\/a>/);
+  assert.match(contact, /<h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch<\/h2>/);
+  assert.match(contact, /Contact your group officers/);
+  assert.match(contact, /href="\/member-login\.html" data-i18n="signInToYourGroup"/);
+  assert.match(contact, /href="\/register\.html" data-i18n="createChama"/);
+  assert.match(contact, /message to your chairperson or secretary in your group chat/);
+  assert.doesNotMatch(contact, /support/i);
   assert.match(css, /#contact \.contact-options\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /#contact \.contact-options\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
 });
@@ -365,7 +367,13 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261104\.6"/);
+  assert.match(html, /href="\/chama\.css\?v=20261104\.7"/);
+});
+
+test("landing sections fit narrow phones without clipping cards", () => {
+  assert.match(css, /@media \(max-width: 600px\)\s*\{[^}]*\.login-overlay \.landing-sections-container \{ padding-right: 0; padding-left: 0; \}/);
+  assert.match(css, /#features \.features-grid,\s*#how-it-works \.steps-list \{ grid-template-columns: minmax\(0, 1fr\) !important; gap: 14px !important; \}/);
+  assert.match(css, /#features \.feature-card,\s*#how-it-works \.step-card \{ min-width: 0; \}/);
 });
 
 test("chat renders server messages and reloads when a live message event arrives", () => {
@@ -471,7 +479,9 @@ test("loan form sends two guarantors and repayments send reference and date", ()
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
   assert.match(profileHtml, /src="\/write-requests\.js" defer/);
-  assert.match(profileHtml, /src="\/profile\.js\?v=20261101\.1" defer/);
+  assert.match(profileHtml, /src="\/profile\.js\?v=20261104\.2" defer/);
+  assert.match(profileScript, /fetch\("\/api\/session"/);
+  assert.match(profileScript, /if \(!session\.authenticated\)[\s\S]*?fetch\("\/api\/profile"/);
   assert.match(profileScript, /fetch\("\/api\/profile"/);
   assert.match(profileScript, /path: "\/api\/profile"/);
   assert.match(profileScript, /\/api\/profile\/photo\/\$\{size\}/);
@@ -482,7 +492,7 @@ test("profile page loads its write helper and connects forms to authenticated pr
 });
 
 test("profile menu view and edit links select the correct profile-page mode", async () => {
-  async function loadMode(mode) {
+  async function loadMode(mode, isAuthenticated = true) {
     const detailFields = Object.fromEntries(["firstName", "lastName", "nickname", "phone", "email"].map(name => [name, { value: "" }]));
     const fields = { disabled: true };
     const changeButton = { hidden: false, addEventListener() {} };
@@ -510,15 +520,22 @@ test("profile menu view and edit links select the correct profile-page mode", as
       querySelector: selector => nodes.get(selector),
       createElement: () => ({ addEventListener() {}, alt: "", src: "" }),
     };
+    const requests = [];
+    let redirect = "";
     const context = {
       document,
       URLSearchParams,
-      window: { location: { search: mode ? "?mode=" + mode : "", assign() {} } },
-      fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { firstName: "Asha", lastName: "Test", nickname: "", phone: "+254700000000", email: "asha@example.test" } }) }),
+      window: { location: { search: mode ? "?mode=" + mode : "", assign: value => { redirect = value; } } },
+      fetch: async url => {
+        requests.push(url);
+        return { ok: true, status: 200, json: async () => url === "/api/session"
+          ? { authenticated: isAuthenticated }
+          : { data: { firstName: "Asha", lastName: "Test", nickname: "", phone: "+254700000000", email: "asha@example.test" } } };
+      },
     };
     vm.runInNewContext(profileScript, context);
     await new Promise(resolve => setImmediate(resolve));
-    return { detailFields, fields, changeButton, saveButton, photoInput, uploadLabel, document, pageHeading };
+    return { detailFields, fields, changeButton, saveButton, photoInput, uploadLabel, document, pageHeading, requests, redirect };
   }
 
   const view = await loadMode("view");
@@ -530,10 +547,15 @@ test("profile menu view and edit links select the correct profile-page mode", as
   assert.equal(view.uploadLabel.hidden, true);
   assert.equal(view.document.title, "View profile | Jirani Chama");
   assert.equal(view.detailFields.firstName.value, "Asha");
+  assert.deepEqual(view.requests, ["/api/session", "/api/profile"]);
 
   const edit = await loadMode("edit");
   assert.equal(edit.fields.disabled, false);
   assert.equal(edit.changeButton.hidden, true);
   assert.equal(edit.saveButton.hidden, false);
   assert.equal(edit.photoInput.disabled, false);
+
+  const signedOut = await loadMode("view", false);
+  assert.equal(signedOut.redirect, "/");
+  assert.deepEqual(signedOut.requests, ["/api/session"]);
 });

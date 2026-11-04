@@ -986,10 +986,10 @@ app.post("/api/profile/photo/:size", requireAuth, requirePinChanged, express.raw
   }
   return res.status(201).json({ message: "Profile photo saved.", size, path: `/api/profile/photo/${size}` });
 });
-app.get("/manifest.webmanifest", requireAuth, requirePinChanged, (req, res) => {
+app.get("/manifest.webmanifest", (req, res) => {
   res.type("application/manifest+json").json({
-    name: "Jirani Chama", short_name: "Jirani Chama", start_url: "/profile.html", display: "standalone",
-    icons: [32, 180, 192, 512].map(size => ({ src: `/api/profile/photo/${size}`, sizes: size === 512 ? "512x512 any" : `${size}x${size}`, type: "image/png", purpose: "any maskable" }))
+    name: "Jirani Chama", short_name: "Jirani Chama", start_url: "/", display: "standalone",
+    icons: [{ src: "/brand-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
   });
 });
 app.use(express.static(FRONTEND));

@@ -2336,6 +2336,11 @@ body { background: var(--bg); }
 #contact .contact-option > .button-outline { border: 1px solid var(--green); color: var(--green); background: transparent; }
 #contact .contact-option > .button-outline:hover { background: var(--green-soft); }
 @media (max-width: 600px) {
+  .login-overlay .landing-sections-container { padding-right: 0; padding-left: 0; }
+  #features .features-grid,
+  #how-it-works .steps-list { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  #features .feature-card,
+  #how-it-works .step-card { min-width: 0; }
   #contact.contact-section { width: calc(100% - 28px) !important; margin: 36px auto !important; padding: 22px !important; }
   #contact .contact-options { grid-template-columns: minmax(0, 1fr); }
   #contact .contact-option { padding: 18px; }
