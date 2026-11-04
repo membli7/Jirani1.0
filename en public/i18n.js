@@ -358,6 +358,17 @@
 
   const keyedTranslations = {
     youTab: ["You", "Wewe"], groupTab: ["Group", "Kikundi"], englishOption: ["English", "Kiingereza"],
+    supportNav: ["Support", "Usaidizi"], supportAndGettingStarted: ["SUPPORT & GETTING STARTED", "USAIDIZI NA KUANZA"],
+    supportOptionsTitle: ["Support for members and new groups", "Usaidizi kwa wanachama na vikundi vipya"],
+    supportOptionsCopy: ["Choose the option that fits what you need.", "Chagua njia inayokufaa."],
+    existingMember: ["EXISTING MEMBER", "MWANACHAMA ALIYEKUWEPO"],
+    memberSupportTitle: ["Need help with your group?", "Unahitaji msaada wa kikundi chako?"],
+    memberSupportCopy: ["Sign in to message your chairperson or secretary in your group’s chat.", "Ingia na umtumie mwenyekiti au katibu ujumbe kupitia gumzo la kikundi chako."],
+    signInToYourGroup: ["Sign in to your group", "Ingia kwenye kikundi chako"],
+    newToJiraniChama: ["NEW TO JIRANI CHAMA?", "MPYA JIRANI CHAMA?"],
+    startYourChama: ["Start your chama", "Anzisha chama chako"],
+    startChamaCopy: ["Create your group, invite members, and manage shared records in one place.", "Unda kikundi chako, waalike wanachama, na usimamie rekodi pamoja sehemu moja."],
+    createChama: ["Create a chama", "Fungua chama"],
     yourFinances: ["Your finances", "Fedha zako"], yourFinancesCopy: ["Only your own records are shown here.", "Rekodi zako pekee ndizo zinazoonyeshwa hapa."],
     yourContributions: ["Your contributions", "Michango yako"], note: ["Note", "Maelezo"], yourFines: ["Your fines", "Faini zako"], reason: ["Reason", "Sababu"],
     amountDue: ["Amount due", "Kiasi kinachodaiwa"], yourLoanBalances: ["Your loan balances", "Salio la mikopo yako"], balanceDue: ["Balance due", "Salio linalodaiwa"],

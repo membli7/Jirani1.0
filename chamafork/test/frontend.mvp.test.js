@@ -111,6 +111,17 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
+test("landing support presents clear routes for members and new groups", () => {
+  const support = html.match(/<section id="contact"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(html, /href="#contact" class="topbar-nav-link" data-i18n="supportNav">Support<\/a>/);
+  assert.match(support, /Support for members and new groups/);
+  assert.match(support, /href="\/member-login\.html" data-i18n="signInToYourGroup"/);
+  assert.match(support, /href="\/register\.html" data-i18n="createChama"/);
+  assert.match(support, /message your chairperson or secretary in your group’s chat/);
+  assert.match(css, /#contact \.contact-options\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /#contact \.contact-options\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+});
+
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
   assert.match(html, /id="simulated-payment-section"/);
   assert.match(html, /Use fake TEST-\* values only\. This does not connect to M-Pesa or any payment provider\./);
@@ -166,6 +177,8 @@ test("standalone member login posts credentials to the login API", () => {
   assert.match(authPagesScript, /window\.location\.assign\("\/"\)/);
   assert.match(authPagesScript, /postJson\("\/api\/invitations\/activate"/);
   assert.match(memberLoginHtml, /PIN recovery is not available yet/);
+  assert.match(memberLoginHtml, /id="activate-code"[^>]*autocomplete="one-time-code"/);
+  assert.match(memberLoginHtml, /id="activate-pin"[^>]*autocomplete="new-password"/);
   assert.doesNotMatch(memberLoginHtml, /We.ll send a one-time code|Send OTP/);
 });
 
@@ -352,6 +365,7 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
+  assert.match(html, /href="\/chama\.css\?v=20261104\.6"/);
 });
 
 test("chat renders server messages and reloads when a live message event arrives", () => {

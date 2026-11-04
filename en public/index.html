@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-        <link rel="stylesheet" href="/chama.css?v=20261104.5">
+        <link rel="stylesheet" href="/chama.css?v=20261104.6">
     </head>
 <body>
  <header class="topbar">
@@ -18,7 +18,7 @@
           <a href="#how-it-works" class="topbar-nav-link">How It Works</a>
           <a href="#security" class="topbar-nav-link">Security</a>
           <a href="#faq" class="topbar-nav-link">FAQ</a>
-          <a href="#contact" class="topbar-nav-link">Get in touch</a>
+          <a href="#contact" class="topbar-nav-link" data-i18n="supportNav">Support</a>
       </nav>
      </div>
      <nav class="dashboard-tabs" id="dashboard-tabs" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews">
@@ -1008,14 +1008,24 @@
                  </div>
             </section>
             <section id="contact" class="contact-section" aria-labelledby="get-in-touch">
-              <div class="contact-copy">
-                <p class="contact-kicker">SUPPORT</p>
-                <h2 id="get-in-touch">Get in touch</h2>
-    <p class="contact-description">Contact your chairperson or secretary through your group’s in-app chat.</p>
-              </div>
-              <div class="contact-action">
-    <p>Already a member or officer?</p>
-    <a class="button-primary" href="/member-login.html">Sign in to your group <span aria-hidden="true">→</span></a>
+              <header class="contact-heading">
+                <p class="contact-kicker" data-i18n="supportAndGettingStarted">SUPPORT &amp; GETTING STARTED</p>
+                <h2 id="get-in-touch" data-i18n="supportOptionsTitle">Support for members and new groups</h2>
+                <p class="contact-description" data-i18n="supportOptionsCopy">Choose the option that fits what you need.</p>
+              </header>
+              <div class="contact-options">
+                <article class="contact-option">
+                  <p class="contact-option-kicker" data-i18n="existingMember">EXISTING MEMBER</p>
+                  <h3 data-i18n="memberSupportTitle">Need help with your group?</h3>
+                  <p data-i18n="memberSupportCopy">Sign in to message your chairperson or secretary in your group’s chat.</p>
+                  <a class="button-primary" href="/member-login.html" data-i18n="signInToYourGroup">Sign in to your group</a>
+                </article>
+                <article class="contact-option contact-option-secondary">
+                  <p class="contact-option-kicker" data-i18n="newToJiraniChama">NEW TO JIRANI CHAMA?</p>
+                  <h3 data-i18n="startYourChama">Start your chama</h3>
+                  <p data-i18n="startChamaCopy">Create your group, invite members, and manage shared records in one place.</p>
+                  <a class="button-outline" href="/register.html" data-i18n="createChama">Create a chama</a>
+                </article>
               </div>
             </section>
         </div>
@@ -1058,7 +1068,7 @@
         </div>
     </form>
  </dialog>
- <script src="/i18n.js?v=20261101.2" defer>
+ <script src="/i18n.js?v=20261104.1" defer>
 
  </script>
  <script src="/write-requests.js?v=20261016.1" defer>
