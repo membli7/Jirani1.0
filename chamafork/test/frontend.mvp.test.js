@@ -155,7 +155,7 @@ test("Chairperson setup checklist reflects active members and valid invitations"
 
 test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
-  assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true">J<\/span>/);
+  assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true"><img src="\/brand-mark\.svg" alt=""><\/span>/);
   assert.doesNotMatch(memberLoginHtml, /[A-Za-z]:\\Users\\/);
   assert.match(memberLoginHtml, /<\/select><\/label>\s*<\/header>/);
   assert.match(memberLoginHtml, /src="\/auth-pages\.js\?v=/);
@@ -235,7 +235,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261101\.2" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261104\.3" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -339,6 +339,19 @@ test("You and Group have separate financial views with accessible monthly line c
   assert.match(html, /Group monthly financial trends/);
   assert.match(script, /await loadFinancialViews\(\)/);
   assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?bottom:\s*0;/);
+});
+
+test("phone financial views keep details readable and expose trend data by swipe", () => {
+  assert.match(script, /class="trend-data-wrap" role="region"[^>]*tabindex="0"/);
+  assert.match(css, /\.trend-data-wrap\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(css, /\.trend-data\s*\{\s*display:\s*table;\s*width:\s*max-content;/);
+  assert.match(css, /\.finance-data-table\s*\{\s*min-width:\s*0;/);
+  assert.match(css, /td::before\s*\{\s*content:\s*attr\(data-label\)/);
+  assert.match(script, /\[t\("date"\)\], \[t\("amountKes"\)\], \[t\("note"\)\]/);
+  assert.match(css, /button, \.button-primary, \.mini-btn, input, select, textarea \{ min-height: 44px; \}/);
+  assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
+  assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
+  assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
 });
 
 test("chat renders server messages and reloads when a live message event arrives", () => {

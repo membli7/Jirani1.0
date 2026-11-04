@@ -528,7 +528,7 @@ function renderFinancialTrend(selector, months, series) {
   const monthLabels = months.map((month, index) => `<text x="${x(index)}" y="${height - 20}" text-anchor="middle" class="trend-axis-label">${esc(month.label)}</text>`).join("");
   const legend = series.map(item => `<span class="trend-legend-item"><i style="--trend-color:${item.color}"></i>${esc(item.label)}</span>`).join("");
   const table = `<table class="trend-data"><thead><tr><th>Month</th>${series.map(item => `<th>${esc(item.label)}</th>`).join("")}</tr></thead><tbody>${months.map((month, index) => `<tr><th scope="row">${esc(month.label)}</th>${series.map(item => `<td>${esc(money(item.values[index]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  container.innerHTML = `<div class="financial-trend-legend">${legend}</div><svg class="financial-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly financial trends for the last six months">${grid}${paths}${monthLabels}</svg>${table}`;
+  container.innerHTML = `<div class="financial-trend-legend">${legend}</div><svg class="financial-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly financial trends for the last six months">${grid}${paths}${monthLabels}</svg><div class="trend-data-wrap" role="region" aria-label="Monthly financial trend data. Scroll horizontally to view all series." tabindex="0">${table}</div>`;
 }
 function financialMonths(count = 6) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
@@ -563,13 +563,13 @@ async function loadFinancialViews() {
     const contributionTotal = contributions.filter(item => item.status !== "pending-member").reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     const loanTotal = openLoans.reduce((sum, item) => sum + (Number(item.outstanding) || 0), 0);
     const finesTotal = unpaidFines.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    financeRows("#you-contributions", contributions.filter(item => item.status !== "pending-member").map(item => [financeDate(item.at), money(item.amount), esc(item.note || item.paymentType || "Monthly contribution")]), [["Date"], ["Amount"], ["Note"]], "No contributions recorded.");
-    financeRows("#you-fines", fines.map(item => [financeDate(item.at || item.date), esc(item.reason || "Fine"), `${money(item.amount)}${item.status === "outstanding" ? " · Unpaid" : " · Paid"}`]), [["Date"], ["Reason"], ["Amount due"]], "No fines recorded.");
-    financeRows("#you-loans", loans.map(item => [financeDate(item.createdAt), esc(item.status), money(item.status === "approved" ? item.outstanding : 0)]), [["Date"], ["Status"], ["Balance due"]], "No loans recorded.");
+    financeRows("#you-contributions", contributions.filter(item => item.status !== "pending-member").map(item => [financeDate(item.at), money(item.amount), esc(item.note || item.paymentType || "Monthly contribution")]), [[t("date")], [t("amountKes")], [t("note")]], "No contributions recorded.");
+    financeRows("#you-fines", fines.map(item => [financeDate(item.at || item.date), esc(item.reason || "Fine"), `${money(item.amount)}${item.status === "outstanding" ? " · Unpaid" : " · Paid"}`]), [[t("date")], [t("reason")], [t("amountDue")]], "No fines recorded.");
+    financeRows("#you-loans", loans.map(item => [financeDate(item.createdAt), esc(item.status), money(item.status === "approved" ? item.outstanding : 0)]), [[t("date")], [t("status")], [t("balanceDue")]], "No loans recorded.");
     const arrears = [];
     if (loanTotal > 0) arrears.push(["Outstanding loans", money(loanTotal)]);
     if (finesTotal > 0) arrears.push(["Unpaid fines", money(finesTotal)]);
-    financeRows("#you-arrears", arrears, [["Amount due"], ["Amount"]], "No arrears recorded.");
+    financeRows("#you-arrears", arrears, [[t("dueItem")], [t("amountKes")]], "No arrears recorded.");
     const months = financialMonths();
     const personalTransactions = state.transactions || [];
     renderFinancialTrend("#you-chart", months, [

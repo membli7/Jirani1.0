@@ -1896,6 +1896,7 @@ body > .site-footer {
 .topbar.is-authenticated .hamburger-btn { display: inline-flex !important; }
 
 .menu-bar {
+  box-sizing: border-box;
   display: none !important;
   position: fixed;
   top: 64px;
@@ -2185,6 +2186,8 @@ body {
 .financial-trend-svg .trend-grid { stroke: rgba(64, 83, 72, .16); stroke-width: 1; }
 .financial-trend-svg .trend-axis-label { fill: #58645d; font: 12px system-ui, sans-serif; }
 .trend-data { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.trend-data-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.trend-data-wrap:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
 .trend-data th, .trend-data td { padding: 6px 8px; border-bottom: 1px solid rgba(64, 83, 72, .14); text-align: right; white-space: nowrap; }
 .trend-data th:first-child { text-align: left; }
 .trend-data thead th { color: #58645d; font-weight: 600; }
@@ -2207,10 +2210,6 @@ body {
 @media (max-width: 700px) {
   .finance-table-grid { grid-template-columns: minmax(0, 1fr); }
   .finance-table-wrap { overflow-x: auto; }
-  .finance-data-table { min-width: 460px; }
-  .finance-data-table, .finance-data-table thead, .finance-data-table tbody, .finance-data-table tr, .finance-data-table th, .finance-data-table td { display: revert; }
-  .finance-data-table thead { position: sticky; width: auto; height: auto; overflow: visible; clip: auto; }
-  .finance-data-table td::before { content: none; }
   .audit-table-wrap { overflow: auto; }
   .audit-table, .audit-table thead, .audit-table tbody, .audit-table tr, .audit-table th, .audit-table td { display: revert; }
   .audit-table { min-width: 620px; width: 100%; border-collapse: collapse; }
@@ -2218,12 +2217,22 @@ body {
   .audit-table td::before { content: none; }
 }
 @media (max-width: 600px) {
-  .menu-bar { top: 72px; max-height: calc(100dvh - 88px - env(safe-area-inset-bottom)); }
+  .menu-bar { top: 64px; max-height: calc(100dvh - 64px - env(safe-area-inset-bottom)); padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .topbar.is-authenticated .top-actions { gap: 7px !important; }
   .header-icon-button, .profile-icon { width: 40px; height: 40px; flex-basis: 40px; }
   .profile-menu { top: calc(100% + 8px); max-height: min(68dvh, 440px); overflow-y: auto; }
   .election-card-heading, .election-ballot { align-items: stretch; flex-direction: column; }
   .election-card-heading .status-pill { align-self: flex-start; }
+  .trend-data { display: table; width: max-content; min-width: 100%; }
+  .trend-data thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .trend-data tbody { display: table-row-group; }
+  .trend-data tr { display: table-row; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .trend-data th, .trend-data td { display: table-cell; padding: 8px; }
+  .trend-data th:first-child, .trend-data td:first-child { position: sticky; left: 0; background: var(--paper); }
+  td { grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr); }
+  dialog { width: calc(100% - 24px); max-width: 420px; max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; padding: 18px; }
+  .dialog-actions { flex-wrap: wrap; }
+  .dialog-actions > button { flex: 1 1 140px; }
 }
 
 /* Refined Jirani Chama visual system */
@@ -2285,7 +2294,7 @@ body { background: var(--bg); }
 }
 .login-logo-wrap img { display: block; width: min(100%, 370px); height: auto; margin: 0 auto 20px; }
 .finance-table-wrap { scrollbar-width: thin; scrollbar-color: #9cb8b5 #edf3f3; }
-.finance-data-table { min-width: 400px; }
+.finance-data-table { min-width: 0; }
 .setup-checklist-item-actions { flex-wrap: wrap; justify-content: flex-end; }
 .contact-form { cursor: default; }
 @media (max-width: 600px) {
@@ -2294,7 +2303,7 @@ body { background: var(--bg); }
   .page-heading h1 { line-height: 1.15; }
   .setup-checklist-item { grid-template-columns: minmax(0, 1fr); }
   .setup-checklist-item-actions { justify-content: flex-start; }
-  .finance-data-table { min-width: 380px; }
+  .finance-table-wrap { overflow: visible; }
   .topbar { backdrop-filter: blur(14px); }
 }
 @media (prefers-reduced-motion: reduce) {
