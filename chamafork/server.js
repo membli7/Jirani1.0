@@ -686,9 +686,9 @@ function permissionsFor(user, usersInChama = scopeToChama(state.users, user.cham
   const anotherOfficer = usersInChama.some(item => item.status === "active" && item.id !== user.id && ["chairperson", "secretary", "treasurer"].includes(item.role));
   const pendingLeaderRoles = new Set(scopeToChama(state.invitations, chamaId).filter(item => ["secretary", "treasurer"].includes(item.requestedRole) && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now()).map(item => item.requestedRole));
   const activeLeaderRoles = new Set(usersInChama.filter(item => item.status === "active" && item.id !== user.id && ["secretary", "treasurer"].includes(item.role)).map(item => item.role));
-  const priorLeadershipChange = scopeToChama(state.leadershipChanges, chamaId).some(item => item.type === "appointment");
-  const allLeaderSlotsFilled = ["secretary", "treasurer"].every(r => pendingLeaderRoles.has(r) || activeLeaderRoles.has(r));
-  const directInviteLeader = user.role === "chairperson" && !allLeaderSlotsFilled && !priorLeadershipChange;
+  const priorLeadershipRoles = new Set(scopeToChama(state.leadershipChanges, chamaId).filter(item => item.type === "appointment").map(item => item.role));
+  const priorLeadershipChange = priorLeadershipRoles.size > 0;
+  const directInviteLeader = user.role === "chairperson" && ["secretary", "treasurer"].some(role => !pendingLeaderRoles.has(role) && !activeLeaderRoles.has(role) && !priorLeadershipRoles.has(role));
   return {
     manageMembers: ["chairperson", "secretary"].includes(user.role),
     manageLeadership: ["chairperson", "secretary"].includes(user.role),
@@ -1494,9 +1494,9 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
   const updated = structuredClone(state); const saved = updated.invitations.find(item => item.id === matchingCode.id && item.chamaId === matchingCode.chamaId); saved.usedAt = now(); saved.usedCodeHash = codeDigest;
   const inviter = scopeToChama(updated.users, saved.chamaId).find(item => item.id === saved.invitedBy);
   const chamaUsers = scopeToChama(updated.users, saved.chamaId);
-  const anotherOfficer = chamaUsers.some(item => item.status === "active" && item.id !== saved.invitedBy && ["chairperson", "secretary", "treasurer"].includes(item.role));
-  const priorLeadershipChange = scopeToChama(updated.leadershipChanges, saved.chamaId).some(item => item.type === "appointment");
-  const directLeaderRole = ["secretary", "treasurer"].includes(saved.requestedRole) && inviter?.role === "chairperson" && !anotherOfficer && !priorLeadershipChange;
+  const roleAlreadyActive = chamaUsers.some(item => item.status === "active" && item.role === saved.requestedRole);
+  const priorLeadershipChange = scopeToChama(updated.leadershipChanges, saved.chamaId).some(item => item.type === "appointment" && item.role === saved.requestedRole);
+  const directLeaderRole = ["secretary", "treasurer"].includes(saved.requestedRole) && inviter?.role === "chairperson" && !roleAlreadyActive && !priorLeadershipChange;
   const createdAt = now();
   const user = { id: newId(), name: saved.name, phone: saved.phone, email: normalizeEmail(saved.email), role: directLeaderRole ? saved.requestedRole : "member", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt, chamaId: saved.chamaId };
   updated.users.push(user);

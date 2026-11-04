@@ -104,13 +104,11 @@ test("all page backgrounds use a subdued blend of the logo colors", () => {
   assert.match(css, /\.login-overlay\s*\{[\s\S]*?background-color:\s*#f3f1eb/);
 });
 
-test("landing page uses muted community photos behind readable content", () => {
-  assert.match(css, /\.login-overlay::before\s*\{[\s\S]*?url\("\/assets\/chama-hero-background\.webp"\)/);
-  assert.match(css, /\.login-overlay \.landing-sections-container\s*\{[\s\S]*?url\("\/assets\/chama-community-background\.webp"\)/);
+test("landing page uses muted color backgrounds without photos", () => {
+  assert.match(css, /\.login-overlay::before\s*\{[\s\S]*?background-image:\s*linear-gradient/);
+  assert.match(css, /\.login-overlay \.landing-sections-container\s*\{[\s\S]*?background-image:\s*linear-gradient/);
   assert.match(css, /\.login-overlay > \*\s*\{[\s\S]*?z-index:\s*1/);
-  for (const asset of ["chama-hero-background.webp", "chama-community-background.webp"]) {
-    assert.ok(fs.existsSync(path.join(frontend, "assets", asset)), `expected landing background asset: ${asset}`);
-  }
+  assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
