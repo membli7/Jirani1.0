@@ -2178,6 +2178,18 @@ body {
   background-size: cover;
 }
 .comparison-row { display: grid; gap: 7px; }
+.financial-trend-legend { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: .88rem; }
+.trend-legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.trend-legend-item i { width: 16px; height: 3px; border-radius: 3px; background: var(--trend-color); }
+.financial-trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.financial-trend-svg .trend-grid { stroke: rgba(64, 83, 72, .16); stroke-width: 1; }
+.financial-trend-svg .trend-axis-label { fill: #58645d; font: 12px system-ui, sans-serif; }
+.trend-data { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.trend-data th, .trend-data td { padding: 6px 8px; border-bottom: 1px solid rgba(64, 83, 72, .14); text-align: right; white-space: nowrap; }
+.trend-data th:first-child { text-align: left; }
+.trend-data thead th { color: #58645d; font-weight: 600; }
+.election-runoff { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 14px; }
+.election-runoff .field { margin: 0; }
 .comparison-label { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 14px; }
 .comparison-label strong { text-align: right; font-variant-numeric: tabular-nums; }
 .comparison-track { height: 12px; overflow: hidden; border-radius: 99px; background: #eef2ee; }

@@ -31,6 +31,12 @@ async function json(response) {
   return response.json();
 }
 
+function todayInNairobi() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-chama-test-"));
   const initialState = { version: 2, users: [], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [] };
@@ -167,6 +173,10 @@ describe("Jirani Chama server", () => {
   });
 
   test("preserves distinct concurrent writes instead of replacing a newer snapshot", async () => {
+    const stream = await fetch(`${baseUrl}/api/events/stream`, { headers: { Cookie: cookie, Accept: "text/event-stream" } });
+    assert.equal(stream.status, 200);
+    const reader = stream.body.getReader();
+    await reader.read(); // ready event
     const responses = await Promise.all([
       request("/api/messages", { method: "POST", write: true, body: JSON.stringify({ text: "Concurrent message A" }) }),
       request("/api/messages", { method: "POST", write: true, body: JSON.stringify({ text: "Concurrent message B" }) }),
@@ -178,6 +188,10 @@ describe("Jirani Chama server", () => {
     const texts = (await json(messages)).data.map(message => message.text);
     assert.ok(texts.includes("Concurrent message A"));
     assert.ok(texts.includes("Concurrent message B"));
+    const eventChunk = new TextDecoder().decode((await reader.read()).value);
+    assert.match(eventChunk, /event: messages-updated/);
+    await reader.cancel();
+    assert.ok((await json(await request("/api/messages"))).data.every(message => message.authorName === "Test Chair"));
   });
 
   test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
@@ -201,6 +215,7 @@ describe("Jirani Chama server", () => {
     });
     assert.equal(save.status, 200);
     assert.equal((await json(save)).data.nickname, "N");
+    assert.ok((await json(await request("/api/messages"))).data.every(message => message.authorName === "N"), "chat history should show the saved nickname");
 
     const png = Buffer.alloc(24);
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
@@ -304,18 +319,18 @@ describe("Jirani Chama server", () => {
     assert.equal(secondActivation.status, 201);
     const secondCandidateId = (await json(secondActivation)).user.id;
 
-    cookie = secretaryCookie;
-    const declinedProposal = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId] }) });
-    assert.equal(declinedProposal.status, 201);
-    const declinedId = (await json(declinedProposal)).data.id;
     cookie = chairCookie;
-    assert.equal((await request(`/api/leadership-elections/${declinedId}/decline`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
+    const scheduledByChair = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId], scheduledDate: todayInNairobi() }) });
+    assert.equal(scheduledByChair.status, 201);
+    const electionId = (await json(scheduledByChair)).data.id;
+    assert.equal((await json(await request("/api/dashboard"))).permissions.proposeLeadershipElection, true);
     cookie = secretaryCookie;
-    const electionProposal = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId] }) });
-    assert.equal(electionProposal.status, 201);
-    const electionId = (await json(electionProposal)).data.id;
+    assert.equal((await json(await request("/api/dashboard"))).permissions.proposeLeadershipElection, true);
     cookie = chairCookie;
-    assert.equal((await request(`/api/leadership-elections/${electionId}/accept`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
+    assert.equal((await request(`/api/leadership-elections/${electionId}/decline`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 409);
+    const activeElection = (await json(await request("/api/leadership-elections"))).data.find(item => item.id === electionId);
+    assert.equal(activeElection.status, "voting");
+    assert.equal(activeElection.scheduledDate, todayInNairobi());
 
     const castVote = async (voterCookie, candidateId) => {
       cookie = voterCookie;
@@ -332,6 +347,8 @@ describe("Jirani Chama server", () => {
     assert.equal(secondLogin.status, 200);
     assert.equal((await castVote(secondCookie, secondCandidateId)).status, 200);
     assert.equal((await castVote(secondCookie, treasurerId)).status, 409);
+    cookie = secondCookie;
+    assert.equal((await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId], scheduledDate: todayInNairobi() }) })).status, 403);
 
     cookie = secondCookie;
     const votingElection = (await json(await request("/api/dashboard"))).leadershipElections.find(item => item.id === electionId);
@@ -343,19 +360,11 @@ describe("Jirani Chama server", () => {
     cookie = secondCookie;
     assert.equal(JSON.stringify(votingElection).includes("voterToken"), false);
     cookie = chairCookie;
-    const closed = await request(`/api/leadership-elections/${electionId}/close`, { method: "POST", write: true, body: JSON.stringify({}) });
-    assert.equal(closed.status, 200);
-    assert.deepEqual((await json(closed)).data.result.tiedCandidateIds.sort(), [treasurerId, secondCandidateId].sort());
+    assert.equal((await request(`/api/leadership-elections/${electionId}/close`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 409);
     cookie = secondCookie;
+    const memberMessages = (await json(await request("/api/messages"))).data;
+    assert.ok(memberMessages.some(message => message.text === "Concurrent message A" && message.authorName === "N"), "another active member should receive chat messages with the sender nickname");
     assert.equal((await json(await request("/api/leadership-elections"))).data.find(item => item.id === electionId).result, null);
-    cookie = chairCookie;
-    assert.equal((await request(`/api/leadership-elections/${electionId}/verify`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 200);
-    cookie = secondCookie;
-    const electionList = await json(await request("/api/leadership-elections"));
-    const runoff = electionList.data.find(item => item.runoff && item.parentElectionId === electionId);
-    assert.ok(runoff, "a verified tie should open a runoff");
-    assert.equal(runoff.status, "voting");
-    assert.deepEqual(runoff.candidates.map(item => item.id).sort(), [treasurerId, secondCandidateId].sort());
     const privateMessages = await json(await request("/api/messages"));
     assert.ok(privateMessages.data.every(message => !message.recipientId || message.recipientId === secondCandidateId));
   });

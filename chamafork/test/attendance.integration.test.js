@@ -258,7 +258,7 @@ describe("attendance registers", () => {
     assert.match(page, /borrowers cannot decide their own requests/i);
     assert.match(page, /does not transfer loan funds/);
     assert.doesNotMatch(page, /broadcast-panel|vote-fields|M-Pesa Paybill payments appear automatically/);
-    assert.doesNotMatch(clientSource, /api\/messages|leadership-type|payments\/mpesa|M-Pesa payment received/);
+    assert.doesNotMatch(clientSource, /leadership-type|payments\/mpesa|M-Pesa payment received/);
 
     const secondSecretarySession = await login("0700000002", "234567");
     const raceAttendeesA = editedAttendees.map(attendee => ({ ...attendee, present: attendee.present && attendee.userId !== secretaryId }));

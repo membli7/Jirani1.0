@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { applyDueElections, electionView, resultFor } = require("../leadership-elections");
+const { applyDueElections, applyScheduledElections, electionView, electionWindow, resultFor } = require("../leadership-elections");
 
 function election(ballots) {
   return { type: "election", id: "e1", chamaId: "g1", role: "chairperson", candidateIds: ["a", "b", "c"], ballots };
@@ -60,4 +60,51 @@ test("verified role changes remain pending until 24 hours and activate at the sc
   assert.equal(state.users[1].role, "chairperson");
   assert.equal(state.leadershipChanges[0].status, "completed");
   assert.equal(state.messages.filter(message => message.recipientId).length, 2);
+});
+
+function scheduledState(ballots = []) {
+  return {
+    users: [
+      { id: "old", name: "Old Chair", chamaId: "g1", status: "active", role: "chairperson" },
+      { id: "a", name: "Candidate A", chamaId: "g1", status: "active", role: "member" },
+      { id: "b", name: "Candidate B", chamaId: "g1", status: "active", role: "member" },
+      { id: "voter", name: "Voter", chamaId: "g1", status: "active", role: "member" },
+    ],
+    leadershipChanges: [{ type: "election", id: "scheduled-1", chamaId: "g1", role: "chairperson", status: "scheduled", scheduledDate: "2026-11-05", candidateIds: ["a", "b"], candidateNames: [{ id: "a", name: "Candidate A" }, { id: "b", name: "Candidate B" }], ballots }],
+    auditLog: [], messages: [],
+  };
+}
+
+test("scheduled election opens and closes at Nairobi calendar-day boundaries and activates winner immediately", () => {
+  const start = Date.parse("2026-11-05T00:00:00+03:00");
+  const end = Date.parse("2026-11-06T00:00:00+03:00");
+  const state = scheduledState([{ voterToken: "private-voter-token", candidateId: "a", at: new Date(start + 1).toISOString() }]);
+  assert.deepEqual(electionWindow("2026-11-05"), { start, end });
+  assert.equal(electionWindow("2026-02-30"), null);
+  assert.equal(applyScheduledElections(state, start - 1).length, 0);
+  assert.equal(state.leadershipChanges[0].status, "scheduled");
+  assert.equal(applyScheduledElections(state, start).length, 1);
+  assert.equal(state.leadershipChanges[0].status, "voting");
+  assert.deepEqual(state.leadershipChanges[0].eligibleVoterIds, ["old", "a", "b", "voter"]);
+  assert.equal(applyScheduledElections(state, end - 1).length, 0);
+  assert.equal(state.leadershipChanges[0].status, "voting");
+  assert.equal(applyScheduledElections(state, end).length, 1);
+  assert.equal(state.leadershipChanges[0].status, "completed");
+  assert.equal(state.users.find(user => user.id === "a").role, "chairperson");
+  assert.equal(state.users.find(user => user.id === "old").role, "member");
+  assert.equal(state.leadershipChanges[0].result.winnerId, "a");
+  assert.equal(state.messages.length, state.users.length * 2);
+});
+
+test("scheduled election tie does not change portal roles and requires a tied-candidate runoff", () => {
+  const end = Date.parse("2026-11-06T00:00:00+03:00");
+  const state = scheduledState([
+    { voterToken: "v1", candidateId: "a" },
+    { voterToken: "v2", candidateId: "b" },
+  ]);
+  applyScheduledElections(state, Date.parse("2026-11-05T00:00:00+03:00"));
+  applyScheduledElections(state, end);
+  assert.equal(state.leadershipChanges[0].status, "runoff-needed");
+  assert.deepEqual(state.leadershipChanges[0].result.tiedCandidateIds, ["a", "b"]);
+  assert.equal(state.users.find(user => user.id === "old").role, "chairperson");
 });

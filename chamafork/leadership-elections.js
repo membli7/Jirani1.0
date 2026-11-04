@@ -31,7 +31,7 @@ function electionView(election, viewer, users, voterToken) {
     return { id, name: member?.name || original?.name || "No longer eligible", active: Boolean(member) };
   });
   const isChair = viewer.role === "chairperson";
-  const verified = ["verified", "verified-tie", "verified-no-winner", "completed", "cancelled"].includes(election.status);
+  const verified = ["verified", "verified-tie", "verified-no-winner", "runoff-needed", "completed", "cancelled"].includes(election.status);
   const revealCounts = verified || (isChair && election.status === "closed");
   const eligible = (election.eligibleVoterIds || []).includes(viewer.id) &&
     users.some(user => user.id === viewer.id && user.chamaId === election.chamaId && user.status === "active");
@@ -49,6 +49,7 @@ function electionView(election, viewer, users, voterToken) {
     parentElectionId: election.parentElectionId || null,
     candidates,
     proposedAt: election.proposedAt,
+    scheduledDate: election.scheduledDate || null,
     acceptedAt: election.acceptedAt || null,
     closedAt: election.closedAt || null,
     verifiedAt: election.verifiedAt || null,
@@ -58,6 +59,7 @@ function electionView(election, viewer, users, voterToken) {
     votesCast: ballots.length,
     hasVoted: ballots.some(ballot => ballot.voterToken === voterToken),
     canVote: election.status === "voting" && eligible && !ballots.some(ballot => ballot.voterToken === voterToken),
+    canScheduleRunoff: election.status === "runoff-needed" && ["chairperson", "secretary"].includes(viewer.role),
     result,
     winnerName: election.winnerId ? candidates.find(candidate => candidate.id === election.winnerId)?.name || null : null,
   };
@@ -80,6 +82,94 @@ function addNotifications(state, election, text, at = new Date().toISOString()) 
     });
   }
   return recipients.length;
+}
+
+function electionWindow(scheduledDate) {
+  if (typeof scheduledDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) return null;
+  const [year, month, day] = scheduledDate.split("-").map(Number);
+  const start = Date.UTC(year, month - 1, day) - 3 * 60 * 60 * 1000;
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.toISOString().slice(0, 10) !== scheduledDate) return null;
+  return { start, end: start + 24 * 60 * 60 * 1000 };
+}
+
+function activateWinner(state, election, winner, timestamp) {
+  const members = state.users.filter(user => user.chamaId === election.chamaId && user.status === "active");
+  const outgoing = members.find(user => user.id !== winner.id && user.role === election.role);
+  if (outgoing) outgoing.role = "member";
+  winner.role = election.role;
+  election.status = "completed";
+  election.winnerId = winner.id;
+  election.completedAt = new Date(timestamp).toISOString();
+  election.outgoingUserId = outgoing?.id || null;
+  election.audit = Array.isArray(election.audit) ? election.audit : [];
+  election.audit.push({ action: "activated", by: "system", at: election.completedAt, incomingUserId: winner.id, outgoingUserId: outgoing?.id || null });
+  state.auditLog.push({ id: crypto.randomUUID(), type: "leadership.election.activated", entityId: election.id, at: election.completedAt, by: { id: "system", name: "System", role: "system" }, memberId: winner.id, memberName: winner.name, role: election.role, chamaId: election.chamaId });
+  addNotifications(state, election, `${winner.name} is now the ${election.role}. The group portals have been updated.`, election.completedAt);
+  let parentId = election.parentElectionId;
+  while (parentId) {
+    const parent = (state.leadershipChanges || []).find(item => item.id === parentId && item.chamaId === election.chamaId);
+    if (!parent) break;
+    parent.status = "completed";
+    parent.completedAt = election.completedAt;
+    parentId = parent.parentElectionId;
+  }
+}
+
+function closeScheduledElection(state, election, timestamp) {
+  election.status = "closed";
+  election.closedAt = new Date(timestamp).toISOString();
+  election.result = resultFor(election);
+  const winnerId = election.result.winnerId;
+  const winner = winnerId && state.users.find(user => user.id === winnerId && user.chamaId === election.chamaId && user.status === "active" && user.role === "member");
+  if (election.result.tiedCandidateIds.length > 1) {
+    election.status = "runoff-needed";
+    addNotifications(state, election, `The ${election.role} election ended in a tie. The Chairperson or Secretary can schedule a runoff between the tied candidates.`, election.closedAt);
+  } else if (winner) {
+    activateWinner(state, election, winner, timestamp);
+  } else {
+    election.status = "verified-no-winner";
+    election.result.reason = election.result.votesCast ? "The leading candidate is no longer eligible." : "No votes were cast.";
+    addNotifications(state, election, `The ${election.role} election ended without an eligible winner. The Chairperson or Secretary can schedule another election.`, election.closedAt);
+  }
+  state.auditLog.push({ id: crypto.randomUUID(), type: "leadership.election.closed", entityId: election.id, at: election.closedAt, by: { id: "system", name: "System", role: "system" }, chamaId: election.chamaId, role: election.role, votesCast: election.result.votesCast });
+}
+
+function applyScheduledElections(state, timestamp = Date.now()) {
+  const changed = [];
+  for (const election of state.leadershipChanges || []) {
+    if (!isElection(election) || !["scheduled", "voting"].includes(election.status)) continue;
+    const window = electionWindow(election.scheduledDate);
+    if (!window || timestamp < window.start) continue;
+    if (timestamp >= window.end) {
+      if (election.status === "scheduled") {
+        election.openedAt = new Date(window.start).toISOString();
+        election.eligibleVoterIds = [];
+        election.ballots = [];
+      }
+      closeScheduledElection(state, election, window.end);
+      changed.push(election);
+      continue;
+    }
+    if (election.status === "scheduled") {
+      const candidates = (election.candidateIds || []).map(id => state.users.find(user => user.id === id && user.chamaId === election.chamaId && user.status === "active" && user.role === "member"));
+      if (candidates.length < 2 || candidates.some(candidate => !candidate)) {
+        election.status = "cancelled";
+        election.completedAt = new Date(timestamp).toISOString();
+        election.cancellationReason = "A scheduled candidate is no longer an active Member of this chama.";
+        state.auditLog.push({ id: crypto.randomUUID(), type: "leadership.election.cancelled", entityId: election.id, at: election.completedAt, by: { id: "system", name: "System", role: "system" }, chamaId: election.chamaId, role: election.role, reason: election.cancellationReason });
+        addNotifications(state, election, `The ${election.role} election was cancelled because a candidate is no longer eligible.`, election.completedAt);
+      } else {
+        election.status = "voting";
+        election.openedAt = new Date(window.start).toISOString();
+        election.eligibleVoterIds = state.users.filter(user => user.chamaId === election.chamaId && user.status === "active").map(user => user.id);
+        election.ballots = Array.isArray(election.ballots) ? election.ballots : [];
+        addNotifications(state, election, `Voting for the ${election.role} election is now open for today.`, election.openedAt);
+      }
+      changed.push(election);
+    }
+  }
+  return changed;
 }
 
 function applyDueElections(state, timestamp = Date.now()) {
@@ -112,4 +202,4 @@ function applyDueElections(state, timestamp = Date.now()) {
   return completed;
 }
 
-module.exports = { addNotifications, applyDueElections, electionView, isElection, resultFor };
+module.exports = { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor };

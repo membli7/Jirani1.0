@@ -133,14 +133,17 @@ test("leadership elections reject outside-group candidates and voters, and overd
     headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify(body),
   });
-  const foreignCandidateProposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "b-chair"] });
+  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const dateValues = Object.fromEntries(dateParts.map(part => [part.type, part.value]));
+  const scheduledDate = `${dateValues.year}-${dateValues.month}-${dateValues.day}`;
+  const foreignCandidateProposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "b-chair"], scheduledDate });
   assert.equal(foreignCandidateProposal.status, 404);
 
-  const proposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "a-guarantor-2"] });
+  const proposal = await write(secretaryCookie, "/api/leadership-elections", { role: "treasurer", candidateIds: ["a-guarantor-1", "a-guarantor-2"], scheduledDate });
   assert.equal(proposal.status, 201);
   const electionId = (await proposal.json()).data.id;
   const accepted = await write(chairCookie, `/api/leadership-elections/${electionId}/accept`, {});
-  assert.equal(accepted.status, 200);
+  assert.equal(accepted.status, 409);
 
   const outsideElections = await fetch(`${baseUrl}/api/leadership-elections`, { headers: { Cookie: outsiderCookie } });
   assert.deepEqual((await outsideElections.json()).data, []);

@@ -326,16 +326,28 @@ test("authenticated dashboard navigation uses an accessible hamburger drawer", (
   assert.match(css, /\.menu-bar\.menu-open\s*\{\s*display:\s*flex !important/);
 });
 
-test("You and Group have separate financial views with mobile bottom navigation and comparable totals", () => {
+test("You and Group have separate financial views with accessible monthly line charts", () => {
   assert.match(html, /id="dashboard-tabs"[\s\S]*?data-dashboard-tab="you"[\s\S]*?data-dashboard-tab="group"/);
   assert.match(html, /id="you-chart"/);
   assert.match(html, /id="group-chart"/);
   assert.match(script, /api\("\/api\/profile\/summary"\)/);
   assert.match(script, /api\("\/api\/summary"\)/);
-  assert.match(script, /function renderComparableChart\(/);
+  assert.match(script, /function renderFinancialTrend\(/);
+  assert.match(script, /function monthlyTransactionSeries\(/);
+  assert.match(script, /summary\.financialTrends/);
+  assert.match(script, /<polyline points=/);
+  assert.match(script, /<table class="trend-data">/);
+  assert.match(html, /Your monthly financial trends/);
+  assert.match(html, /Group monthly financial trends/);
   assert.match(script, /await loadFinancialViews\(\)/);
-  assert.match(script, /summary\.balance !== null && summary\.balance !== undefined/);
   assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?bottom:\s*0;/);
+});
+
+test("chat renders server messages and reloads when a live message event arrives", () => {
+  assert.match(script, /state\.messages = \(await api\("\/api\/messages"\)\)\.data \|\| \[\]/);
+  assert.match(script, /addEventListener\("messages-updated"/);
+  assert.match(script, /renderMessages\(state\.messages\)/);
+  assert.match(script, /setInterval\(async \(\) =>[\s\S]*?api\("\/api\/messages"\)[\s\S]*?\}, 5000\)/);
 });
 
 test("header icons, profile actions, live dot, muted background, and short menu are usable", () => {

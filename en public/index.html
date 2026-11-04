@@ -211,7 +211,7 @@
         </section>
       </div>
       <aside class="finance-chart-section" aria-labelledby="you-chart-title">
-        <h3 id="you-chart-title">Your financial comparison (KES)</h3>
+        <h3 id="you-chart-title">Your monthly financial trends (KES)</h3>
         <div class="dashboard-chart" id="you-chart"></div>
       </aside>
     </div>
@@ -353,7 +353,7 @@
         </section>
       </div>
       <aside class="finance-chart-section" aria-labelledby="group-chart-title">
-        <h3 id="group-chart-title">Group financial comparison (KES)</h3>
+        <h3 id="group-chart-title">Group monthly financial trends (KES)</h3>
         <div class="dashboard-chart" id="group-chart"></div>
       </aside>
     </div>
@@ -657,11 +657,12 @@
         <div class="panel-heading">
             <div>
                 <h2 id="leadership-elections-title">Leadership elections</h2>
-                <p>The Secretary proposes active chama members. The Chairperson accepts and closes voting, then verifies the result. The highest vote count wins; a tie opens a runoff. Verified winners take office after 24 hours.</p>
+                <p>The Chairperson or Secretary schedules candidates and a date. Eligible chama accounts can cast one secret vote on that date only, from midnight to 11:59 p.m. Nairobi time. The highest vote count wins and takes office when voting closes; a tie requires a scheduled runoff.</p>
             </div>
         </div>
         <form id="election-proposal-form" class="form-body" hidden>
-            <h3>Propose an election</h3>
+            <h3>Schedule an election</h3>
+            <label class="field" for="election-date">Election date<input id="election-date" name="scheduledDate" type="date" required></label>
             <label class="field" for="election-role">Office<select id="election-role" name="role" required>
                 <option value="chairperson">Chairperson</option>
                 <option value="secretary">Secretary</option>
@@ -670,7 +671,7 @@
             <label class="field" for="election-candidates">Candidates (choose at least two active Members)
                 <select id="election-candidates" name="candidateIds" multiple size="6" required></select>
             </label>
-            <button class="button-primary" type="submit">Send to Chairperson</button>
+            <button class="button-primary" type="submit">Schedule election</button>
         </form>
         <h3>Election notices</h3>
         <div id="election-notifications" class="election-notifications" aria-live="polite"></div>

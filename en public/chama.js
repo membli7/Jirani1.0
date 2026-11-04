@@ -12,6 +12,7 @@ let selectedAttendanceDate;
 let eventStream;
 let streamRetryTimer;
 let pollingTimer;
+let chatPollingTimer;
 let activityTimer;
 let authenticated = false;
 let selectedDashboardView = "you";
@@ -160,11 +161,13 @@ function render() {
   $("#leadership-form").hidden = !permissions.bootstrapLeadership;
   $("#leadership-elections-panel").hidden = false;
   $("#election-proposal-form").hidden = !permissions.proposeLeadershipElection;
+  $("#election-date").min = meetingDateToday();
   $("#election-candidates").innerHTML = members
     .filter(member => member.status === "active" && member.role === "member")
     .map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
   $("#pin-change").hidden = !user.mustChangePin;
   if (user.mustChangePin) notice("Change your temporary PIN before making any records.", true);
+  renderMessages(state.messages || []);
 
   $("#transactions").innerHTML = transactions.map(item => `<tr><td data-label="Date">${esc(fmtDate(item.at))}</td><td data-label="Member">${esc(item.memberName)}<span class="schedule-sub">${esc(item.payer || item.recordedByName || "")}</span></td><td data-label="Amount">${money(item.amount)}</td><td data-label="Method">${esc(item.method)}${item.ref ? `<span class="schedule-sub">${esc(item.ref)}</span>` : ""}</td><td data-label="Type">${esc(item.paymentType)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-state">No transactions available.</td></tr>';
   const memberRows = members.map(member => {
@@ -218,6 +221,15 @@ function render() {
   updateNavigationVisibility();
   showAppPage(activeAppPage);
   window.jiraniI18n?.apply();
+}
+
+function renderMessages(messages) {
+  const container = $("#chat-messages");
+  if (!container) return;
+  container.innerHTML = messages.length
+    ? messages.filter(message => !message.recipientId || message.recipientId === state.user.id).slice(-100).map(message => `<article class="chat-message"><strong>${esc(message.authorName)}</strong><p>${esc(message.text)}</p><time>${esc(fmtTime(message.at))}</time></article>`).join("")
+    : `<p class="empty-state">${esc(t("No messages yet."))}</p>`;
+  container.scrollTop = container.scrollHeight;
 }
 function updateNavigationVisibility() {
   for (const link of menuBar.querySelectorAll("a[data-panel]")) {
@@ -378,25 +390,27 @@ function renderElections(elections, user, notifications) {
   $("#leadership-elections").innerHTML = elections.slice().reverse().map(election => {
     const candidates = election.candidates.map(candidate => `<li>${esc(candidate.name)}${candidate.active ? "" : " · no longer eligible"}</li>`).join("");
     const labels = {
-      proposed: "Awaiting Chairperson acceptance", voting: "Voting open", closed: "Closed · awaiting verification",
+      proposed: "Awaiting Chairperson acceptance", scheduled: "Scheduled", voting: "Voting open", closed: "Closed · awaiting verification",
       verified: "Verified · role change scheduled", "verified-tie": "Tie verified · runoff open",
-      "verified-no-winner": "Verified · no winner", completed: "Role updated", cancelled: "Election cancelled", declined: "Proposal declined",
+      "verified-no-winner": "No winner", "runoff-needed": "Tie · runoff date needed", completed: "Role updated", cancelled: "Election cancelled", declined: "Proposal declined",
     };
     const countSummary = election.result
       ? `<div class="election-counts"><strong>${election.result.votesCast} vote${election.result.votesCast === 1 ? "" : "s"}</strong><ul>${election.candidates.map(candidate => `<li>${esc(candidate.name)}: ${election.result.counts[candidate.id] || 0}</li>`).join("")}</ul></div>`
-      : `<p>${election.votesCast} vote${election.votesCast === 1 ? "" : "s"} recorded · ${election.eligibleVoters} eligible members</p>`;
+      : election.status === "scheduled" ? `<p>${esc(t("Ballots become available on the election date."))}</p>` : `<p>${election.votesCast} vote${election.votesCast === 1 ? "" : "s"} recorded · ${election.eligibleVoters} eligible members</p>`;
     const voteForm = election.canVote
       ? `<form class="election-ballot" data-election-ballot="${esc(election.id)}"><label class="field" for="election-choice-${esc(election.id)}">Choose one candidate<select id="election-choice-${esc(election.id)}" name="candidateId" required><option value="">Select a candidate</option>${election.candidates.filter(candidate => candidate.active).map(candidate => `<option value="${esc(candidate.id)}">${esc(candidate.name)}</option>`).join("")}</select></label><button class="button-primary" type="submit">Cast secret vote</button></form>`
       : election.hasVoted ? '<p class="election-action-note">Your secret vote is recorded.</p>' : "";
     const actions = [
-      election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="accept" data-election-id="${esc(election.id)}">Accept candidates and open voting</button>` : "",
-      election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="decline" data-election-id="${esc(election.id)}">Decline proposal</button>` : "",
-      election.status === "voting" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="close" data-election-id="${esc(election.id)}">Close voting</button>` : "",
-      election.status === "closed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="verify" data-election-id="${esc(election.id)}">Verify result</button>` : "",
+      !election.scheduledDate && election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="accept" data-election-id="${esc(election.id)}">Accept candidates and open voting</button>` : "",
+      !election.scheduledDate && election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="decline" data-election-id="${esc(election.id)}">Decline proposal</button>` : "",
+      !election.scheduledDate && election.status === "voting" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="close" data-election-id="${esc(election.id)}">Close voting</button>` : "",
+      !election.scheduledDate && election.status === "closed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="verify" data-election-id="${esc(election.id)}">Verify result</button>` : "",
     ].filter(Boolean).join("");
     const winner = election.winnerName ? `<p class="election-result">Winner: <strong>${esc(election.winnerName)}</strong>. ${election.activationAt ? `Portal access changes ${esc(fmtDate(election.activationAt))} at ${esc(fmtTime(election.activationAt))}.` : ""}</p>` : "";
     const runoff = election.runoff ? '<p class="election-action-note">Runoff ballot for the tied candidates.</p>' : "";
-    return `<article class="election-card"><div class="election-card-heading"><div><h4>${esc(roleName(election.role))} election${election.runoff ? " · runoff" : ""}</h4><span class="schedule-sub">${election.acceptedAt ? `Voting opened ${esc(fmtDate(election.acceptedAt))} at ${esc(fmtTime(election.acceptedAt))}` : `Proposed ${esc(fmtDate(election.proposedAt))} by the Secretary`}</span></div><span class="status-pill ${election.status === "completed" ? "active" : ["verified-no-winner", "cancelled", "declined"].includes(election.status) ? "inactive" : "pending"}">${esc(labels[election.status] || election.status)}</span></div><ul class="election-candidates">${candidates}</ul>${countSummary}${winner}${runoff}${voteForm}${actions}</article>`;
+    const schedule = election.scheduledDate ? `<p class="election-action-note">${esc(t(election.status === "scheduled" ? "Voting opens" : "Election date"))} ${esc(fmtDate(election.scheduledDate))}. ${esc(t("Voting is available from midnight to 11:59 p.m. Nairobi time on that date."))}</p>` : "";
+    const runoffForm = election.canScheduleRunoff ? `<form class="election-runoff" data-election-runoff="${esc(election.id)}"><label class="field" for="runoff-date-${esc(election.id)}">${esc(t("Runoff date"))}<input id="runoff-date-${esc(election.id)}" name="scheduledDate" type="date" min="${meetingDateToday()}" required></label><button class="mini-btn" type="submit">${esc(t("Schedule runoff"))}</button></form>` : "";
+    return `<article class="election-card"><div class="election-card-heading"><div><h4>${esc(roleName(election.role))} election${election.runoff ? " · runoff" : ""}</h4><span class="schedule-sub">${election.scheduledDate ? `Scheduled ${esc(fmtDate(election.proposedAt))}` : election.acceptedAt ? `Voting opened ${esc(fmtDate(election.acceptedAt))} at ${esc(fmtTime(election.acceptedAt))}` : `Proposed ${esc(fmtDate(election.proposedAt))} by the Secretary`}</span></div><span class="status-pill ${election.status === "completed" ? "active" : ["verified-no-winner", "cancelled", "declined"].includes(election.status) ? "inactive" : "pending"}">${esc(t(labels[election.status] || election.status))}</span></div><ul class="election-candidates">${candidates}</ul>${schedule}${countSummary}${winner}${runoff}${voteForm}${runoffForm}${actions}</article>`;
   }).join("") || '<p class="empty-state">No leadership elections are active.</p>';
 }
 function auditDescription(entry) {
@@ -493,15 +507,46 @@ function financeRows(selector, rows, columns, emptyMessage) {
     ? rows.map(row => `<tr>${columns.map(([label], index) => `<td data-label="${esc(label)}">${row[index] ?? "—"}</td>`).join("")}</tr>`).join("")
     : `<tr><td colspan="${columns.length}" class="empty-state">${esc(emptyMessage)}</td></tr>`;
 }
-function renderComparableChart(selector, values) {
+function renderFinancialTrend(selector, months, series) {
   const container = $(selector);
   if (!container) return;
-  const safeValues = values.map(([label, value]) => [label, Number.isFinite(Number(value)) ? Number(value) : 0]);
-  const max = Math.max(0, ...safeValues.map(([, value]) => Math.abs(value)));
-  container.innerHTML = safeValues.length ? safeValues.map(([label, value]) => {
-    const width = max > 0 ? Math.max(value !== 0 ? 2 : 0, Math.abs(value) / max * 100) : 0;
-    return `<div class="comparison-row"><div class="comparison-label"><span>${esc(label)}</span><strong>${money(value)}</strong></div><div class="comparison-track" aria-hidden="true"><span class="${value < 0 ? "is-negative" : ""}" style="width:${width.toFixed(1)}%"></span></div></div>`;
-  }).join("") : '<p class="empty-state">No financial totals available.</p>';
+  const width = 720, height = 270, left = 64, right = 20, top = 18, bottom = 50;
+  const plotWidth = width - left - right, plotHeight = height - top - bottom;
+  const maxValue = Math.max(0, ...series.flatMap(item => item.values.map(Number)));
+  const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 1000) * 1000 : 1000;
+  const x = index => left + (months.length < 2 ? plotWidth / 2 : index * plotWidth / (months.length - 1));
+  const y = value => top + plotHeight - Number(value) / scaleMax * plotHeight;
+  const grid = Array.from({ length: 5 }, (_, index) => {
+    const value = scaleMax * index / 4, py = y(value);
+    return `<line x1="${left}" y1="${py}" x2="${width - right}" y2="${py}" class="trend-grid"/><text x="${left - 8}" y="${py + 4}" text-anchor="end" class="trend-axis-label">${esc(Math.round(value).toLocaleString("en-KE"))}</text>`;
+  }).join("");
+  const paths = series.map(item => {
+    const points = item.values.map((value, index) => `${x(index)},${y(value)}`).join(" ");
+    const dots = item.values.map((value, index) => `<circle cx="${x(index)}" cy="${y(value)}" r="4" fill="${item.color}"><title>${esc(item.label)} · ${esc(months[index].label)}: ${esc(money(value))}</title></circle>`).join("");
+    return `<polyline points="${points}" fill="none" stroke="${item.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
+  }).join("");
+  const monthLabels = months.map((month, index) => `<text x="${x(index)}" y="${height - 20}" text-anchor="middle" class="trend-axis-label">${esc(month.label)}</text>`).join("");
+  const legend = series.map(item => `<span class="trend-legend-item"><i style="--trend-color:${item.color}"></i>${esc(item.label)}</span>`).join("");
+  const table = `<table class="trend-data"><thead><tr><th>Month</th>${series.map(item => `<th>${esc(item.label)}</th>`).join("")}</tr></thead><tbody>${months.map((month, index) => `<tr><th scope="row">${esc(month.label)}</th>${series.map(item => `<td>${esc(money(item.values[index]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  container.innerHTML = `<div class="financial-trend-legend">${legend}</div><svg class="financial-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly financial trends for the last six months">${grid}${paths}${monthLabels}</svg>${table}`;
+}
+function financialMonths(count = 6) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const year = Number(parts.find(item => item.type === "year").value), month = Number(parts.find(item => item.type === "month").value);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - 1 - (count - 1 - index), 1));
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    return { key, label: date.toLocaleDateString("en-KE", { month: "short", year: "2-digit", timeZone: "UTC" }) };
+  });
+}
+function monthlyTransactionSeries(transactions, months, label, paymentType, color) {
+  const values = Object.fromEntries(months.map(month => [month.key, 0]));
+  for (const item of transactions) {
+    const date = item.date || item.at;
+    const key = typeof date === "string" ? date.slice(0, 7) : "";
+    if (item.paymentType === paymentType && item.status !== "pending-member" && Object.hasOwn(values, key)) values[key] += Number(item.amount) || 0;
+  }
+  return { label, color, values: months.map(month => values[month.key]) };
 }
 async function loadFinancialViews() {
   const personalNotice = $("#you-data-notice");
@@ -525,7 +570,12 @@ async function loadFinancialViews() {
     if (loanTotal > 0) arrears.push(["Outstanding loans", money(loanTotal)]);
     if (finesTotal > 0) arrears.push(["Unpaid fines", money(finesTotal)]);
     financeRows("#you-arrears", arrears, [["Amount due"], ["Amount"]], "No arrears recorded.");
-    renderComparableChart("#you-chart", [["Contributions", contributionTotal], ["Outstanding loans", loanTotal], ["Unpaid fines", finesTotal]]);
+    const months = financialMonths();
+    const personalTransactions = state.transactions || [];
+    renderFinancialTrend("#you-chart", months, [
+      monthlyTransactionSeries(personalTransactions, months, "Contributions", "Monthly Contribution", "#347c62"),
+      monthlyTransactionSeries(personalTransactions, months, "Loan repayments", "Loan Repayment", "#bd7b35"),
+    ]);
     if (personalNotice) personalNotice.hidden = true;
   } else if (personalNotice) {
     personalNotice.textContent = "Your financial details could not load. Try refreshing the page.";
@@ -537,9 +587,22 @@ async function loadFinancialViews() {
     $("#group-loans-total").textContent = money(summary.outstanding);
     $("#group-balance-total").textContent = money(summary.balance);
     $("#group-members-total").textContent = Number(summary.memberCount || 0).toLocaleString("en-KE");
-    const comparison = [["This month’s contributions", summary.contributions], ["Outstanding loans", summary.outstanding]];
-    if (summary.balance !== null && summary.balance !== undefined) comparison.push(["Group balance", summary.balance]);
-    renderComparableChart("#group-chart", comparison);
+    const months = financialMonths();
+    const trends = summary.financialTrends;
+    const trendSeries = (key, label, color) => {
+      const positions = new Map((trends?.months || []).map((month, index) => [month, index]));
+      return {
+        label, color,
+        values: months.map(month => {
+          const index = positions.get(month.key);
+          return index === undefined ? 0 : Number(trends?.[key]?.[index]) || 0;
+        }),
+      };
+    };
+    renderFinancialTrend("#group-chart", months, [
+      trendSeries("contributions", "Contributions", "#347c62"),
+      trendSeries("loanRepayments", "Loan repayments", "#bd7b35"),
+    ]);
     if (groupNotice) groupNotice.hidden = true;
   } else if (groupNotice) {
     groupNotice.textContent = "Group financial totals could not load. Try refreshing the page.";
@@ -549,6 +612,7 @@ async function loadFinancialViews() {
 async function refresh() {
   try {
     state = await api("/api/dashboard");
+    state.messages = (await api("/api/messages")).data || [];
     state.simulatedPayments = state.permissions.simulatePayments ? (await api("/api/payments/inbox")).data || [] : [];
     attendanceData = await api("/api/attendance");
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
@@ -577,8 +641,15 @@ function startPollingFallback() {
   if (pollingTimer) return;
   setConnectionStatus(navigator.onLine ? "polling" : "offline");
   pollingTimer = setInterval(() => { if (navigator.onLine) refresh(); else setConnectionStatus("offline"); }, 30000);
+  if (!chatPollingTimer) chatPollingTimer = setInterval(async () => {
+    if (!navigator.onLine || !authenticated || !state) return;
+    try { state.messages = (await api("/api/messages")).data || []; renderMessages(state.messages); } catch {}
+  }, 5000);
 }
-function stopPollingFallback() { if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; } }
+function stopPollingFallback() {
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+  if (chatPollingTimer) { clearInterval(chatPollingTimer); chatPollingTimer = null; }
+}
 function startActivityMonitor() {
   if (activityTimer) return;
   const checkActivity = () => {
@@ -611,6 +682,13 @@ function connectEventStream() {
   eventStream.onopen = () => { setConnectionStatus("live"); stopPollingFallback(); };
   eventStream.addEventListener("members-updated", () => { refresh(); });
   eventStream.addEventListener("loans-updated", () => { refresh(); });
+  eventStream.addEventListener("messages-updated", async () => {
+    if (!authenticated || !state) return;
+    try {
+      state.messages = (await api("/api/messages")).data || [];
+      renderMessages(state.messages);
+    } catch { /* polling and reconnect paths will reload the chat */ }
+  });
   eventStream.onerror = () => {
     eventStream.close(); eventStream = null; startPollingFallback(); setConnectionStatus(navigator.onLine ? "reconnecting" : "offline");
     streamRetryTimer = setTimeout(() => { streamRetryTimer = null; connectEventStream(); }, 5000);
@@ -650,6 +728,23 @@ $("#login-form")?.addEventListener("submit", async event => {
   try { await api("/api/login", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#login-notice"), ""); await refresh(); }
   catch (error) { if (error instanceof TypeError) { setConnectionStatus("offline"); setLoginNotice($("#login-notice"), "Cannot reach the server. Check that it is running, then try again."); } else setLoginNotice($("#login-notice"), error.message); } finally { setButton(form, false); }
 });
+$("#chat-form")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const text = new FormData(form).get("text").trim();
+  if (!text) return;
+  setButton(form, true);
+  try {
+    const result = await api("/api/messages", { method: "POST", body: { text }, write: form });
+    state.messages = [...(state.messages || []), result.data].slice(-100);
+    renderMessages(state.messages);
+    form.reset();
+    notice(result.message || "Message sent.");
+  } catch (error) {
+    notice(error.message || t("retryError"), true);
+  } finally { setButton(form, false); }
+});
+
 $("#activation-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
   try { const result = await api("/api/invitations/activate", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#activation-notice"), ""); setLoginNotice($("#login-notice"), result.message); $("#activation-form").hidden = true; $("#login-form").hidden = false; }
@@ -865,13 +960,25 @@ $("#leadership-form").addEventListener("submit", async event => {
 });
 $("#election-proposal-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const formData = new FormData(form);
-  const values = { role: formData.get("role"), candidateIds: formData.getAll("candidateIds") };
+  const values = { role: formData.get("role"), candidateIds: formData.getAll("candidateIds"), scheduledDate: formData.get("scheduledDate") };
   if (values.candidateIds.length < 2) { notice("Choose at least two active Members as candidates.", true); return; }
   setButton(form, true);
-  try { await api("/api/leadership-elections", { method: "POST", body: values, write: form }); form.reset(); notice("Election proposal sent to the Chairperson."); await refresh(); }
+  try { await api("/api/leadership-elections", { method: "POST", body: values, write: form }); form.reset(); notice("Election scheduled."); await refresh(); }
   catch (error) { notice(error.message, true); } finally { setButton(form, false); }
 });
 $("#leadership-elections").addEventListener("submit", async event => {
+  const runoffForm = event.target.closest("form[data-election-runoff]");
+  if (runoffForm) {
+    event.preventDefault(); if (!runoffForm.reportValidity()) return;
+    const electionId = runoffForm.dataset.electionRunoff;
+    const scheduledDate = new FormData(runoffForm).get("scheduledDate");
+    const button = runoffForm.querySelector("button[type=submit]"); if (button) button.disabled = true;
+    try {
+      await api(`/api/leadership-elections/${encodeURIComponent(electionId)}/runoff`, { method: "POST", body: { scheduledDate }, write: runoffForm });
+      notice("Runoff scheduled."); await refresh();
+    } catch (error) { notice(error.message, true); if (button) button.disabled = false; }
+    return;
+  }
   const form = event.target.closest("form[data-election-ballot]"); if (!form) return;
   event.preventDefault(); if (!form.reportValidity()) return; const electionId = form.dataset.electionBallot;
   const candidateId = new FormData(form).get("candidateId"); const button = form.querySelector("button[type=submit]"); if (button) button.disabled = true;

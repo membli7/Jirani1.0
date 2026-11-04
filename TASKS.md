@@ -12,7 +12,7 @@
 - [x] Keep CSV export: transaction and attendance records, scoped for Member accounts.
 - [x] Keep loan requests: 1, 2, 3, and 6 month terms with three role decisions; Secretary substitutes when the borrower is Chairperson or Treasurer. No money is disbursed by the app.
 - [x] Use the leadership-election workflow below for officer changes after initial setup; direct assignment remains limited to initial bootstrap.
-- [x] Defer Chat, WhatsApp/SMS broadcasts, Paybill processing/matching, and loan terms outside 1, 2, 3, and 6 months.
+- [x] Defer WhatsApp/SMS broadcasts, Paybill processing/matching, and loan terms outside 1, 2, 3, and 6 months. In-app group chat is in scope.
 
 ## Leadership election decisions (2026-10-20)
 - Secretary proposes 2-20 active ordinary Members for Chairperson, Secretary, or Treasurer; Chairperson accepts the proposal and manually closes voting.
@@ -20,6 +20,12 @@
 - The candidate with the highest vote total wins; no quorum threshold applies. A tie among the highest candidates opens a rematch limited to the tied candidates.
 - Chairperson verifies the closed result. The elected role and portal access switch exactly 24 hours after verification.
 - No SQL schema change; elections use existing leadership, audit, and message records. Post-bootstrap officer changes must use elections.
+
+## Product scope update (2026-11-04)
+- In-app group chat is available to active members. New messages refresh over the existing server event stream, with polling fallback; chat author labels use the saved nickname when present, otherwise the member's actual name.
+- Personal and group financial charts show monthly contribution and loan-repayment trends for the last six months, using existing dated transaction records and a visible data table.
+- These election decisions supersede the 2026-10-20 opening, closing, verification, and activation timing: either the Chairperson or Secretary schedules 2-20 active ordinary Member candidates and a date. Voting opens at 12:00 a.m. and closes at 11:59 p.m. Africa/Nairobi time on that date. All active chama accounts are eligible, secret ballots are limited to one per eligible account, the highest total wins without a quorum, and a tie requires a separately scheduled runoff limited to tied candidates. A winner's role and portal access switch automatically when the election closes.
+- Scheduled dates are stored as `scheduledDate` in the existing JSONB leadership record; no SQL column or migration is added. Existing elections without a scheduled date retain the legacy flow for compatibility.
 ## Step 0: setup
 - [x] Create branch `review-fixes`; it contains local work that has not been pushed to `origin/review-fixes`.
 - [x] Save the security report as `docs/review.md`. The UX plan currently lives at `docs/docs/docs/ux-plan.md` (the earlier `docs/ux-plan.md` path is stale).
@@ -71,7 +77,7 @@ Attendance tracking scope decision (resolved): restore and test attendance end t
 
 ## Step 4: larger UX work (Codex, after steps 2 and 3 are merged)
 - [x] New Chairperson setup checklist; completion is derived from active officers and valid invitations, while skip/dismiss state is stored per Chairperson in the browser.
-- [x] Leadership election lifecycle and dashboard panel implemented; see decisions dated 2026-10-20.
+- [x] Leadership election lifecycle and dashboard panel implemented; scheduled-election rules are recorded above.
 - [ ] Manual mobile layout review at common phone sizes (responsive navigation and stacked cards are implemented).
 - [x] Kiswahili translation completeness and wording review (language support is implemented).
 - [ ] Sample-group demo
@@ -86,7 +92,7 @@ Attendance tracking scope decision (resolved): restore and test attendance end t
 - [ ] Confirm the QA PINs are not reused anywhere
 
 ## Deferred / not in scope
-- [ ] Chat and broadcast delivery via WhatsApp/SMS
+- [ ] Broadcast delivery via WhatsApp/SMS
 - [ ] Paybill callback/matching
 - [ ] Loan terms outside 1, 2, 3, and 6 months
 - [ ] SMS invitation delivery (provider not configured)

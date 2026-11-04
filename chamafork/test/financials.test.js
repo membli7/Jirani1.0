@@ -161,6 +161,25 @@ test("the welfare reserve pools fees from every member", async () => {
   assert.equal(saved.users.find(item => item.id === otherMember.id).shareCapital, 150);
 });
 
+test("group financial trends aggregate dated transactions without exposing member records", async () => {
+  const response = await fetch(`${baseUrl}/api/summary`, { headers: { Cookie: treasurerCookie } });
+  assert.equal(response.status, 200);
+  const summary = (await response.json()).data;
+  assert.equal(summary.financialTrends.months.length, 6);
+  const october = summary.financialTrends.months.indexOf("2026-10");
+  assert.ok(october >= 0);
+  assert.equal(summary.financialTrends.contributions[october], 2800);
+  assert.equal(summary.financialTrends.loanRepayments[october], 0);
+  assert.equal(JSON.stringify(summary.financialTrends).includes("memberId"), false);
+
+  const memberCookie = await login(member, "345678");
+  const memberResponse = await fetch(`${baseUrl}/api/summary`, { headers: { Cookie: memberCookie } });
+  assert.equal(memberResponse.status, 200);
+  const memberSummary = (await memberResponse.json()).data;
+  assert.equal(memberSummary.balance, null);
+  assert.equal(memberSummary.financialTrends.contributions[october], 2800);
+});
+
 test("a payment below the welfare fee is rejected and changes nothing", async () => {
   const before = persistedState();
   const response = await contribute(thirdMember.id, { amount: 300, referenceNumber: "RCPT-1003" });
