@@ -175,10 +175,15 @@ test("standalone member login posts credentials to the login API", () => {
   assert.match(authPagesScript, /postJson\("\/api\/login"/);
   assert.match(authPagesScript, /method:\s*"POST"/);
   assert.match(authPagesScript, /credentials:\s*"same-origin"/);
+  assert.match(memberLoginHtml, /id="show-forgot-pin"/);
+  assert.match(memberLoginHtml, /id="forgot-pin-form"/);
+  assert.match(memberLoginHtml, /id="reset-pin-form"/);
+  assert.match(authPagesScript, /postJson\("\/api\/forgot-pin"/);
+  assert.match(authPagesScript, /postJson\("\/api\/reset-pin"/);
   assert.match(authPagesScript, /name = "chamaId"/);
   assert.match(authPagesScript, /window\.location\.assign\("\/"\)/);
   assert.match(authPagesScript, /postJson\("\/api\/invitations\/activate"/);
-  assert.match(memberLoginHtml, /PIN recovery is not available yet/);
+  assert.match(memberLoginHtml, /PIN reset code/);
   assert.match(memberLoginHtml, /id="activate-code"[^>]*autocomplete="one-time-code"/);
   assert.match(memberLoginHtml, /id="activate-pin"[^>]*autocomplete="new-password"/);
   assert.doesNotMatch(memberLoginHtml, /We.ll send a one-time code|Send OTP/);

@@ -58,7 +58,17 @@
         </form>
         <section id="forgot-pin-view" class="login-card recovery-card" hidden>
             <h2>Forgot PIN?</h2>
-            <p>PIN recovery is not available yet because secure email delivery is not configured.</p>
+            <p>Enter the email address saved on your account. If it matches an active account, we will send a PIN reset code.</p>
+            <p class="login-notice" id="forgot-pin-notice" role="alert" aria-live="assertive" hidden></p>
+            <form id="forgot-pin-form">
+                <label class="field" for="forgot-pin-email">Email address<input id="forgot-pin-email" name="email" type="email" autocomplete="email" required></label>
+                <button class="button-primary" type="submit">Send reset code</button>
+            </form>
+            <form id="reset-pin-form" hidden>
+                <label class="field" for="reset-pin-code">Reset code<input id="reset-pin-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>
+                <label class="field" for="reset-pin-new">New 6–12 digit PIN<input id="reset-pin-new" name="newPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,12}" minlength="6" maxlength="12" required></label>
+                <button class="button-primary" type="submit">Reset PIN</button>
+            </form>
             <button class="panel-link" id="forgot-pin-back" type="button">Back to sign in</button>
         </section>
                 <p class="auth-page-links">Starting a new group? <a href="/register.html">Register a new chama</a></p>
@@ -67,6 +77,6 @@
         </div>
     </main>
     <script src="/i18n.js?v=20261101.1" defer></script>
-    <script src="/auth-pages.js?v=20261101.1" defer></script>
+    <script src="/auth-pages.js?v=20261105.1" defer></script>
 </body>
 </html>

@@ -172,8 +172,9 @@ describe("Jirani Chama server", () => {
     const forgotPin = await request("/api/forgot-pin", { method: "POST", body: JSON.stringify({ email: "chair@example.test" }) });
     const resetPin = await request("/api/reset-pin", { method: "POST", body: JSON.stringify({ email: "chair@example.test", otp: "123456", newPin: "654321" }) });
     const otpRequest = await request("/api/otp/request", { method: "POST", body: JSON.stringify({ phone: "0712345678" }) });
-    assert.equal(forgotPin.status, 503);
-    assert.equal(resetPin.status, 503);
+    assert.equal(forgotPin.status, 200);
+    assert.deepEqual(await json(forgotPin), { message: "If an active account uses this email address, a PIN reset code may be sent." });
+    assert.equal(resetPin.status, 400);
     assert.equal(otpRequest.status, 503);
     const afterRecovery = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
     assert.equal(afterRecovery.users[0].resetOtp, beforeRecovery.users[0].resetOtp);

@@ -1099,10 +1099,84 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   }
   req.session.regenerate(error => { if (error) return next(error); req.session.userId = user.id; req.session.lastActivityAt = Date.now(); req.session.save(saveError => { if (saveError) return next(saveError); activeSessionsGauge.inc(); return res.json({ message: "Signed in successfully.", user: safeUser(user) }); }); });
 });
-app.post("/api/forgot-pin", pinRecoveryLimiter, (req, res) =>
-  res.status(503).json({ message: "PIN recovery is unavailable until secure email delivery is configured." }));
-app.post("/api/reset-pin", pinRecoveryLimiter, (req, res) =>
-  res.status(503).json({ message: "PIN recovery is unavailable until secure email delivery is configured." }));
+const PIN_RESET_TTL_MS = process.env.NODE_ENV === "test" && Number.isSafeInteger(Number(process.env.PIN_RESET_TTL_MS)) && Number(process.env.PIN_RESET_TTL_MS) > 0
+  ? Number(process.env.PIN_RESET_TTL_MS)
+  : 10 * 60 * 1000;
+const PIN_RESET_RESPONSE = { message: "If an active account uses this email address, a PIN reset code may be sent." };
+function pinResetDestinationKey(req) {
+  const email = normalizeEmail(req.body?.email);
+  if (!validEmail(email)) return `ip:${ipKeyGenerator(req.ip)}`;
+  return `email:${crypto.createHmac("sha256", SESSION_SECRET).update(email).digest("hex")}`;
+}
+const pinResetSendCooldown = sharedRateLimit("pin-reset-send-cooldown", {
+  windowMs: 60 * 1000,
+  max: 1,
+  keyGenerator: pinResetDestinationKey,
+  message: PIN_RESET_RESPONSE,
+});
+const pinResetSendDailyLimit = sharedRateLimit("pin-reset-send-daily", {
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: pinResetDestinationKey,
+  message: PIN_RESET_RESPONSE,
+});
+const pinResetVerifyLimiter = sharedRateLimit("pin-reset-verify", {
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: "Too many PIN reset attempts. Please try again later." },
+});
+function saveSession(session) {
+  return new Promise((resolve, reject) => session.save(error => error ? reject(error) : resolve()));
+}
+app.post("/api/forgot-pin", pinRecoveryLimiter, pinResetSendCooldown, pinResetSendDailyLimit, async (req, res, next) => {
+  const email = normalizeEmail(req.body?.email);
+  const account = validEmail(email) && state.users.find(item => item.status === "active" && normalizeEmail(item.email) === email);
+  if (!account || !emailConfigured()) return res.json(PIN_RESET_RESPONSE);
+  const code = String(crypto.randomInt(100000, 1000000));
+  req.session.pinResetHash = hashCode(code);
+  req.session.pinResetAccountId = account.id;
+  req.session.pinResetExpiresAt = Date.now() + PIN_RESET_TTL_MS;
+  try {
+    await saveSession(req.session);
+    const info = await sendEmail(account.email, "Jirani Chama PIN Reset Code", `Your Jirani Chama PIN reset code is ${code}. It expires in 10 minutes. Do not share it.`);
+    if (process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
+      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+    }
+  } catch (error) {
+    delete req.session.pinResetHash;
+    delete req.session.pinResetAccountId;
+    delete req.session.pinResetExpiresAt;
+    try { await saveSession(req.session); } catch (saveError) { return next(saveError); }
+  }
+  return res.json(PIN_RESET_RESPONSE);
+});
+app.post("/api/reset-pin", pinRecoveryLimiter, pinResetVerifyLimiter, async (req, res, next) => {
+  const email = normalizeEmail(req.body?.email);
+  const code = clean(req.body?.code || req.body?.otp);
+  const newPin = clean(req.body?.newPin);
+  if (!validNewPin(newPin)) return res.status(400).json({ message: "Choose a 6-12 digit PIN." });
+  const codeDigest = hashCode(code);
+  const valid = validEmail(email) && /^\d{6}$/.test(code) &&
+    typeof req.session.pinResetHash === "string" &&
+    typeof req.session.pinResetExpiresAt === "number" &&
+    Date.now() < req.session.pinResetExpiresAt &&
+    req.session.pinResetHash.length === codeDigest.length &&
+    crypto.timingSafeEqual(Buffer.from(req.session.pinResetHash), Buffer.from(codeDigest));
+  const account = valid && state.users.find(item => item.id === req.session.pinResetAccountId && item.status === "active" && normalizeEmail(item.email) === email);
+  if (!account) return res.status(400).json({ message: "Invalid or expired PIN reset code." });
+  delete req.session.pinResetHash;
+  delete req.session.pinResetAccountId;
+  delete req.session.pinResetExpiresAt;
+  try {
+    await saveSession(req.session);
+    const updated = structuredClone(state);
+    const saved = updated.users.find(item => item.id === account.id);
+    saved.pinHash = pinHash(newPin);
+    saved.mustChangePin = false;
+    await persist(updated);
+    return res.json({ message: "PIN reset. Please sign in with your new PIN." });
+  } catch (error) { return next(error); }
+});
 app.post("/api/logout", requireAuth, (req, res, next) => req.session.destroy(error => { if (error) return next(error); activeSessionsGauge.dec(); return res.clearCookie("chama.sid").json({ message: "Signed out." }); }));
 app.get("/api/dashboard", requireAuth, async (req, res, next) => {
   if (req.user.mustChangePin) return res.status(403).json({ message: "Change your PIN before viewing the dashboard.", mustChangePin: true });
