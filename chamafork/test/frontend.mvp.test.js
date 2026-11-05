@@ -255,7 +255,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261104\.3" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261104\.4" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -373,6 +373,11 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
   assert.match(html, /href="\/chama\.css\?v=20261104\.7"/);
+  assert.match(html, /src="\/chama\.js\?v=20261104\.4"/);
+  assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
+  assert.doesNotMatch(script, /<i style=/);
+  assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);
+  assert.match(css, /\.trend-legend-item i\.is-ochre \{ background: #bd7b35; \}/);
 });
 
 test("landing sections fit narrow phones without clipping cards", () => {

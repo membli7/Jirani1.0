@@ -2181,7 +2181,9 @@ body {
 .comparison-row { display: grid; gap: 7px; }
 .financial-trend-legend { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: .88rem; }
 .trend-legend-item { display: inline-flex; align-items: center; gap: 7px; }
-.trend-legend-item i { width: 16px; height: 3px; border-radius: 3px; background: var(--trend-color); }
+.trend-legend-item i { width: 16px; height: 3px; border-radius: 3px; }
+.trend-legend-item i.is-green { background: #347c62; }
+.trend-legend-item i.is-ochre { background: #bd7b35; }
 .financial-trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .financial-trend-svg .trend-grid { stroke: rgba(64, 83, 72, .16); stroke-width: 1; }
 .financial-trend-svg .trend-axis-label { fill: #58645d; font: 12px system-ui, sans-serif; }

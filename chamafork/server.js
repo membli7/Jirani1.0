@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const fs = require("fs");
+const fsPromises = require("fs/promises");
 const https = require("https");
 const path = require("path");
 const express = require("express");
@@ -191,6 +192,32 @@ function publishLoanUpdate(loan, chamaId = loan?.chamaId) {
 function validPin(pin) { return /^\d{4,12}$/.test(clean(pin)); }
 function validNewPin(pin) { return /^\d{6,12}$/.test(clean(pin)); }
 const invitationAttemptLimit = 5;
+let activationAttemptTail = Promise.resolve();
+function serializeActivationAttempt(work) {
+  const previous = activationAttemptTail;
+  let release;
+  activationAttemptTail = new Promise(resolve => { release = resolve; });
+  return previous.then(work, work).finally(release);
+}
+async function withActivationFileLock(work) {
+  const lockFile = `${DATA_FILE}.activation.lock`;
+  let handle;
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    try {
+      handle = await fsPromises.open(lockFile, "wx", 0o600);
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+  if (!handle) throw new Error("Activation verification is temporarily unavailable.");
+  try { return await work(); }
+  finally {
+    await handle.close().catch(() => {});
+    await fsPromises.unlink(lockFile).catch(() => {});
+  }
+}
 function pinHash(pin, salt = crypto.randomBytes(16).toString("hex")) { return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`; }
 function verifyPin(pin, stored) {
   if (!validPin(pin) || typeof stored !== "string") return false;
@@ -1556,30 +1583,44 @@ app.post("/api/invitations/:id/revoke", requireAuth, requirePinChanged, requireR
 }));
 app.post("/api/invitations/activate", activationLimiter, async (req, res, next) => {
   const phone = normalizePhone(req.body?.phone); const code = clean(req.body?.code); const codeDigest = hashCode(code); const pin = clean(req.body?.pin);
-  const matchingCode = state.invitations.find(item => item.codeHash === codeDigest || item.usedCodeHash === codeDigest);
-  if (matchingCode?.usedAt || matchingCode?.usedCodeHash === codeDigest) return res.status(400).json({ message: "Code already used" });
-  if (matchingCode && invitationRevocation(matchingCode)) return res.status(400).json({ message: "Invitation revoked" });
-  if (matchingCode && Date.parse(matchingCode.expiresAt) <= Date.now()) return res.status(400).json({ message: "Code expired" });
-  if (matchingCode && matchingCode.phone !== phone) return res.status(400).json({ message: "Phone number does not match the invitation" });
-  if (!matchingCode) {
-    return res.status(400).json({ message: "Incorrect activation code." });
-  }
-  if (!validEmail(matchingCode.email) || !validNewPin(pin)) return res.status(400).json({ message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." });
-  const updated = structuredClone(state); const saved = updated.invitations.find(item => item.id === matchingCode.id && item.chamaId === matchingCode.chamaId); saved.usedAt = now(); saved.usedCodeHash = codeDigest;
-  const inviter = scopeToChama(updated.users, saved.chamaId).find(item => item.id === saved.invitedBy);
-  const chamaUsers = scopeToChama(updated.users, saved.chamaId);
-  const roleAlreadyActive = chamaUsers.some(item => item.status === "active" && item.role === saved.requestedRole);
-  const priorLeadershipChange = scopeToChama(updated.leadershipChanges, saved.chamaId).some(item => item.type === "appointment" && item.role === saved.requestedRole);
-  const directLeaderRole = ["secretary", "treasurer"].includes(saved.requestedRole) && inviter?.role === "chairperson" && !roleAlreadyActive && !priorLeadershipChange;
-  const createdAt = now();
-  const user = { id: newId(), name: saved.name, phone: saved.phone, email: normalizeEmail(saved.email), role: directLeaderRole ? saved.requestedRole : "member", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt, chamaId: saved.chamaId };
-  updated.users.push(user);
-  if (directLeaderRole) {
-    const leadershipChange = { id: newId(), type: "appointment", role: user.role, outgoingUserId: null, incomingUserId: user.id, effectiveDate: createdAt.slice(0, 10), vote: null, emergencyReason: null, status: "confirmed", proposedBy: inviter.id, proposedAt: createdAt, confirmedBy: inviter.id, confirmedAt: createdAt, audit: [{ action: "proposed", by: inviter.id, at: createdAt }, { action: "confirmed", by: inviter.id, at: createdAt }], chamaId: saved.chamaId };
-    updated.leadershipChanges.push(leadershipChange);
-    updated.auditLog.push(auditEntry("leadership.confirmed", leadershipChange.id, inviter, { role: user.role, incomingUserId: user.id, outgoingUserId: null }));
-  }
-  await persist(updated); publishMemberUpdate(saved.chamaId); return res.status(201).json({ message: "Account activated. Please sign in.", user: safeUser(user) });
+  try {
+    const activate = async () => {
+      const matchingCode = state.invitations.find(item => item.codeHash === codeDigest || item.usedCodeHash === codeDigest);
+      if (matchingCode?.usedAt || matchingCode?.usedCodeHash === codeDigest) return { status: 400, body: { message: "Code already used" } };
+      if (matchingCode && invitationRevocation(matchingCode)) return { status: 400, body: { message: "Invitation revoked" } };
+      if (matchingCode && Date.parse(matchingCode.expiresAt) <= Date.now()) return { status: 400, body: { message: "Code expired" } };
+      if (matchingCode && matchingCode.phone !== phone) return { status: 400, body: { message: "Phone number does not match the invitation" } };
+      const invitation = matchingCode || state.invitations.find(item => item.phone === phone && !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now());
+      if (!invitation) return { status: 400, body: { message: "Incorrect activation code." } };
+      if ((invitation.attemptsRemaining ?? invitationAttemptLimit) <= 0) return { status: 400, body: { message: "Invitation locked after too many incorrect activation codes." } };
+      if (!matchingCode) {
+        const updated = structuredClone(state);
+        const saved = updated.invitations.find(item => item.id === invitation.id && item.chamaId === invitation.chamaId);
+        saved.attemptsRemaining = (saved.attemptsRemaining ?? invitationAttemptLimit) - 1;
+        if (saved.attemptsRemaining === 0) saved.lockedAt = now();
+        await persist(updated);
+        return { status: 400, body: { message: saved.attemptsRemaining === 0 ? "Invitation locked after too many incorrect activation codes." : "Incorrect activation code." } };
+      }
+      if (!validEmail(matchingCode.email) || !validNewPin(pin)) return { status: 400, body: { message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." } };
+      const updated = structuredClone(state); const saved = updated.invitations.find(item => item.id === matchingCode.id && item.chamaId === matchingCode.chamaId); saved.usedAt = now(); saved.usedCodeHash = codeDigest;
+      const inviter = scopeToChama(updated.users, saved.chamaId).find(item => item.id === saved.invitedBy);
+      const chamaUsers = scopeToChama(updated.users, saved.chamaId);
+      const roleAlreadyActive = chamaUsers.some(item => item.status === "active" && item.role === saved.requestedRole);
+      const priorLeadershipChange = scopeToChama(updated.leadershipChanges, saved.chamaId).some(item => item.type === "appointment" && item.role === saved.requestedRole);
+      const directLeaderRole = ["secretary", "treasurer"].includes(saved.requestedRole) && inviter?.role === "chairperson" && !roleAlreadyActive && !priorLeadershipChange;
+      const createdAt = now();
+      const user = { id: newId(), name: saved.name, phone: saved.phone, email: normalizeEmail(saved.email), role: directLeaderRole ? saved.requestedRole : "member", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt, chamaId: saved.chamaId };
+      updated.users.push(user);
+      if (directLeaderRole) {
+        const leadershipChange = { id: newId(), type: "appointment", role: user.role, outgoingUserId: null, incomingUserId: user.id, effectiveDate: createdAt.slice(0, 10), vote: null, emergencyReason: null, status: "confirmed", proposedBy: inviter.id, proposedAt: createdAt, confirmedBy: inviter.id, confirmedAt: createdAt, audit: [{ action: "proposed", by: inviter.id, at: createdAt }, { action: "confirmed", by: inviter.id, at: createdAt }], chamaId: saved.chamaId };
+        updated.leadershipChanges.push(leadershipChange);
+        updated.auditLog.push(auditEntry("leadership.confirmed", leadershipChange.id, inviter, { role: user.role, incomingUserId: user.id, outgoingUserId: null }));
+      }
+      await persist(updated); publishMemberUpdate(saved.chamaId); return { status: 201, body: { message: "Account activated. Please sign in.", user: safeUser(user) } };
+    };
+    const result = await serializeActivationAttempt(() => DATA_BACKEND === "json" ? withActivationFileLock(async () => { state = loadState(); return activate(); }) : activate());
+    return res.status(result.status).json(result.body);
+  } catch (error) { return next(error); }
 });
 app.post("/api/pin/change", requireAuth, async (req, res, next) => {
   const currentPin = clean(req.body?.currentPin); const newPin = clean(req.body?.newPin);
