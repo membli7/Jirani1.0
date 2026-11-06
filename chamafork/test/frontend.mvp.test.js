@@ -86,11 +86,67 @@ test("profile and sign-in pages load the shared language switch", () => {
   assert.match(profileHtml, /id="language-switch"/);
   assert.match(profileHtml, /src="\/i18n\.js\?v=20261101\.1"/);
   assert.match(memberLoginHtml, /src="\/i18n\.js\?v=20261101\.1"/);
-  assert.match(registerHtml, /src="\/i18n\.js\?v=20261101\.1"/);
+  assert.match(registerHtml, /src="\/i18n\.js\?v=20261106\.1"/);
   assert.match(registerHtml, /src="\/register\.js\?v=20261101\.1"/);
   assert.match(authPagesScript, /translateAuthText\(error instanceof TypeError/);
   assert.match(registerScript, /translateRegistrationText\(error instanceof TypeError/);
   assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
+});
+
+test("Kiswahili switch translates new-chama registration copy and restores English", () => {
+  const strings = [
+    "Register a new chama | Jirani Chama", "GROUP SAVINGS", "Language", "Start a new chama",
+    "Register your group and create the chairperson account. You will be signed in when setup is complete.",
+    "This instance is already set up",
+    "To create a separate chama, open this app on a separate instance connected to an empty database. This instance’s existing records will remain unchanged.",
+    "Sign in to this instance", "Chama and chairperson details",
+    "All fields are required. Your PIN must have 6 to 12 digits.", "Chama name", "Chairperson full name",
+    "Phone number", "Email address", "Financial rules",
+    "These defaults can be changed for this chama. They are enforced by the server.",
+    "Monthly contribution due by day", "Monthly welfare contribution (KES)",
+    "Late contribution penalty (KES)", "Monthly loan interest (%)", "Create PIN", "Register chama",
+    "Back to home", "Chama registered",
+    "Your chairperson account is ready. Continue to your chama dashboard.", "Open dashboard"
+  ];
+  const nodes = strings.map(value => ({ nodeType: 3, nodeValue: value, parentElement: { tagName: "P", closest: () => null } }));
+  const root = { lang: "en", querySelectorAll: () => [] };
+  const document = {
+    documentElement: root,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    createTreeWalker: () => {
+      let currentIndex = -1;
+      return {
+        nextNode() {
+          if (currentIndex + 1 >= nodes.length) return false;
+          this.currentNode = nodes[++currentIndex];
+          return true;
+        }
+      };
+    },
+    addEventListener: () => {}
+  };
+  const storage = new Map();
+  const sandbox = {
+    window: { dispatchEvent: () => {} },
+    document,
+    localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
+    NodeFilter: { SHOW_TEXT: 4 },
+    CustomEvent: function CustomEvent() {}
+  };
+  vm.runInNewContext(i18n, sandbox);
+
+  sandbox.window.jiraniI18n.setLanguage("sw");
+  for (let index = 0; index < strings.length; index++) {
+    assert.notEqual(nodes[index].nodeValue, strings[index], `registration copy was not translated: ${strings[index]}`);
+  }
+  assert.match(registerHtml, /<option value="en" data-i18n="englishOption">English<\/option>/);
+  assert.match(registerHtml, /<option value="sw" data-i18n="swahili">Kiswahili<\/option>/);
+  assert.match(registerHtml, /href="\/member-login\.html" data-i18n="memberLogin">Member Login<\/a>/);
+  assert.match(registerHtml, /data-i18n-aria-label="newChamaRegistration"/);
+
+  sandbox.window.jiraniI18n.setLanguage("en");
+  assert.deepEqual(nodes.map(node => node.nodeValue), strings);
 });
 
 test("all page backgrounds use a subdued blend of the logo colors", () => {

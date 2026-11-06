@@ -14,9 +14,9 @@
             <span>Jirani Chama <small>GROUP SAVINGS</small></span>
         </a>
         <label class="language-control" for="language-switch">Language
-            <select id="language-switch" aria-label="Language">
-                <option value="en">English</option>
-                <option value="sw">Kiswahili</option>
+            <select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
+                <option value="en" data-i18n="englishOption">English</option>
+                <option value="sw" data-i18n="swahili">Kiswahili</option>
             </select>
         </label>
     </header>
@@ -27,7 +27,7 @@
                 <h1>Start a new chama</h1>
                 <p class="login-intro">Register your group and create the chairperson account. You will be signed in when setup is complete.</p>
             </section>
-            <section class="auth-page-forms" aria-label="New chama registration">
+            <section class="auth-page-forms" aria-label="New chama registration" data-i18n-aria-label="newChamaRegistration">
                 <section id="new-chama-existing-instance" class="login-card" hidden>
                     <h2>This instance is already set up</h2>
                     <p>To create a separate chama, open this app on a separate instance connected to an empty database. This instance’s existing records will remain unchanged.</p>
@@ -69,7 +69,7 @@
                         <input id="register-chairperson-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required>
                     </label>
                     <button class="button-primary" type="submit">Register chama</button>
-                    <p class="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html">Member login</a></p>
+                    <p class="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>
                 </form>
                 <section id="register-success" class="login-card" aria-live="polite" hidden>
                     <h2>Chama registered</h2>
@@ -79,7 +79,7 @@
             </section>
         </div>
     </main>
-    <script src="/i18n.js?v=20261101.1" defer></script>
+    <script src="/i18n.js?v=20261106.1" defer></script>
     <script src="/register.js?v=20261101.1" defer></script>
 </body>
 </html>
