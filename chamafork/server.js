@@ -970,8 +970,13 @@ app.post("/api/contact", sharedRateLimit("contact", {
       try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
     }
     return res.json({ message: "Your message has been sent." });
-  } catch {
-    logger.warn("Contact email delivery failed.");
+  } catch (error) {
+    // Log protocol error identifiers only; never log SMTP responses or credentials.
+    const details = {};
+    if (typeof error?.code === "string" && /^[A-Z][A-Z0-9_]{0,31}$/i.test(error.code)) details.code = error.code;
+    if (Number.isInteger(error?.responseCode)) details.responseCode = error.responseCode;
+    if (typeof error?.command === "string" && /^[A-Z ]{1,20}$/i.test(error.command)) details.command = error.command;
+    logger.warn("Contact email delivery failed.", details);
     return res.status(502).json({ message: "Email delivery is temporarily unavailable. Please try again later or email us directly." });
   }
 });

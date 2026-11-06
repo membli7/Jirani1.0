@@ -36,8 +36,9 @@
 
       if (!response.ok) {
         if (response.status === 429) showFeedback("Too many messages were sent. Please try again later.", "error");
-        else if (response.status === 502 || response.status === 503) showFeedback("Email delivery is temporarily unavailable. Please try again later or email us directly.", "error");
-        else showFeedback("Please review the required fields and try again.", "error");
+        else if (response.status === 400) showFeedback("Please review the required fields and try again.", "error");
+        else if (response.status >= 500) showFeedback("Email delivery is temporarily unavailable. Please try again later or email us directly.", "error");
+        else showFeedback("We couldn’t send your message just now. Please try again or email us directly.", "error");
         return;
       }
 

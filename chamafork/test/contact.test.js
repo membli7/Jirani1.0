@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { after, test } = require("node:test");
@@ -15,7 +16,18 @@ const validMessage = {
   message: "Could you tell me more about the group tools?"
 };
 
-async function startTestServer({ emailEnabled = true, logFile = "" } = {}) {
+async function closedLocalPort() {
+  const listener = net.createServer();
+  await new Promise((resolve, reject) => {
+    listener.once("error", reject);
+    listener.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = listener.address();
+  await new Promise((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+  return port;
+}
+
+async function startTestServer({ emailEnabled = true, logFile = "", smtpFailurePort = 0 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-contact-test-"));
   const dataFile = path.join(directory, "data.json");
   const port = 42000 + (process.pid % 10000) + servers.length;
@@ -28,10 +40,12 @@ async function startTestServer({ emailEnabled = true, logFile = "" } = {}) {
     SESSION_SECRET: "test-contact-form-secret",
     CHAMA_DATA_FILE: dataFile,
     SMTP_TRANSPORT: emailEnabled ? "json" : "",
-    SMTP_HOST: "",
-    SMTP_USER: "",
-    SMTP_PASS: "",
-    SMTP_FROM: "",
+    SMTP_HOST: smtpFailurePort ? "127.0.0.1" : "",
+    SMTP_PORT: smtpFailurePort ? String(smtpFailurePort) : "",
+    SMTP_SECURE: "false",
+    SMTP_USER: smtpFailurePort ? "contact-test-user" : "",
+    SMTP_PASS: smtpFailurePort ? "contact-test-password" : "",
+    SMTP_FROM: smtpFailurePort ? "contact-test-user@example.test" : "",
     SMTP_LOG_FILE: logFile
   };
   const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env });
@@ -55,6 +69,7 @@ async function startTestServer({ emailEnabled = true, logFile = "" } = {}) {
   });
   const server = {
     baseUrl: `http://127.0.0.1:${port}`,
+    output: () => output,
     stop: async () => {
       if (child.exitCode === null) {
         child.kill();
@@ -102,6 +117,22 @@ test("contact form reports unavailable rather than success when email is not con
   const response = await postContact(server);
   assert.equal(response.status, 503);
   assert.match((await response.json()).message, /temporarily unavailable/i);
+});
+
+test("contact form reports SMTP connection failure without claiming success or logging secrets", async () => {
+  const smtpFailurePort = await closedLocalPort();
+  const server = await startTestServer({ emailEnabled: false, smtpFailurePort });
+  const response = await postContact(server);
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.match(body.message, /temporarily unavailable/i);
+  assert.doesNotMatch(JSON.stringify(body), /contact-test-user|contact-test-password|ECONNECTION/);
+  for (let attempt = 0; attempt < 30 && !server.output().includes("Contact email delivery failed."); attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.match(server.output(), /Contact email delivery failed\./);
+  assert.match(server.output(), /code:\s*['"]?[A-Z][A-Z0-9_]*['"]?/);
+  assert.doesNotMatch(server.output(), /contact-test-user|contact-test-password/);
 });
 
 test("contact form rejects header injection and malformed inputs before sending email", async () => {
