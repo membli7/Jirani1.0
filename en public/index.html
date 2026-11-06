@@ -1008,24 +1008,32 @@
                  </div>
             </section>
             <section id="contact" class="contact-section" aria-labelledby="get-in-touch">
-              <header class="contact-heading">
-                <p class="contact-kicker" data-i18n="contactSectionLabel">CONTACT</p>
-                <h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>
-                <p class="contact-description" data-i18n="contactOptionsCopy">Choose the route that best fits your needs.</p>
-              </header>
-              <div class="contact-options">
-                <article class="contact-option">
-                  <p class="contact-option-kicker" data-i18n="memberOrOfficer">MEMBER OR OFFICER</p>
-                  <h3 data-i18n="contactYourOfficers">Contact your group officers</h3>
-                  <p data-i18n="memberContactCopy">Sign in and send a message to your chairperson or secretary in your group chat.</p>
-                  <a class="button-primary" href="/member-login.html" data-i18n="signInToYourGroup">Sign in to your group</a>
-                </article>
-                <article class="contact-option contact-option-secondary">
-                  <p class="contact-option-kicker" data-i18n="newGroupLabel">START A NEW GROUP</p>
-                  <h3 data-i18n="startYourChama">Start your chama</h3>
-                  <p data-i18n="startChamaCopy">Create your group, invite members, and manage shared records in one place.</p>
-                  <a class="button-outline" href="/register.html" data-i18n="createChama">Create a chama</a>
-                </article>
+              <div class="contact-shell">
+                <header class="contact-intro-panel">
+                  <p class="contact-kicker" data-i18n="contactSectionLabel">CONTACT</p>
+                  <h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>
+                  <p class="contact-description" data-i18n="contactOptionsCopy">Choose the route that best fits your needs.</p>
+                </header>
+                <div class="contact-options">
+                  <article class="contact-option">
+                    <span class="contact-option-step" aria-hidden="true">01</span>
+                    <div class="contact-option-copy">
+                      <p class="contact-option-kicker" data-i18n="memberOrOfficer">MEMBER OR OFFICER</p>
+                      <h3 data-i18n="contactYourOfficers">Contact your group officers</h3>
+                      <p data-i18n="memberContactCopy">Sign in and send a message to your chairperson or secretary in your group chat.</p>
+                    </div>
+                    <a class="contact-action" href="/member-login.html"><span data-i18n="signInToYourGroup">Sign in to your group</span><span class="contact-action-arrow" aria-hidden="true">→</span></a>
+                  </article>
+                  <article class="contact-option">
+                    <span class="contact-option-step" aria-hidden="true">02</span>
+                    <div class="contact-option-copy">
+                      <p class="contact-option-kicker" data-i18n="newGroupLabel">START A NEW GROUP</p>
+                      <h3 data-i18n="startYourChama">Start your chama</h3>
+                      <p data-i18n="startChamaCopy">Create your group, invite members, and manage shared records in one place.</p>
+                    </div>
+                    <a class="contact-action" href="/register.html"><span data-i18n="createChama">Create a chama</span><span class="contact-action-arrow" aria-hidden="true">→</span></a>
+                  </article>
+                </div>
               </div>
             </section>
         </div>

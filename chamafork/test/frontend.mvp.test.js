@@ -167,17 +167,30 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
-test("landing contact section has clear routes for members and new groups", () => {
-  const contact = html.match(/<section id="contact"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(html, /href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch<\/a>/);
-  assert.match(contact, /<h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch<\/h2>/);
-  assert.match(contact, /Contact your group officers/);
-  assert.match(contact, /href="\/member-login\.html" data-i18n="signInToYourGroup"/);
-  assert.match(contact, /href="\/register\.html" data-i18n="createChama"/);
-  assert.match(contact, /message to your chairperson or secretary in your group chat/);
-  assert.doesNotMatch(contact, /support/i);
-  assert.match(css, /#contact \.contact-options\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /#contact \.contact-options\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+test("landing contact section offers accessible localized routes for members and new groups", () => {
+  const sectionStart = html.indexOf('<section id="contact"');
+  const sectionEnd = html.indexOf('</section>', sectionStart) + '</section>'.length;
+  const contact = sectionStart >= 0 && sectionEnd >= '</section>'.length ? html.slice(sectionStart, sectionEnd) : "";
+  assert.ok(html.includes('href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch</a>'));
+  assert.ok(contact.includes('aria-labelledby="get-in-touch"'));
+  assert.ok(contact.includes('<h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>'));
+  assert.ok(contact.includes('data-i18n="contactOptionsCopy"'));
+  assert.ok(contact.includes('data-i18n="memberOrOfficer"'));
+  assert.ok(contact.includes('data-i18n="contactYourOfficers"'));
+  assert.ok(contact.includes('data-i18n="memberContactCopy"'));
+  assert.ok(contact.includes('aria-hidden="true">01</span>'));
+  assert.ok(contact.includes('<a class="contact-action" href="/member-login.html"><span data-i18n="signInToYourGroup"'));
+  assert.ok(contact.includes('data-i18n="newGroupLabel"'));
+  assert.ok(contact.includes('data-i18n="startYourChama"'));
+  assert.ok(contact.includes('data-i18n="startChamaCopy"'));
+  assert.ok(contact.includes('aria-hidden="true">02</span>'));
+  assert.ok(contact.includes('<a class="contact-action" href="/register.html"><span data-i18n="createChama"'));
+  assert.doesNotMatch(contact, /support|mailto:|tel:/i);
+  assert.ok(css.includes('#contact .contact-shell {'));
+  assert.ok(css.includes('grid-template-columns: minmax(250px, 0.82fr) minmax(0, 1.18fr);'));
+  assert.ok(css.includes('@media (max-width: 760px)'));
+  assert.ok(css.includes('#contact .contact-action:focus-visible {'));
+  assert.ok(css.includes('#contact .contact-action { transition: none; }'));
 });
 
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
