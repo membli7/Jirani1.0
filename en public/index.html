@@ -1009,30 +1009,52 @@
             </section>
             <section id="contact" class="contact-section" aria-labelledby="get-in-touch">
               <div class="contact-shell">
-                <header class="contact-intro-panel">
-                  <p class="contact-kicker" data-i18n="contactSectionLabel">CONTACT</p>
-                  <h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>
-                  <p class="contact-description" data-i18n="contactOptionsCopy">Choose the route that best fits your needs.</p>
-                </header>
-                <div class="contact-options">
-                  <article class="contact-option">
-                    <span class="contact-option-step" aria-hidden="true">01</span>
-                    <div class="contact-option-copy">
-                      <p class="contact-option-kicker" data-i18n="memberOrOfficer">MEMBER OR OFFICER</p>
-                      <h3 data-i18n="contactYourOfficers">Contact your group officers</h3>
-                      <p data-i18n="memberContactCopy">Sign in and send a message to your chairperson or secretary in your group chat.</p>
+                <aside class="contact-intro-panel">
+                  <div>
+                    <p class="contact-kicker" data-i18n="contactSectionLabel">CONTACT</p>
+                    <h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>
+                    <p class="contact-description" data-i18n="contactDescription">Tell us how we can help. Your message goes directly to our team.</p>
+                  </div>
+                  <div class="contact-direct">
+                    <p class="contact-direct-label" data-i18n="contactDirectLabel">Prefer email?</p>
+                    <a class="contact-email" href="mailto:09elim3@gmail.com">09elim3@gmail.com</a>
+                    <p class="contact-direct-copy" data-i18n="contactDirectCopy">You can also email our team directly.</p>
+                  </div>
+                </aside>
+                <div class="contact-content-panel">
+                  <div class="contact-form-heading">
+                    <h3 id="contact-form-title" data-i18n="contactFormTitle">Send us a message</h3>
+                    <p data-i18n="contactFormCopy">Fill in the form and we’ll get your message to the right person.</p>
+                  </div>
+                  <form id="contact-form" class="contact-form" method="post" action="/api/contact" aria-labelledby="contact-form-title">
+                    <div class="contact-form-fields">
+                      <label class="contact-field" for="contact-name">
+                        <span data-i18n="contactNameLabel">Your name</span>
+                        <input id="contact-name" name="name" type="text" autocomplete="name" maxlength="100" required>
+                      </label>
+                      <label class="contact-field" for="contact-email">
+                        <span data-i18n="contactEmailLabel">Email address</span>
+                        <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                      </label>
+                      <label class="contact-field contact-field--full" for="contact-subject">
+                        <span data-i18n="contactSubjectLabel">Subject</span>
+                        <input id="contact-subject" name="subject" type="text" maxlength="120" required>
+                      </label>
+                      <label class="contact-field contact-field--full" for="contact-message">
+                        <span data-i18n="contactMessageLabel">Message</span>
+                        <textarea id="contact-message" name="message" rows="5" minlength="10" maxlength="3000" required></textarea>
+                      </label>
                     </div>
-                    <a class="contact-action" href="/member-login.html"><span data-i18n="signInToYourGroup">Sign in to your group</span><span class="contact-action-arrow" aria-hidden="true">→</span></a>
-                  </article>
-                  <article class="contact-option">
-                    <span class="contact-option-step" aria-hidden="true">02</span>
-                    <div class="contact-option-copy">
-                      <p class="contact-option-kicker" data-i18n="newGroupLabel">START A NEW GROUP</p>
-                      <h3 data-i18n="startYourChama">Start your chama</h3>
-                      <p data-i18n="startChamaCopy">Create your group, invite members, and manage shared records in one place.</p>
+                    <div class="contact-form-actions">
+                      <button id="contact-submit" class="contact-submit" type="submit"><span data-i18n="contactSubmitLabel">Send message</span><span aria-hidden="true">→</span></button>
+                      <p class="contact-privacy-note" data-i18n="contactPrivacyNote">Your message is sent privately to our team.</p>
                     </div>
-                    <a class="contact-action" href="/register.html"><span data-i18n="createChama">Create a chama</span><span class="contact-action-arrow" aria-hidden="true">→</span></a>
-                  </article>
+                    <p id="contact-feedback" class="contact-feedback" role="status" aria-live="polite" hidden></p>
+                  </form>
+                  <nav class="contact-route-links" aria-label="Other ways to get in touch" data-i18n-aria-label="contactMoreOptions">
+                    <a class="contact-route-link" href="/member-login.html"><span data-i18n="contactMemberRoute">Already a member? Sign in</span><span aria-hidden="true">→</span></a>
+                    <a class="contact-route-link" href="/register.html"><span data-i18n="contactCreateRoute">Starting a chama? Create one</span><span aria-hidden="true">→</span></a>
+                  </nav>
                 </div>
               </div>
             </section>
@@ -1079,6 +1101,7 @@
  <script src="/i18n.js?v=20261104.2" defer></script>
  <script src="/write-requests.js?v=20261016.1" defer></script>
  <script src="/chama.js?v=20261104.4" defer></script>
+ <script src="/contact.js?v=20261106.1" defer></script>
  <footer class="site-footer">
     <p>Built for Kenyan savings groups.</p>
     <p>© 2026 Jirani Chama. All rights reserved.</p>

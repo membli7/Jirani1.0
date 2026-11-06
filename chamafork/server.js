@@ -855,6 +855,7 @@ function sendSms(phone, message) {
   const body = new URLSearchParams({ username, to: `+${to}`, message, ...(from ? { from } : {}) }).toString();
   return providerRequest(new URL("https://api.africastalking.com/version1/messaging"), { apiKey, "Content-Type": "application/x-www-form-urlencoded", "Content-Length": Buffer.byteLength(body), Accept: "application/json" }, body, "SMS");
 }
+const CONTACT_RECIPIENT = "09elim3@gmail.com";
 function emailConfigured() {
   if (process.env.SMTP_TRANSPORT === "json") return true;
   const host = clean(process.env.SMTP_HOST);
@@ -879,11 +880,13 @@ function getEmailTransporter() {
   });
   return _emailTransporter;
 }
-async function sendEmail(to, subject, text) {
+async function sendEmail(to, subject, text, options = {}) {
   if (!emailConfigured()) throw new Error("Email delivery is not configured.");
   if (!to || !validEmail(to)) throw new Error("Invalid recipient email address.");
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  return getEmailTransporter().sendMail({ from, to, subject, text });
+  const replyTo = options.replyTo;
+  if (replyTo && !validEmail(replyTo)) throw new Error("Invalid reply-to email address.");
+  return getEmailTransporter().sendMail({ from, to, subject, text, ...(replyTo ? { replyTo } : {}) });
 }
 app.disable("x-powered-by");
 app.use(compression());
@@ -936,6 +939,42 @@ if (sessionBackend.store) sessionOptions.store = sessionBackend.store;
 app.use(session(sessionOptions));
 app.use("/api", protectWriteRequest);
 app.use("/api", serializeWriteRequests);
+app.post("/api/contact", sharedRateLimit("contact", {
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: "Too many messages were sent. Please try again later." },
+}), async (req, res) => {
+  const raw = req.body || {};
+  if ([raw.name, raw.email, raw.subject, raw.message].some(value => typeof value !== "string")) {
+    return res.status(400).json({ message: "Please review the required fields and try again." });
+  }
+  const name = clean(raw.name);
+  const email = normalizeEmail(raw.email);
+  const subject = clean(raw.subject);
+  const message = clean(raw.message).replace(/\r\n?/g, "\n");
+  const headerControl = /[\u0000-\u001f\u007f]/;
+  const messageControl = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+  if (!name || name.length > 100 || headerControl.test(name)
+    || !validEmail(email) || email.length > 254 || /[\r\n]/.test(email)
+    || !subject || subject.length > 120 || headerControl.test(subject)
+    || message.length < 10 || message.length > 3000 || messageControl.test(message)) {
+    return res.status(400).json({ message: "Please review the required fields and try again." });
+  }
+  if (!emailConfigured() || (process.env.SMTP_TRANSPORT === "json" && process.env.NODE_ENV !== "test")) {
+    return res.status(503).json({ message: "Email delivery is temporarily unavailable. Please try again later or email us directly." });
+  }
+  const text = `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`;
+  try {
+    const info = await sendEmail(CONTACT_RECIPIENT, `Website contact: ${subject}`, text, { replyTo: email });
+    if (process.env.NODE_ENV === "test" && process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
+      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+    }
+    return res.json({ message: "Your message has been sent." });
+  } catch {
+    logger.warn("Contact email delivery failed.");
+    return res.status(502).json({ message: "Email delivery is temporarily unavailable. Please try again later or email us directly." });
+  }
+});
 function profileIconPath(userId, size) { return path.join(PROFILE_ICON_DIR, `${userId}-${size}.png`); }
 function profileNameParts(name) {
   const parts = clean(name).split(/\s+/).filter(Boolean);

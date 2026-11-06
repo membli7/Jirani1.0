@@ -17,6 +17,7 @@ const registerScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8
 const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
 const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
+const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
 
 test("launch-critical invitation, election, and cash copy is accurate in English and Kiswahili", () => {
   for (const message of [
@@ -174,23 +175,22 @@ test("landing contact section offers accessible localized routes for members and
   assert.ok(html.includes('href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch</a>'));
   assert.ok(contact.includes('aria-labelledby="get-in-touch"'));
   assert.ok(contact.includes('<h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>'));
-  assert.ok(contact.includes('data-i18n="contactOptionsCopy"'));
-  assert.ok(contact.includes('data-i18n="memberOrOfficer"'));
-  assert.ok(contact.includes('data-i18n="contactYourOfficers"'));
-  assert.ok(contact.includes('data-i18n="memberContactCopy"'));
-  assert.ok(contact.includes('aria-hidden="true">01</span>'));
-  assert.ok(contact.includes('<a class="contact-action" href="/member-login.html"><span data-i18n="signInToYourGroup"'));
-  assert.ok(contact.includes('data-i18n="newGroupLabel"'));
-  assert.ok(contact.includes('data-i18n="startYourChama"'));
-  assert.ok(contact.includes('data-i18n="startChamaCopy"'));
-  assert.ok(contact.includes('aria-hidden="true">02</span>'));
-  assert.ok(contact.includes('<a class="contact-action" href="/register.html"><span data-i18n="createChama"'));
-  assert.doesNotMatch(contact, /support|mailto:|tel:/i);
+  assert.ok(contact.includes('id="contact-form"'));
+  for (const field of ["name", "email", "subject", "message"]) assert.match(contact, new RegExp(`name="${field}"`));
+  assert.ok(contact.includes('id="contact-feedback" class="contact-feedback" role="status" aria-live="polite"'));
+  assert.ok(contact.includes('href="mailto:09elim3@gmail.com"'));
+  assert.ok(contact.includes('href="/member-login.html"'));
+  assert.ok(contact.includes('href="/register.html"'));
+  assert.match(html, /src="\/contact\.js\?v=/);
+  assert.match(contactScript, /fetch\("\/api\/contact"/);
+  assert.match(contactScript, /if \(!response\.ok\)/);
+  assert.doesNotMatch(contactScript, /SMTP_(?:USER|PASS|HOST)/);
   assert.ok(css.includes('#contact .contact-shell {'));
-  assert.ok(css.includes('grid-template-columns: minmax(250px, 0.82fr) minmax(0, 1.18fr);'));
+  assert.ok(css.includes('#contact .contact-form-fields {'));
+  assert.ok(css.includes('#contact .contact-submit:focus-visible,'));
   assert.ok(css.includes('@media (max-width: 760px)'));
-  assert.ok(css.includes('#contact .contact-action:focus-visible {'));
-  assert.ok(css.includes('#contact .contact-action { transition: none; }'));
+  assert.match(i18n, /contactDescription: \["Tell us how we can help\./);
+  assert.match(i18n, /contactDescription:[^\n]*Tuambie jinsi/);
 });
 
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
