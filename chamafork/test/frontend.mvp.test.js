@@ -269,6 +269,43 @@ test("subscription rollout copy keeps access activation server-verified and make
   assert.match(script, /landingMenuToggle\?\.addEventListener/);
 });
 
+test("unpaid loan requests show a renewal path while officer-role revocation remains a security exception", () => {
+  const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  assert.match(html, /id="loan-request-access-note"[\s\S]*?id="loan-request-renewal-link"/);
+  assert.match(html, /id="loan-submit" class="button-primary" type="submit" disabled/);
+  assert.match(script, /function updateLoanRequestAccess\(/);
+  assert.match(script, /if \(state\?\.subscription\?\.status !== "active"\)/);
+  assert.match(server, /app\.post\("\/api\/loans", requireAuth, requirePinChanged, requireActiveSubscription/);
+  assert.match(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke", requireAuth, requirePinChanged, requireRole\("chairperson"\), idempotent/);
+  assert.doesNotMatch(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke"[^\n]*requireActiveSubscription/);
+  assert.match(html, /data-i18n="roleRevocationSecurityException"/);
+  assert.match(i18n, /roleRevocationSecurityException:\s*"For account security, chairpersons can still revoke an officer role\."/);
+  assert.match(i18n, /roleRevocationSecurityException:\s*"Kwa usalama wa akaunti/);
+});
+
+test("member roster and invitation history are distinct, normalized, and phone-friendly", () => {
+  assert.match(html, /id="active-members-title"[\s\S]*?tbody id="members"/);
+  assert.match(html, /id="member-history-title"[\s\S]*?tbody id="member-invitation-history"/);
+  assert.match(script, /function memberStatusPresentation\(/);
+  assert.match(script, /const activeMemberRows = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) === "active"\)/);
+  assert.match(script, /const inactiveMemberRows = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) !== "active"\)/);
+  assert.match(script, /const statusKey = revocation \? "revokedStatus"/);
+  assert.match(i18n, /activeStatus:\s*"Active"/);
+  assert.match(i18n, /activeStatus:\s*"Hai"/);
+  assert.match(css, /#members-panel \.members-table td \{ display: grid; grid-template-columns/);
+  assert.match(css, /@media \(max-width: 700px\) \{[\s\S]*?#members-panel \.members-table tr \{ display: block/);
+  assert.match(css, /#members-panel \.members-table td \.mini-btn \{ max-width: 100%; min-height: 44px/);
+});
+
+test("Contributions navigation opens the appropriate contribution history view", () => {
+  assert.match(html, /href="#group-contributions-title" data-panel="overview" data-contributions-link data-i18n="contributionsNav"/);
+  assert.match(script, /const contributionsLink = event\.target\.closest\("a\[data-contributions-link\]"\)/);
+  assert.match(script, /showAppPage\("overview", \{ scrollTarget: targetId \}\)/);
+  assert.match(script, /function showAppPage\(panelId, \{ scrollTarget \} = \{\}\)/);
+  assert.match(i18n, /contributionsNav:\s*"Contributions"/);
+  assert.match(i18n, /contributionsNav:\s*"Michango"/);
+});
+
 test("landing contact section offers accessible localized routes for members and new groups", () => {
   const sectionStart = html.indexOf('<section id="contact"');
   const sectionEnd = html.indexOf('</section>', sectionStart) + '</section>'.length;
@@ -427,7 +464,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261107\.5" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.6" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -512,7 +549,7 @@ test("authenticated dashboard navigation uses an accessible hamburger drawer", (
   assert.match(html, /id="menu-identity"/);
   assert.match(script, /menuToggle\.addEventListener\("click"/);
   assert.match(script, /menuBar\.addEventListener\("click"/);
-  assert.match(script, /function showAppPage\(panelId\)/);
+  assert.match(script, /function showAppPage\(panelId, \{ scrollTarget \} = \{\}\)/);
   assert.match(script, /showAppPage\(panelLink\.dataset\.panel\)/);
   assert.match(script, /aria-expanded/);
   assert.match(css, /\.topbar\.is-authenticated \.topbar-nav/);
@@ -542,13 +579,14 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.trend-data\s*\{\s*display:\s*table;\s*width:\s*max-content;/);
   assert.match(css, /\.finance-data-table\s*\{\s*min-width:\s*0;/);
   assert.match(css, /td::before\s*\{\s*content:\s*attr\(data-label\)/);
-  assert.match(script, /\[t\("date"\)\], \[t\("amountKes"\)\], \[t\("note"\)\]/);
+  assert.match(script, /<table class="trend-data"><thead><tr><th>Month<\/th>/);
+  assert.match(script, /series\.map\(item => `<td>\$\{esc\(money\(item\.values\[index\]\)\)\}<\/td>`\)/);
   assert.match(css, /button, \.button-primary, \.mini-btn, input, select, textarea \{ min-height: 44px; \}/);
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261107\.5"/);
-  assert.match(html, /src="\/chama\.js\?v=20261107\.5"/);
+  assert.match(html, /href="\/chama\.css\?v=20261107\.6"/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.6"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);

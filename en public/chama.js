@@ -4,6 +4,26 @@ const $ = selector => document.querySelector(selector);
 const money = value => value === null || value === undefined ? "Private" : `KES ${Number(value).toLocaleString("en-KE")}`;
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const t = key => window.jiraniI18n?.t(key) || key;
+function updateLoanRequestAccess(subscription = state?.subscription) {
+  const blocked = subscription?.status !== "active";
+  const note = $("#loan-request-access-note");
+  const submit = $("#loan-submit");
+  const renewalLink = $("#loan-request-renewal-link");
+  const contactLink = $("#subscription-renewal-link");
+  if (note) note.hidden = !blocked;
+  if (submit) submit.disabled = blocked;
+  if (renewalLink && contactLink) {
+    renewalLink.href = contactLink.href;
+    renewalLink.hidden = !blocked || contactLink.hidden;
+  }
+}
+function memberStatusPresentation(value) {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  const labels = { active: "activeStatus", inactive: "inactiveStatus", pending: "pendingActivationStatus", activated: "activatedStatus", expired: "expiredStatus", revoked: "revokedStatus" };
+  const statusClass = normalized === "active" || normalized === "activated" ? "active" : normalized === "pending" ? "pending" : "inactive";
+  const label = labels[normalized] ? t(labels[normalized]) : normalized ? normalized.replace(/\b[a-z]/g, char => char.toUpperCase()) : t("unknownStatus");
+  return { normalized, statusClass, label };
+}
 const writeRequester = window.chamaWriteRequests.createWriteRequester();
 let state;
 let attendanceData;
@@ -262,6 +282,7 @@ function render() {
     if (subscriptionRenewalLink) subscriptionRenewalLink.hidden = !renewalMessage;
     subscriptionNotice.hidden = !renewalMessage;
   }
+  updateLoanRequestAccess(subscription);
   renderChairpersonSetupChecklist(user, members, invitations);
   const balance = $("#balance");
   const contributions = $("#contributions");
@@ -291,20 +312,23 @@ function render() {
   renderMessages(state.messages || []);
 
   $("#transactions").innerHTML = transactions.map(item => `<tr><td data-label="Date">${esc(fmtDate(item.at))}</td><td data-label="Member">${esc(item.memberName)}<span class="schedule-sub">${esc(item.payer || item.recordedByName || "")}</span></td><td data-label="Amount">${money(item.amount)}</td><td data-label="Method">${esc(item.method)}${item.ref ? `<span class="schedule-sub">${esc(item.ref)}</span>` : ""}</td><td data-label="Type">${esc(item.paymentType)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-state">No transactions available.</td></tr>';
-  const memberRows = members.map(member => {
+  const memberRow = member => {
+    const status = memberStatusPresentation(member.status);
     const activeRoleChange = (leadershipChanges || []).slice().reverse().find(change =>
       change.status === "confirmed" && change.incomingUserId === member.id && change.role === member.role &&
       !(change.audit || []).some(item => item.action === "revoked"));
-    const revokeButton = permissions.revokeLeadershipRoles && member.status === "active" && member.role !== "member" && activeRoleChange
+    const revokeButton = permissions.revokeLeadershipRoles && status.normalized === "active" && member.role !== "member" && activeRoleChange
       ? `<button class="mini-btn danger" type="button" data-revoke-role="${esc(activeRoleChange.id)}">Revoke this role</button>`
       : "";
-    return `<tr><td data-label="Name">${esc(member.name)}</td><td data-label="Phone">${esc(member.phone)}</td><td data-label="Role">${esc(roleName(member.role))}</td><td data-label="Status">${esc(member.status)}</td><td data-label="Actions">${revokeButton}</td></tr>`;
-  });
+    return `<tr><td data-label="${esc(t("memberNameColumn"))}">${esc(member.name)}</td><td data-label="${esc(t("memberPhoneColumn"))}">${esc(member.phone)}</td><td data-label="${esc(t("memberRoleColumn"))}">${esc(roleName(member.role))}</td><td data-label="${esc(t("memberStatusColumn"))}"><span class="status-pill ${status.statusClass}">${esc(status.label)}</span></td><td data-label="${esc(t("memberActionsColumn"))}">${revokeButton}</td></tr>`;
+  };
+  const activeMemberRows = members.filter(member => String(member.status || "").toLowerCase() === "active").map(memberRow);
+  const inactiveMemberRows = members.filter(member => String(member.status || "").toLowerCase() !== "active").map(memberRow);
   const invitationRows = permissions.manageMembers ? invitations.map(invitation => {
     const revocation = invitation.revocation;
     const expired = Date.parse(invitation.expiresAt) <= Date.now();
     const age = Date.now() - Date.parse(invitation.invitedAt);
-    const status = revocation ? "Revoked by Chairperson" : invitation.usedAt ? "Activated" : expired ? "Invitation expired" : "Awaiting activation";
+    const statusKey = revocation ? "revokedStatus" : invitation.usedAt ? "activatedStatus" : expired ? "expiredStatus" : "pendingActivationStatus";
     const statusClass = revocation || expired ? "inactive" : invitation.usedAt ? "active" : "pending";
     const history = revocation
       ? `<span class="schedule-sub">This invitation was revoked by ${esc(roleName(revocation.by?.role))} on ${esc(fmtDate(revocation.at))} at ${esc(fmtTime(revocation.at))} (reason: ${esc(revocation.reason)})</span>`
@@ -312,9 +336,10 @@ function render() {
     const undoButton = permissions.revokeInvitations && !revocation && !invitation.usedAt && age >= 0 && age <= 24 * 60 * 60 * 1000
       ? `<button class="mini-btn danger" type="button" data-revoke-invitation="${esc(invitation.id)}">Undo</button>`
       : "";
-    return `<tr><td data-label="Name">${esc(invitation.name)}${history}</td><td data-label="Phone">${esc(invitation.phone)}</td><td data-label="Role">${esc(roleName(invitation.requestedRole))}</td><td data-label="Status"><span class="status-pill ${statusClass}">${status}</span></td><td data-label="Actions">${undoButton}</td></tr>`;
+    return `<tr><td data-label="${esc(t("memberNameColumn"))}">${esc(invitation.name)}${history}</td><td data-label="${esc(t("memberPhoneColumn"))}">${esc(invitation.phone)}</td><td data-label="${esc(t("memberRoleColumn"))}">${esc(roleName(invitation.requestedRole))}</td><td data-label="${esc(t("memberStatusColumn"))}"><span class="status-pill ${statusClass}">${esc(t(statusKey))}</span></td><td data-label="${esc(t("memberActionsColumn"))}">${undoButton}</td></tr>`;
   }) : [];
-  $("#members").innerHTML = [...memberRows, ...invitationRows].join("") || '<tr><td colspan="5" class="empty-state">No members or invitations available.</td></tr>';
+  $("#members").innerHTML = activeMemberRows.join("") || `<tr><td colspan="5" class="empty-state" data-i18n="noActiveMembers">${esc(t("noActiveMembers"))}</td></tr>`;
+  $("#member-invitation-history").innerHTML = [...inactiveMemberRows, ...invitationRows].join("") || `<tr><td colspan="5" class="empty-state" data-i18n="noMemberHistory">${esc(t("noMemberHistory"))}</td></tr>`;
   $("#loan-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Your requests and eligible independent approvals." : "Three roles review each request; the Secretary fills a Chairperson or Treasurer borrower’s approval seat.");
   const visibleLoans = [...new Map([...loans, ...approvalQueue].map(loan => [loan.id, loan])).values()];
   $("#loans").innerHTML = visibleLoans.map(loan => {
@@ -380,7 +405,7 @@ function updateDashboardTabs() {
     tab.tabIndex = selected ? 0 : -1;
   }
 }
-function showAppPage(panelId) {
+function showAppPage(panelId, { scrollTarget } = {}) {
   const overview = panelId === "overview" || panelId === "dashboard";
   if (panelId === "dashboard") selectedDashboardView = "you";
   const financePanel = selectedDashboardView === "group" ? "dashboard" : "you-dashboard";
@@ -415,7 +440,8 @@ function showAppPage(panelId) {
   }
   updateDashboardTabs();
   setNavigationOpen(false);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (scrollTarget) requestAnimationFrame(() => document.getElementById(scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  else window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function renderAttendance(user) {
   if (!attendanceData) return;
@@ -1000,9 +1026,34 @@ $("#simulated-payment-form").addEventListener("submit", async event => {
   }
 });
 $("#loan-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; setButton(form, true);
-  try { const formData = new FormData(form); const values = Object.fromEntries(formData); values.amount = Number(values.amount); values.months = Number(values.months); values.guarantorIds = formData.getAll("guarantorIds"); await api("/api/loans", { method: "POST", body: values, write: true }); form.reset(); notice("Loan request submitted."); await refresh(); }
-  catch (error) { notice(error.message, true); } finally { setButton(form, false); }
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (state?.subscription?.status !== "active") {
+    updateLoanRequestAccess(state?.subscription);
+    return;
+  }
+  setButton(form, true);
+  try {
+    const formData = new FormData(form);
+    const values = Object.fromEntries(formData);
+    values.amount = Number(values.amount);
+    values.months = Number(values.months);
+    values.guarantorIds = formData.getAll("guarantorIds");
+    await api("/api/loans", { method: "POST", body: values, write: true });
+    form.reset();
+    notice("Loan request submitted.");
+    await refresh();
+  } catch (error) {
+    notice(error.message, true);
+    if (error.status === 402) {
+      if (state?.subscription) state.subscription = { ...state.subscription, status: "expired" };
+      updateLoanRequestAccess(state?.subscription);
+      try { await refresh(); } catch {}
+    }
+  } finally {
+    setButton(form, false);
+    updateLoanRequestAccess();
+  }
 });
 $("#invite-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
@@ -1164,6 +1215,14 @@ menuBar.addEventListener("click", event => {
     const expanded = dropdownToggle.getAttribute("aria-expanded") === "true";
     dropdownToggle.setAttribute("aria-expanded", String(!expanded));
     dropdown.classList.toggle("open", !expanded);
+    return;
+  }
+  const contributionsLink = event.target.closest("a[data-contributions-link]");
+  if (contributionsLink) {
+    event.preventDefault();
+    selectedDashboardView = state?.user?.role === "member" ? "you" : "group";
+    const targetId = selectedDashboardView === "group" ? "group-contributions-title" : "you-contributions-title";
+    showAppPage("overview", { scrollTarget: targetId });
     return;
   }
   const panelLink = event.target.closest("a[data-panel]");

@@ -54,7 +54,8 @@ fs.writeFileSync(dataFile, JSON.stringify({
     { id: "expired-invitation", name: "Blocked Member", phone: "+254711000002", email: "blocked@example.test", requestedRole: "member", codeHash: hashCode(expiredCode), attemptsRemaining: 5, invitedBy: "chair", invitedAt: new Date().toISOString(), expiresAt: futureAt, usedAt: null, chamaId: "subscription-chama" },
     { id: "capped-invitation", name: "At-Cap Member", phone: "+254711000004", email: "at-cap@example.test", requestedRole: "member", codeHash: hashCode(cappedCode), attemptsRemaining: 5, invitedBy: "capped-chair", invitedAt: new Date().toISOString(), expiresAt: futureAt, usedAt: null, chamaId: "capped-chama" }
   ],
-  leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], penalties: [], dividendCycles: [], messages: [],
+  leadershipChanges: [{ id: "expired-officer-change", type: "appointment", bootstrap: true, role: "treasurer", outgoingUserId: null, incomingUserId: "treasurer", status: "confirmed", audit: [{ action: "proposed" }, { action: "confirmed" }], chamaId: "subscription-chama" }],
+  pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], penalties: [], dividendCycles: [], messages: [],
   settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }
 }), "utf8");
 
@@ -138,6 +139,25 @@ test("expired subscriptions retain view and chat access while paid actions stay 
   const messages = await request("/api/messages", { headers: { Cookie: chairCookie } });
   assert.equal(messages.status, 200);
   assert.ok((await messages.json()).data.some(message => message.text === "History and chat remain available."));
+});
+
+test("expired groups cannot submit new loans but chairpersons can revoke officer roles for account security", async () => {
+  const expiredChairCookie = await login("0711000001", "123456");
+  const loansBefore = JSON.parse(fs.readFileSync(dataFile, "utf8")).loans.length;
+  const blockedLoan = await request("/api/loans", { method: "POST", headers: { Cookie: expiredChairCookie, "Idempotency-Key": "subscription-new-loan-0001" }, body: JSON.stringify({ amount: 100 }) });
+  assert.equal(blockedLoan.status, 402);
+  assert.equal(JSON.parse(fs.readFileSync(dataFile, "utf8")).loans.length, loansBefore);
+
+  const activeChairCookie = await login("0711000003", "345678");
+  const activeLoanValidation = await request("/api/loans", { method: "POST", headers: { Cookie: activeChairCookie, "Idempotency-Key": "subscription-active-loan-validation-0001" }, body: JSON.stringify({ amount: 0 }) });
+  assert.equal(activeLoanValidation.status, 400);
+
+  const revoke = await request("/api/leadership-changes/expired-officer-change/revoke", { method: "POST", headers: { Cookie: expiredChairCookie, "Idempotency-Key": "subscription-role-revoke-0001" }, body: JSON.stringify({ reason: "Protect group account security." }) });
+  assert.equal(revoke.status, 200);
+  assert.equal((await revoke.json()).message, "Leadership role revoked.");
+  const saved = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  assert.equal(saved.users.find(user => user.id === "treasurer").role, "member");
+  assert.ok(saved.auditLog.some(entry => entry.type === "leadership.role.revoked" && entry.memberId === "treasurer"));
 });
 
 test("server enforces member caps when inviting and activating accounts", async () => {

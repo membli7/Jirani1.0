@@ -2241,7 +2241,7 @@ app.post("/api/leadership-changes/:id/confirm", requireAuth, requirePinChanged, 
   updated.auditLog.push(auditEntry("leadership.confirmed", record.id, req.user, { role: record.role, incomingUserId: record.incomingUserId, outgoingUserId: record.outgoingUserId }));
   return commit(req, res, next, updated, 200, { message: "Officer assignment confirmed.", data: record });
 }));
-app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
+app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
   const reason = clean(req.body?.reason);
   if (reason.length < 5 || reason.length > 500) return res.status(400).json({ message: "Enter a reason of 5-500 characters." });
   const updated = structuredClone(state);
