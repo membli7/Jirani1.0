@@ -169,18 +169,26 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
-test("public landing palette is scoped to signed-out mode and remains responsive", () => {
+test("public landing design system is scoped to signed-out mode and has a distinct responsive hierarchy", () => {
   assert.match(html, /<body class="landing-mode">/);
-  assert.match(html, /href="\/landing-theme\.css\?v=/);
-  assert.match(landingTheme, /body\.landing-mode\s*\{/);
-  assert.match(landingTheme, /--green:\s*#236a52/);
-  assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*rgba\(23, 61, 54, \.98\)/);
-  assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*linear-gradient\(145deg, #173d36/);
-  assert.match(landingTheme, /body\.landing-mode \.pricing-card-featured\s*\{[\s\S]*?background:\s*linear-gradient\(145deg, #173d36/);
-  assert.match(landingTheme, /body\.landing-mode \.login-brand::after[\s\S]*?right:\s*32px/);
-  assert.match(landingTheme, /body\.landing-mode \.feature-card[\s\S]*?background:\s*#fff/);
-  assert.match(landingTheme, /body\.landing-mode #faq details/);
-  assert.match(landingTheme, /body\.landing-mode #contact \.contact-intro-panel/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261107\.5"/);
+  assert.match(landingTheme, /body\.landing-mode\s*\{[\s\S]*?--forest:\s*#153d33/);
+  assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*var\(--forest\)/);
+  assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*transparent/);
+  assert.match(landingTheme, /body\.landing-mode \.login-brand h1\s*\{[\s\S]*?font-family:\s*Georgia/);
+  assert.match(landingTheme, /body\.landing-mode \.login-brand::before[\s\S]*?background:\s*linear-gradient\(var\(--gold\)/);
+  assert.match(landingTheme, /body\.landing-mode #login \.landing-sections-container\s*\{[\s\S]*?gap:\s*0/);
+  assert.match(landingTheme, /body\.landing-mode #features \.features-grid[\s\S]*?grid-template-columns:\s*repeat\(4/);
+  assert.match(landingTheme, /body\.landing-mode #security\.landing-section\s*\{/);
+  assert.match(landingTheme, /body\.landing-mode #pricing\.landing-section\s*\{/);
+  assert.match(landingTheme, /body\.landing-mode #faq details\s*\{/);
+  assert.match(landingTheme, /body\.landing-mode #contact \.contact-shell\s*\{/);
+  assert.match(landingTheme, /body\.landing-mode #pricing-modal\s*\{[\s\S]*?overflow-y:\s*auto/);
+  assert.match(landingTheme, /font-size:\s*clamp\(30px, 4vw, 43px\) !important;/);
+  assert.match(landingTheme, /body\.landing-mode \.pricing-amount\s*\{[^}]*font-size:\s*clamp\(27px, 3vw, 34px\) !important;/);
+  assert.match(landingTheme, /body\.landing-mode #pricing-modal\s*\{\s*position:\s*fixed !important;[\s\S]*?transform:\s*translate\(-50%, -50%\) !important;/);
+  assert.match(landingTheme, /@media \(max-width: 600px\)[\s\S]*?body\.landing-mode #pricing-modal\s*\{[\s\S]*?top:\s*calc\(50% \+ 32px\) !important;[\s\S]*?max-height:\s*calc\(100dvh - 88px\)/);
+  assert.match(landingTheme, /@media \(max-width: 900px\)/);
   assert.match(landingTheme, /@media \(max-width: 600px\)/);
   assert.match(landingTheme, /@media \(max-width: 390px\)/);
   assert.match(script, /document\.body\.classList\.remove\("landing-mode"\)/);
