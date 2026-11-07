@@ -755,6 +755,42 @@ html {
   max-width: 600px;
 }
 
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  max-width: 760px;
+}
+.pricing-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+  padding: 28px;
+  border: 1px solid #d5dfd7;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 8px 22px rgba(31, 45, 61, .07);
+}
+.pricing-card-featured { border: 2px solid var(--green); }
+.pricing-card h3 { margin: 0; color: var(--navy); font-size: 18px; }
+.pricing-amount { margin: 16px 0 8px; color: var(--navy); font-size: 32px; font-weight: 800; letter-spacing: -.03em; }
+.pricing-amount span { margin-left: 4px; color: var(--muted); font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.pricing-copy, .pricing-saving { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.pricing-saving { color: var(--green); font-weight: 700; }
+.pricing-badge { align-self: flex-start; margin: 0 0 14px; padding: 5px 9px; border-radius: 999px; color: #fff; background: var(--green); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.pricing-plan-button { width: 100%; margin-top: auto; }
+.pricing-modal-content { max-width: 390px; }
+.pricing-modal-content p { margin: 0 0 10px; }
+#pricing-modal-selection { color: var(--ink); font-weight: 700; }
+#pricing-contact { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.pricing-plan-button:focus-visible, #pricing-contact:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+@media (max-width: 600px) {
+  .pricing-grid { grid-template-columns: minmax(0, 1fr); }
+  .pricing-card { min-height: 0; }
+}
+
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

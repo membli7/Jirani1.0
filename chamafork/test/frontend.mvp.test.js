@@ -168,6 +168,25 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
+test("landing pricing presents transparent monthly and annual choices without a payment integration", () => {
+  assert.match(html, /<section id="pricing"[^>]*aria-labelledby="pricing-title"/);
+  assert.match(html, /KSh 300<span>\/month<\/span>/);
+  assert.match(html, /KSh 2,880<span>\/year<\/span>/);
+  assert.match(html, /Save KSh 720 — KSh 240\/month equivalent\./);
+  assert.match(html, /data-pricing-plan="Monthly plan" data-pricing-price="KSh 300\/month"/);
+  assert.match(html, /data-pricing-plan="Annual plan" data-pricing-price="KSh 2,880\/year"/);
+  assert.match(html, /id="pricing-modal"[^>]*aria-labelledby="pricing-modal-title"/);
+  assert.match(html, /Online payment is not yet available in Jirani Chama/);
+  assert.match(html, /id="pricing-contact"[^>]*href="#contact"/);
+  assert.match(script, /function openPricingModal\(button\)/);
+  const pricingModalSource = script.match(/function openPricingModal\(button\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(pricingModalSource, "pricing modal opener is present");
+  assert.match(pricingModalSource, /dialog\.showModal\(\)/);
+  assert.doesNotMatch(pricingModalSource, /api\(|fetch\(/);
+  assert.match(css, /\.pricing-grid\s*\{/);
+  assert.match(css, /\.pricing-card-featured\s*\{\s*border: 2px solid var\(--green\)/);
+});
+
 test("landing contact section offers accessible localized routes for members and new groups", () => {
   const sectionStart = html.indexOf('<section id="contact"');
   const sectionEnd = html.indexOf('</section>', sectionStart) + '</section>'.length;
@@ -324,7 +343,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261104\.4" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.1" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -441,8 +460,8 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261104\.7"/);
-  assert.match(html, /src="\/chama\.js\?v=20261104\.4"/);
+  assert.match(html, /href="\/chama\.css\?v=20261107\.1"/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.1"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);

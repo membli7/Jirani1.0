@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-        <link rel="stylesheet" href="/chama.css?v=20261104.7">
+        <link rel="stylesheet" href="/chama.css?v=20261107.1">
     </head>
 <body>
  <header class="topbar">
@@ -16,6 +16,7 @@
       <nav class="topbar-nav" aria-label="Landing Page Navigation">
           <a href="#features" class="topbar-nav-link">Features</a>
           <a href="#how-it-works" class="topbar-nav-link">How It Works</a>
+          <a href="#pricing" class="topbar-nav-link">Pricing</a>
           <a href="#security" class="topbar-nav-link">Security</a>
           <a href="#faq" class="topbar-nav-link">FAQ</a>
           <a href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch</a>
@@ -951,6 +952,30 @@
                     </ul>
                 </div>
             </section>
+            <section id="pricing" class="landing-section pricing-section" aria-labelledby="pricing-title">
+                <div class="section-inner">
+                    <header class="section-header pricing-header">
+                        <span class="section-eyebrow">Pricing</span>
+                        <h2 id="pricing-title" class="section-heading">Simple pricing for every chama</h2>
+                        <p class="section-subheading">Choose the billing schedule that works best for your group.</p>
+                    </header>
+                    <div class="pricing-grid">
+                        <article class="pricing-card" aria-labelledby="monthly-plan-title">
+                            <h3 id="monthly-plan-title">Monthly</h3>
+                            <p class="pricing-amount">KSh 300<span>/month</span></p>
+                            <p class="pricing-copy">Flexible month-to-month access for your chama.</p>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-plan="Monthly plan" data-pricing-price="KSh 300/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                        </article>
+                        <article class="pricing-card pricing-card-featured" aria-labelledby="annual-plan-title">
+                            <p class="pricing-badge">Save 20%</p>
+                            <h3 id="annual-plan-title">Annual</h3>
+                            <p class="pricing-amount">KSh 2,880<span>/year</span></p>
+                            <p class="pricing-saving">Save KSh 720 — KSh 240/month equivalent.</p>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-plan="Annual plan" data-pricing-price="KSh 2,880/year" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual</button>
+                        </article>
+                    </div>
+                </div>
+            </section>
             <!--FAQ SECTION-->
             <section id="faq">
                 <div class="faq-container">
@@ -1076,6 +1101,17 @@
             </div>
         </form>
     </dialog>
+    <dialog id="pricing-modal" aria-labelledby="pricing-modal-title" aria-describedby="pricing-modal-selection pricing-modal-copy">
+        <div class="pricing-modal-content">
+            <h2 id="pricing-modal-title">Proceed with payment</h2>
+            <p id="pricing-modal-selection"></p>
+            <p id="pricing-modal-copy">Online payment is not yet available in Jirani Chama. Send us a message and our team will help arrange your subscription payment.</p>
+            <div class="dialog-actions">
+                <button id="pricing-modal-cancel" class="mini-btn" type="button">Not now</button>
+                <a id="pricing-contact" class="button-primary" href="#contact">Continue to payment enquiry</a>
+            </div>
+        </div>
+    </dialog>
 </section>
  <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
     <form method="dialog" id="cash-confirm-form">
@@ -1100,7 +1136,7 @@
  </dialog>
  <script src="/i18n.js?v=20261104.2" defer></script>
  <script src="/write-requests.js?v=20261016.1" defer></script>
- <script src="/chama.js?v=20261104.4" defer></script>
+ <script src="/chama.js?v=20261107.1" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
  <footer class="site-footer">
     <p>Built for Kenyan savings groups.</p>

@@ -26,6 +26,20 @@ const idleLimitMs = 15 * 60 * 1000;
 const menuToggle = $("#menu-toggle");
 const menuBar = $("#menu-bar");
 
+function openPricingModal(button) {
+  const dialog = $("#pricing-modal");
+  const selection = $("#pricing-modal-selection");
+  if (!dialog || !selection) return;
+  selection.textContent = `You selected the ${button.dataset.pricingPlan}: ${button.dataset.pricingPrice}.`;
+  dialog.showModal();
+}
+
+document.querySelectorAll("[data-pricing-plan]").forEach(button => {
+  button.addEventListener("click", () => openPricingModal(button));
+});
+$("#pricing-modal-cancel")?.addEventListener("click", () => $("#pricing-modal")?.close());
+$("#pricing-contact")?.addEventListener("click", () => $("#pricing-modal")?.close());
+
 async function api(path, { method = "GET", body, write = false, validateResponse, silentForbidden = false } = {}) {
   if (write) {
     try {
