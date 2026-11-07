@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-        <link rel="stylesheet" href="/chama.css?v=20261107.1">
+        <link rel="stylesheet" href="/chama.css?v=20261107.2">
     </head>
 <body>
  <header class="topbar">
@@ -960,18 +960,31 @@
                         <p class="section-subheading">Choose the billing schedule that works best for your group.</p>
                     </header>
                     <div class="pricing-grid">
-                        <article class="pricing-card" aria-labelledby="monthly-plan-title">
-                            <h3 id="monthly-plan-title">Monthly</h3>
+                        <article class="pricing-card" aria-labelledby="entry-plan-title">
+                            <h3 id="entry-plan-title">Entry</h3>
+                            <p class="pricing-cap">Up to 10 members</p>
                             <p class="pricing-amount">KSh 300<span>/month</span></p>
                             <p class="pricing-copy">Flexible month-to-month access for your chama.</p>
-                            <button class="button-primary pricing-plan-button" type="button" data-pricing-plan="Monthly plan" data-pricing-price="KSh 300/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                            <p class="pricing-saving">Annual: KSh 2,880/year — save KSh 720 (KSh 240/month equivalent).</p>
+                            <div class="pricing-plan-actions">
+                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 300/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 2,880/year (KSh 240/month equivalent)" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
+                            </div>
                         </article>
-                        <article class="pricing-card pricing-card-featured" aria-labelledby="annual-plan-title">
-                            <p class="pricing-badge">Save 20%</p>
-                            <h3 id="annual-plan-title">Annual</h3>
-                            <p class="pricing-amount">KSh 2,880<span>/year</span></p>
-                            <p class="pricing-saving">Save KSh 720 — KSh 240/month equivalent.</p>
-                            <button class="button-primary pricing-plan-button" type="button" data-pricing-plan="Annual plan" data-pricing-price="KSh 2,880/year" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual</button>
+                        <article class="pricing-card pricing-card-featured" aria-labelledby="growth-plan-title">
+                            <p class="pricing-badge">Growing groups</p>
+                            <h3 id="growth-plan-title">Growth Chama</h3>
+                            <p class="pricing-cap">Up to 30 members</p>
+                            <p class="pricing-amount">KSh 600<span>/month</span></p>
+                            <p class="pricing-copy">More room for a larger chama to manage its records together.</p>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-price="KSh 600/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose Growth</button>
+                        </article>
+                        <article class="pricing-card" aria-labelledby="enterprise-plan-title">
+                            <h3 id="enterprise-plan-title">Enterprise / Investment</h3>
+                            <p class="pricing-cap">Custom member caps for groups above 30 members</p>
+                            <p class="pricing-amount pricing-amount-custom">Custom pricing<span>Contact us</span></p>
+                            <p class="pricing-copy">Tailored for scale and the added administration of contribution tracking and loan approvals.</p>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Enterprise / Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-price="Custom pricing — Contact us" aria-haspopup="dialog" aria-controls="pricing-modal">Contact us for pricing</button>
                         </article>
                     </div>
                 </div>
@@ -1136,7 +1149,7 @@
  </dialog>
  <script src="/i18n.js?v=20261104.2" defer></script>
  <script src="/write-requests.js?v=20261016.1" defer></script>
- <script src="/chama.js?v=20261107.1" defer></script>
+ <script src="/chama.js?v=20261107.2" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
  <footer class="site-footer">
     <p>Built for Kenyan savings groups.</p>

@@ -30,7 +30,7 @@ function openPricingModal(button) {
   const dialog = $("#pricing-modal");
   const selection = $("#pricing-modal-selection");
   if (!dialog || !selection) return;
-  selection.textContent = `You selected the ${button.dataset.pricingPlan}: ${button.dataset.pricingPrice}.`;
+  selection.textContent = `You selected ${button.dataset.pricingTier} — ${button.dataset.memberCap}: ${button.dataset.pricingPrice}.`;
   dialog.showModal();
 }
 
