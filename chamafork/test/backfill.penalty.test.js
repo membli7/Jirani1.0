@@ -44,6 +44,7 @@ const legacyTransactions = [
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users,
   transactions: legacyTransactions,
   loans: [],

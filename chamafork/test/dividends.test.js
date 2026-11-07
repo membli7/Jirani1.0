@@ -38,6 +38,7 @@ const penalty = (id, paidAt, status = "paid") => ({ id, memberId: "c", memberNam
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users: people.map(person => ({ id: person.id, name: person.name, phone: person.phone, role: person.role, status: "active", pinHash: pinHash(person.pin), mustChangePin: false, shareCapital: person.shareCapital })),
   transactions: [
     repayment("r1", "2026-10-05", 300),

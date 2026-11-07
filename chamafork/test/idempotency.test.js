@@ -29,6 +29,7 @@ const expiredRecord = { id: "old-transaction", at: expiredAt, memberId: member.i
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users: [chair, treasurer, member],
   transactions: [expiredRecord],
   loans: [{ id: "loan", memberId: member.id, memberName: member.name, amount: 1000, months: 1, outstanding: 1000, status: "approved", createdAt: expiredAt, approvals: [], approvalHistory: [] }],

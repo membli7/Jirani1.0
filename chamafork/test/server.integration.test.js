@@ -156,10 +156,12 @@ describe("Jirani Chama server", () => {
     const savedState = JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8"));
     assert.equal(savedState.chamas.length, 1);
     assert.equal(savedState.chamas[0].name, "Test Chama");
+    assert.equal(savedState.chamas[0].subscription.status, "unpaid");
     assert.deepEqual(savedState.settings, { defaultDeadlineDay: 10, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 7.5, meetingDates: {} });
     assert.equal(savedState.users[0].chamaId, savedState.chamas[0].id);
     cookie = setup.headers.getSetCookie?.()[0]?.split(";")[0] || setup.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie, "setup should establish a session cookie");
+    await require("./active-subscription-fixture").activateTestSubscription({ dataFile: path.join(tempDir, "data.json"), baseUrl, chamaId: savedState.chamas[0].id });
 
     const dashboard = await request("/api/dashboard");
     assert.equal(dashboard.status, 200);

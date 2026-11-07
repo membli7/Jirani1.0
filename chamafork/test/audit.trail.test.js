@@ -30,6 +30,7 @@ const secretary = { id: "secretary", name: "Test Secretary", phone: "+2547110000
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users: [chair, treasurer, member, secretary],
   transactions: [],
   loans: [],

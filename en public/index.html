@@ -5,9 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-        <link rel="stylesheet" href="/chama.css?v=20261107.2">
+        <link rel="stylesheet" href="/chama.css?v=20261107.5">
+        <link rel="stylesheet" href="/landing-theme.css?v=20261107.3">
     </head>
-<body>
+<body class="landing-mode">
  <header class="topbar">
      <div class="brand">
         <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg" alt=""></span>
@@ -20,6 +21,10 @@
           <a href="#security" class="topbar-nav-link">Security</a>
           <a href="#faq" class="topbar-nav-link">FAQ</a>
           <a href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch</a>
+      </nav>
+      <button id="landing-menu-toggle" class="mini-btn landing-menu-toggle" type="button" aria-label="Open landing navigation" data-i18n-aria-label="landingNavOpen" aria-expanded="false" aria-controls="landing-mobile-nav" data-i18n="landingNavMenu">Menu</button>
+      <nav id="landing-mobile-nav" class="landing-mobile-nav" aria-label="Landing page navigation" data-i18n-aria-label="landingNavLabel" hidden>
+        <a href="#features" data-i18n="landingNavFeatures">Features</a><a href="#how-it-works" data-i18n="landingNavHowItWorks">How it works</a><a href="#pricing" data-i18n="landingNavPricing">Pricing</a><a href="#security" data-i18n="landingNavSecurity">Security</a><a href="#faq" data-i18n="landingNavFaq">FAQ</a><a href="#contact" data-i18n="landingNavContact">Contact</a>
       </nav>
      </div>
      <nav class="dashboard-tabs" id="dashboard-tabs" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews">
@@ -112,6 +117,7 @@
       </div>
   </nav>
   <p id="notice" class="notice" role="status" aria-live="polite"></p>
+  <p id="subscription-notice" class="notice subscription-notice" role="status" aria-live="polite" hidden><span id="subscription-notice-copy"></span> <a id="subscription-renewal-link" href="mailto:09elim3@gmail.com?subject=Chama%20subscription%20renewal" hidden>Contact us about a plan or renewal</a></p>
   <button id="retry" class="button-primary retry-button" type="button" hidden>Try again</button>
   <section class="page-heading">
     <div>
@@ -607,8 +613,8 @@
             <button class="button-primary" type="submit" data-i18n="inviteBothOfficials">Invite both officials</button>
         </form>
         <form id="invite-form" class="form-body">
-            <label class="field" for="invite-name">Name<input id="invite-name" name="name" required></label>
-            <label class="field" for="invite-phone">Kenyan phone<input id="invite-phone" name="phone" type="tel" placeholder="0712 345 678" required></label>
+            <label class="field" for="invite-name">Name<input id="invite-name" name="name" autocomplete="name" required></label>
+            <label class="field" for="invite-phone">Kenyan phone<input id="invite-phone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required></label>
             <label class="field" for="invite-email">Email address<input id="invite-email" name="email" type="email" autocomplete="email" maxlength="254" required></label>
             <label class="field" for="invite-role">Requested role<select id="invite-role" name="role">
                 <option value="member" data-i18n="member">Member</option>
@@ -803,8 +809,8 @@
             <div class="login-logo-wrap">
                 <img src="/brand-lockup.svg" alt="Jirani Chama — group savings, together" width="440" height="112">
             </div>
-            <h1 data-i18n="landingHeading">Simple, trusted <span class="hero-accent" data-i18n="groupSavings">group savings</span>.</h1>
-            <p class="login-intro" data-i18n="landingSubtitle">Keep contributions, loans, and group decisions together in one secure place.</p>
+            <h1><span data-i18n="landingHeroLead">Run contributions,</span> <span class="hero-accent" data-i18n="landingHeroHighlight">loan approvals, and records</span> <span data-i18n="landingHeroTail">in one accountable place.</span></h1>
+            <p class="login-intro" data-i18n="landingHeroSubtitle">Give your chama a clear shared record of what was contributed, approved, and decided.</p>
         </div>
                 <div id="landing-view" class="login-card">
             <h2 data-i18n="welcomePortal">Welcome to Jirani Chama</h2>
@@ -960,15 +966,15 @@
                         <p class="section-subheading">Choose the billing schedule that works best for your group.</p>
                     </header>
                     <div class="pricing-grid">
-                        <article class="pricing-card" aria-labelledby="entry-plan-title">
-                            <h3 id="entry-plan-title">Entry</h3>
+                        <article class="pricing-card" aria-labelledby="basic-plan-title">
+                            <h3 id="basic-plan-title">Basic</h3>
                             <p class="pricing-cap">Up to 10 members</p>
                             <p class="pricing-amount">KSh 300<span>/month</span></p>
                             <p class="pricing-copy">Flexible month-to-month access for your chama.</p>
                             <p class="pricing-saving">Annual: KSh 2,880/year — save KSh 720 (KSh 240/month equivalent).</p>
                             <div class="pricing-plan-actions">
-                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 300/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
-                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 2,880/year (KSh 240/month equivalent)" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
+                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Monthly" data-pricing-price="KSh 300/month" data-pricing-total="KSh 300" data-pricing-savings="No annual discount" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Annual" data-pricing-price="KSh 2,880/year" data-pricing-total="KSh 2,880" data-pricing-savings="Save KSh 720 · KSh 240/month equivalent" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
                             </div>
                         </article>
                         <article class="pricing-card pricing-card-featured" aria-labelledby="growth-plan-title">
@@ -977,14 +983,18 @@
                             <p class="pricing-cap">Up to 30 members</p>
                             <p class="pricing-amount">KSh 600<span>/month</span></p>
                             <p class="pricing-copy">More room for a larger chama to manage its records together.</p>
-                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-price="KSh 600/month" aria-haspopup="dialog" aria-controls="pricing-modal">Choose Growth</button>
+                            <p class="pricing-saving">Annual: KSh 5,760/year — save KSh 1,440 (KSh 480/month equivalent).</p>
+                            <div class="pricing-plan-actions">
+                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-billing="Monthly" data-pricing-price="KSh 600/month" data-pricing-total="KSh 600" data-pricing-savings="No annual discount" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-billing="Annual" data-pricing-price="KSh 5,760/year" data-pricing-total="KSh 5,760" data-pricing-savings="Save KSh 1,440 · KSh 480/month equivalent" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
+                            </div>
                         </article>
                         <article class="pricing-card" aria-labelledby="enterprise-plan-title">
                             <h3 id="enterprise-plan-title">Enterprise / Investment</h3>
                             <p class="pricing-cap">Custom member caps for groups above 30 members</p>
                             <p class="pricing-amount pricing-amount-custom">Custom pricing<span>Contact us</span></p>
                             <p class="pricing-copy">Tailored for scale and the added administration of contribution tracking and loan approvals.</p>
-                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Enterprise / Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-price="Custom pricing — Contact us" aria-haspopup="dialog" aria-controls="pricing-modal">Contact us for pricing</button>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Enterprise / Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-billing="Custom" data-pricing-price="Custom pricing — Contact sales" data-pricing-total="Agreed with sales" data-pricing-savings="Tailored plan" aria-haspopup="dialog" aria-controls="pricing-modal">Contact us for pricing</button>
                         </article>
                     </div>
                 </div>
@@ -1036,12 +1046,11 @@
                             </div>
                         </details>
 
-                        <details>
-                            <summary>Can we automatically enforce late payment penalties?</summary>
-                            <div class="faq-answer">
-                                <p>Yes. The registration defaults are a KES 500 welfare contribution, a KES 200 late penalty, and a monthly deadline on day 5. The chairperson can change each during registration. After the deadline, the platform can assess one outstanding penalty if an active member has not reached the configured welfare contribution.</p>
-                            </div>
-                        </details>
+                        <details><summary>How are late-payment penalties assessed?</summary><div class="faq-answer"><p>After the configured deadline, the Chairperson or Secretary runs the penalty assessment. The app does not assess penalties automatically. At most one outstanding penalty is assessed for an eligible member and month.</p></div></details>
+                        <details><summary>Which plan fits our group?</summary><div class="faq-answer"><p>Basic supports up to 10 members. Growth Chama supports up to 30 members. Enterprise / Investment is for groups above 30 members and is arranged with sales. Member limits are enforced by the server when members are invited or activated.</p></div></details>
+                        <details><summary>How does the annual discount work?</summary><div class="faq-answer"><p>Basic is KSh 2,880 per year instead of KSh 3,600, saving KSh 720. Growth Chama is KSh 5,760 per year instead of KSh 7,200, saving KSh 1,440. Both annual options are 20% off the equivalent monthly total.</p></div></details>
+                        <details><summary>When does payment confirm our subscription?</summary><div class="faq-answer"><p>A subscription becomes active only after the server verifies a real provider transaction for the expected KES amount and the group’s reference. Clicking a plan or reporting that you paid never activates access. Online payment collection is not enabled yet.</p></div></details>
+                        <details><summary>What happens when a subscription expires?</summary><div class="faq-answer"><p>Your financial history remains available to view and export. New financial records, member invitations, loan decisions, and other subscription-gated actions are blocked for unpaid or expired groups. Online payments are not enabled yet; contact us about pricing and renewal.</p></div></details>
                     </div>
                  </div>
             </section>
@@ -1114,17 +1123,31 @@
             </div>
         </form>
     </dialog>
-    <dialog id="pricing-modal" aria-labelledby="pricing-modal-title" aria-describedby="pricing-modal-selection pricing-modal-copy">
+    <dialog id="pricing-modal" aria-labelledby="pricing-modal-title" aria-describedby="pricing-modal-selection pricing-modal-copy pricing-reference-panel">
         <div class="pricing-modal-content">
-            <h2 id="pricing-modal-title">Proceed with payment</h2>
-            <p id="pricing-modal-selection"></p>
-            <p id="pricing-modal-copy">Online payment is not yet available in Jirani Chama. Send us a message and our team will help arrange your subscription payment.</p>
+            <h2 id="pricing-modal-title" tabindex="-1">Review your plan</h2>
+            <dl id="pricing-modal-selection" class="pricing-modal-details"><div><dt>Tier</dt><dd id="pricing-modal-tier"></dd></div><div><dt>Member cap</dt><dd id="pricing-modal-cap"></dd></div><div><dt>Billing</dt><dd id="pricing-modal-billing"></dd></div><div><dt>Total</dt><dd id="pricing-modal-total"></dd></div><div><dt>Annual saving</dt><dd id="pricing-modal-savings"></dd></div></dl>
+            <p id="pricing-modal-copy">Choose a plan to review it. A signed-in chairperson can request a pending reference for the chama. No payment request is sent, and choosing a plan does not activate access.</p>
+            <div id="pricing-reference-panel" class="pricing-reference-panel" hidden>
+                <div><p class="pricing-reference-label">Pending M-PESA reference</p><output id="pricing-modal-reference" class="pricing-reference-code" aria-label="Pending M-PESA reference"></output></div>
+                <button id="pricing-copy-reference" class="mini-btn" type="button" disabled>Copy reference</button>
+                <p id="pricing-reference-copy-status" class="pricing-reference-copy-status" role="status" aria-live="polite"></p>
+            </div>
             <div class="dialog-actions">
                 <button id="pricing-modal-cancel" class="mini-btn" type="button">Not now</button>
-                <a id="pricing-contact" class="button-primary" href="#contact">Continue to payment enquiry</a>
+                <a id="pricing-contact" class="button-primary" href="#contact">Contact us about this plan</a>
             </div>
         </div>
     </dialog>
+    <footer class="site-footer">
+       <p>Built for Kenyan savings groups.</p>
+       <p>© 2026 Jirani Chama. All rights reserved.</p>
+       <nav class="site-footer-links" aria-label="Footer links">
+           <a href="/privacy.html">Privacy</a>
+           <span aria-hidden="true">·</span>
+           <a href="/terms.html">Terms</a>
+       </nav>
+    </footer>
 </section>
  <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
     <form method="dialog" id="cash-confirm-form">
@@ -1149,16 +1172,7 @@
  </dialog>
  <script src="/i18n.js?v=20261104.2" defer></script>
  <script src="/write-requests.js?v=20261016.1" defer></script>
- <script src="/chama.js?v=20261107.2" defer></script>
+ <script src="/chama.js?v=20261107.5" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
- <footer class="site-footer">
-    <p>Built for Kenyan savings groups.</p>
-    <p>© 2026 Jirani Chama. All rights reserved.</p>
-    <nav class="site-footer-links" aria-label="Footer links">
-        <a href="#">Privacy</a>
-        <span aria-hidden="true">·</span>
-        <a href="#">Terms</a>
-    </nav>
- </footer>
- </body>
- </html>
+</body>
+</html>

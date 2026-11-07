@@ -343,6 +343,11 @@ textarea { width: 100%; font: inherit; color: var(--ink); background: #fff; }
     radial-gradient(ellipse at 90% 85%, #e6eee7 0, transparent 36%), #f5f7f4;
   backdrop-filter: none;
 }
+#login.login-overlay { align-content: start; }
+#login.login-overlay > .site-footer {
+  width: calc(100% + clamp(20px, 6vw, 72px) + clamp(20px, 6vw, 72px));
+  margin: 32px calc(0px - clamp(20px, 6vw, 72px)) 0;
+}
 .login-content { display: grid; width: min(980px, 100%); grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: center; gap: clamp(30px, 8vw, 90px); }
 .login-brand { max-width: 470px; }
 .login-brand-mark { display: grid; width: 58px; height: 58px; margin-bottom: 26px; place-items: center; border-radius: 17px; color: #fff; background: var(--green); box-shadow: 0 10px 24px rgba(36, 115, 74, .2); font-size: 30px; font-weight: 800; }
@@ -787,6 +792,13 @@ html {
 .pricing-modal-content { max-width: 390px; }
 .pricing-modal-content p { margin: 0 0 10px; }
 #pricing-modal-selection { color: var(--ink); font-weight: 700; }
+.pricing-modal-details { display: grid; gap: 8px; margin: 16px 0; }
+.pricing-modal-details div { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.pricing-modal-details dt { color: var(--muted); font-size: 13px; }
+.pricing-modal-details dd { margin: 0; color: var(--ink); font-weight: 700; text-align: right; }
+.subscription-notice { margin: 12px auto; max-width: 1000px; }
+.subscription-notice a { margin-inline-start: 0.4rem; font-weight: 700; text-underline-offset: 2px; }
+.landing-menu-toggle, .landing-mobile-nav { display: none; }
 #pricing-contact { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .pricing-plan-button:focus-visible, #pricing-contact:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 
@@ -796,6 +808,25 @@ html {
 @media (max-width: 600px) {
   .pricing-grid { grid-template-columns: minmax(0, 1fr); }
   .pricing-card { min-height: 0; }
+}
+
+@media (max-width: 600px) {
+  #pricing-modal {
+    width: calc(100vw - 24px);
+    max-width: 420px;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    margin: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 720px) {
+  .landing-menu-toggle { display: inline-flex; margin-left: auto; }
+  .landing-mobile-nav { position: fixed; top: 64px; right: 12px; z-index: 200; display: grid; min-width: 210px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: var(--shadow); }
+  .landing-mobile-nav[hidden] { display: none; }
+  .landing-mobile-nav a { padding: 12px; color: var(--ink); font-weight: 700; text-decoration: none; }
 }
 
 .features-grid {

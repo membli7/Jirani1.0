@@ -17,6 +17,7 @@ const nodemailer = require("nodemailer");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
+const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = require("./security/mpesa-c2b-subscriptions");
 const { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor } = require("./leadership-elections");
 if (process.env.NODE_ENV === "test") {
   // Tests use explicit disposable storage and must not connect to services in the local .env.
@@ -114,6 +115,10 @@ const LATE_CONTRIBUTION_PENALTY = 200;
 const DEFAULT_DEADLINE_DAY = 5;
 const LOAN_MONTHLY_RATE = 0.05;
 const LOAN_LIMIT_MULTIPLE = 3;
+const SUBSCRIPTION_PLANS = Object.freeze({
+  basic: { label: "Basic", maxMembers: 10, monthlyAmount: 300, annualAmount: 2880, annualSavings: 720 },
+  growth: { label: "Growth Chama", maxMembers: 30, monthlyAmount: 600, annualAmount: 5760, annualSavings: 1440 },
+});
 const monthDateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Africa/Nairobi" });
 const eventClients = new Set();
 let leadershipElectionTimer = null;
@@ -298,6 +303,90 @@ function internationalPhone(phone) {
   return normalized ? normalized.replace(/\D/g, "") : null;
 }
 function emptyState() { return { version: 2, chamas: [], users: [], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: DEFAULT_DEADLINE_DAY, welfareMonthlyFee: WELFARE_MONTHLY_FEE, lateContributionPenalty: LATE_CONTRIBUTION_PENALTY, loanMonthlyRatePercent: LOAN_MONTHLY_RATE * 100, meetingDates: {} }, dividendCycles: [], messages: [] }; }
+function unpaidSubscription(startedAt = now(), previous = null) {
+  const starts = new Date(startedAt);
+  const safeStart = Number.isNaN(starts.getTime()) ? new Date() : starts;
+  const history = Array.isArray(previous?.history)
+    ? previous.history.filter(item => !String(item?.type || "").startsWith("trial."))
+    : [];
+  if (!history.some(item => item?.type === "subscription.unpaid")) history.push({ type: "subscription.unpaid", at: safeStart.toISOString() });
+  return {
+    ...(previous && typeof previous === "object" ? previous : {}),
+    id: previous?.id || newId(), status: "unpaid", tier: null, billing: null,
+    currency: "KES", expectedAmount: null, maxMembers: null, startedAt: safeStart.toISOString(),
+    endsAt: null, reference: null, verifiedAt: null, provider: null, history
+  };
+}
+function ensureSubscriptionRecords(source) {
+  for (const chama of Array.isArray(source.chamas) ? source.chamas : []) {
+    if (!chama.subscription || typeof chama.subscription !== "object" || Array.isArray(chama.subscription)) {
+      chama.subscription = unpaidSubscription();
+    } else if (chama.subscription.status === "trial") {
+      chama.subscription = unpaidSubscription(chama.subscription.startedAt || now(), chama.subscription);
+    }
+  }
+}
+function subscriptionFor(source, chamaId) {
+  const chama = (source.chamas || []).find(item => item.id === chamaId);
+  return chama?.subscription || null;
+}
+function subscriptionIsActive(subscription, at = Date.now()) {
+  return !!subscription && subscription.status === "active" && Number.isFinite(Date.parse(subscription.endsAt)) && Date.parse(subscription.endsAt) > at;
+}
+function subscriptionView(subscription) {
+  const active = subscriptionIsActive(subscription);
+  const status = active ? "active" : subscription?.status === "active" ? "expired" : ["pending", "unpaid", "expired"].includes(subscription?.status) ? subscription.status : "unpaid";
+  return {
+    status,
+    tier: subscription?.tier || null, billing: subscription?.billing || null,
+    maxMembers: Number.isSafeInteger(subscription?.maxMembers) ? subscription.maxMembers : null,
+    currency: subscription?.currency || "KES", expectedAmount: subscription?.expectedAmount ?? null,
+    annualSavings: subscription?.annualSavings ?? null, endsAt: subscription?.endsAt || null,
+    pendingPayment: subscription?.pendingPayment ? {
+      reference: String(subscription.pendingPayment.reference || ""),
+      tier: String(subscription.pendingPayment.tier || ""),
+      billing: String(subscription.pendingPayment.billing || ""),
+      amount: Number.isSafeInteger(subscription.pendingPayment.amount) ? subscription.pendingPayment.amount : null,
+      currency: "KES", status: String(subscription.pendingPayment.status || "pending"),
+      expiresAt: subscription.pendingPayment.expiresAt || null,
+    } : null,
+    paymentEnabled: false,
+    renewalMessage: active ? null : "Your group is in view-only access because its subscription is unpaid or expired. Financial history remains available to view and export. Online payments are not enabled yet; contact us about a plan or renewal."
+  };
+}
+function addSubscriptionPeriod(startAt, billing) {
+  const months = billing === "annual" ? 12 : billing === "monthly" ? 1 : 0;
+  const next = new Date(startAt);
+  if (!months || !Number.isFinite(next.getTime())) return null;
+  const day = next.getUTCDate();
+  next.setUTCDate(1);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDay));
+  return next;
+}
+function pendingSubscriptionForPayment(source, payment, config, at = Date.now()) {
+  const chamaId = config.shortcodeToChama.get(payment.shortcode);
+  const chama = (source.chamas || []).find(item => item.id === chamaId);
+  const subscription = chama?.subscription;
+  const pending = subscription?.pendingPayment;
+  const planKey = String(pending?.planKey || "").toLowerCase();
+  const plan = SUBSCRIPTION_PLANS[planKey];
+  const billing = pending?.billing;
+  const expectedAmount = plan && billing === "annual" ? plan.annualAmount
+    : plan && billing === "monthly" ? plan.monthlyAmount : null;
+  if (!chama || !pending || pending.status !== "pending" || !plan
+    || !Number.isFinite(Date.parse(pending.expiresAt)) || Date.parse(pending.expiresAt) <= at
+    || String(pending.reference || "").toUpperCase() !== payment.reference
+    || pending.currency !== "KES" || pending.tier !== plan.label
+    || pending.amount !== expectedAmount || payment.amountCents !== expectedAmount * 100
+    || pending.maxMembers !== plan.maxMembers) return null;
+  return { chama, subscription, pending, plan };
+}
+function memberCapFor(source, chamaId) {
+  const cap = subscriptionFor(source, chamaId)?.maxMembers;
+  return Number.isSafeInteger(cap) && cap > 0 ? cap : null;
+}
 function settingAmount(key, fallback) {
   const raw = state.settings?.[key];
   if (raw === undefined || raw === null || raw === "") return fallback;
@@ -387,6 +476,7 @@ function migrate(raw) {
         for (const record of raw[key]) if (!record.chamaId) record.chamaId = legacyChama.id;
       }
     }
+    ensureSubscriptionRecords(raw);
     backfillContributionSplits(raw);
     return raw;
   }
@@ -474,7 +564,7 @@ function initializeStorage() {
           await postgresState.saveState(postgresPool, state);
           await writeQueue.writeFile(DATA_FILE, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
         } else {
-          state = await postgresState.loadState(postgresPool);
+          state = migrate(await postgresState.loadState(postgresPool));
         }
         return;
       }
@@ -503,7 +593,17 @@ function requireAuth(req, res, next) {
 }
 function requireRole(...roles) { return (req, res, next) => roles.includes(req.user.role) ? next() : res.status(403).json({ message: "Your role is not allowed to perform this action." }); }
 function requirePinChanged(req, res, next) { return req.user.mustChangePin ? res.status(403).json({ message: "Change your temporary PIN before making any records.", mustChangePin: true }) : next(); }
+function requireActiveSubscription(req, res, next) {
+  const subscription = subscriptionFor(state, req.user.chamaId);
+  if (subscriptionIsActive(subscription)) return next();
+  return res.status(402).json({
+    message: "This chama is in view-only access because its subscription is unpaid or expired. Renew to create new records.",
+    subscription: subscriptionView(subscription)
+  });
+}
 function protectWriteRequest(req, res, next) {
+  const callbackPath = req.originalUrl.split("?")[0];
+  if (req.method === "POST" && ["/api/mpesa/c2b/validation", "/api/mpesa/c2b/confirmation"].includes(callbackPath)) return next();
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   if (req.get("X-Requested-With") !== "chama") return res.status(400).json({ message: "Missing required request header." });
   const origin = req.get("Origin");
@@ -763,6 +863,7 @@ function dashboardFor(user) {
 
   return {
     user: safeUser(user),
+    subscription: subscriptionView(subscriptionFor(state, chamaId)),
     permissions: permissionsFor(user, usersInChama),
     summary: {
       balance: officers ? currentBalance(state, chamaId) : null,
@@ -1139,7 +1240,7 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   updated.settings.welfareMonthlyFee = welfareMonthlyFee;
   updated.settings.lateContributionPenalty = lateContributionPenalty;
   updated.settings.loanMonthlyRatePercent = loanMonthlyRatePercent;
-  updated.chamas.push({ id: chamaId, name: chamaName, createdAt: now() });
+  updated.chamas.push({ id: chamaId, name: chamaName, createdAt: now(), subscription: unpaidSubscription(now()) });
   const user = { id: newId(), name, phone, email, role: "chairperson", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt: now(), chamaId };
   updated.users.push(user);
   try { await persist(updated); } catch (error) { return next(error); }
@@ -1269,7 +1370,7 @@ app.get("/api/attendance", requireAuth, requirePinChanged, (req, res) => {
     .map(register => attendanceRegisterView(register, req.user));
   return res.json({ members, registers, readOnly: req.user.role !== "secretary" });
 });
-app.post("/api/attendance", requireAuth, requirePinChanged, requireRole("secretary"), idempotent((req, res, next) => {
+app.post("/api/attendance", requireAuth, requirePinChanged, requireRole("secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const date = clean(req.body?.date);
   const expectedRevision = req.body?.expectedRevision;
   const submitted = req.body?.attendees;
@@ -1340,6 +1441,43 @@ app.post("/api/session/activity", requireAuth, (req, res) => {
   req.session.touch();
   return res.json({ message: "Session activity recorded.", expiresInMs: idleSessionMs });
 });
+app.get("/api/subscription", requireAuth, (req, res) => {
+  return res.json({ data: subscriptionView(subscriptionFor(state, req.user.chamaId)) });
+});
+app.post("/api/subscription/selection", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent(async (req, res, next) => {
+  const tier = clean(req.body?.tier).toLowerCase();
+  const billing = clean(req.body?.billing).toLowerCase();
+  if (tier === "enterprise") return res.status(400).json({ message: "Enterprise / Investment plans use custom member caps and pricing. Contact sales to discuss your group." });
+  const plan = SUBSCRIPTION_PLANS[tier];
+  if (!plan || !["monthly", "annual"].includes(billing)) return res.status(400).json({ message: "Choose a Basic or Growth Chama monthly or annual plan." });
+  const amount = billing === "annual" ? plan.annualAmount : plan.monthlyAmount;
+  const planView = { tier: plan.label, memberCap: plan.maxMembers, currency: "KES", amount, billing, annualSavings: billing === "annual" ? plan.annualSavings : 0, paymentEnabled: false, paymentRequestStarted: false };
+  const activeOrInvited = scopeToChama(state.users, req.user.chamaId).filter(user => user.status === "active" || user.status === "invited").length;
+  if (activeOrInvited > plan.maxMembers) return res.status(409).json({ message: `This group currently has ${activeOrInvited} active or invited members and cannot select the ${plan.maxMembers}-member plan.`, plan: planView });
+  const config = getC2bSubscriptionConfig(process.env);
+  if (!config.enabled || ![...config.shortcodeToChama.values()].includes(req.user.chamaId)) return res.status(503).json({
+    message: "Sandbox C2B verification is not configured for this group. Register the HTTPS validation and confirmation URLs and configure a valid shortcode-to-group mapping. No payment request was sent or access activated.",
+    plan: planView
+  });
+  const createdAt = now();
+  const pendingPayment = {
+    reference: `JC${crypto.randomBytes(6).toString("hex").toUpperCase()}`,
+    planKey: tier, tier: plan.label, billing, amount, currency: "KES", maxMembers: plan.maxMembers,
+    annualSavings: billing === "annual" ? plan.annualSavings : 0,
+    status: "pending", createdAt, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+  const updated = structuredClone(state);
+  const chama = updated.chamas.find(item => item.id === req.user.chamaId);
+  if (!chama) return res.status(404).json({ message: "This group could not be found." });
+  chama.subscription = { ...(chama.subscription || unpaidSubscription()), pendingPayment };
+  updated.auditLog.push(auditEntry("subscription.selection.created", pendingPayment.reference, req.user, {
+    chamaId: chama.id, tier: plan.label, billing, amount, currency: "KES",
+  }));
+  return commit(req, res, next, updated, 201, {
+    message: "Plan selection saved. No payment request was sent. Contact your team for payment instructions; access activates only after a matching M-PESA C2B confirmation.",
+    plan: { ...planView, reference: pendingPayment.reference, expiresAt: pendingPayment.expiresAt },
+  });
+}));
 function csvCell(value) {
   let text = String(value ?? "");
   if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
@@ -1566,13 +1704,17 @@ app.get("/api/events/stream", requireAuth, requirePinChanged, (req, res) => {
   res.on("error", cleanup);
 });
 
-app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent(async (req, res, next) => {
+app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent(async (req, res, next) => {
   const name = clean(req.body?.name); const phone = normalizePhone(req.body?.phone); const email = normalizeEmail(req.body?.email); const role = clean(req.body?.role);
   if (!name || name.length > 100) return res.status(400).json({ message: "Enter the member's name (up to 100 characters)." });
   if (!phone) return res.status(400).json({ message: "Enter a valid Kenyan mobile phone number." });
   if (!validEmail(email)) return res.status(400).json({ message: "Enter a valid email address for the member." });
   if (!ROLES.has(role)) return res.status(400).json({ message: "Choose a valid member role." });
   if (role === "chairperson") return res.status(400).json({ message: "Invite a Member, Secretary, or Treasurer. Chairperson roles are assigned through leadership changes." });
+  const memberCap = memberCapFor(state, req.user.chamaId);
+  const activeOrInvited = scopeToChama(state.users, req.user.chamaId).filter(item => item.status === "active").length +
+    scopeToChama(state.invitations, req.user.chamaId).filter(item => !item.usedAt && !invitationRevocation(item) && Date.parse(item.expiresAt) > Date.now()).length;
+  if (memberCap !== null && activeOrInvited >= memberCap) return res.status(409).json({ message: `Your ${subscriptionFor(state, req.user.chamaId).tier} plan is limited to ${memberCap} members. Renew or contact us to change plans before inviting another member.` });
   if (["secretary", "treasurer"].includes(role)) {
     if (req.user.role !== "chairperson") return res.status(403).json({ message: "Only the Chairperson can invite the first leader directly." });
     const chamaUsers = scopeToChama(state.users, req.user.chamaId);
@@ -1646,6 +1788,11 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
         return { status: 400, body: { message: saved.attemptsRemaining === 0 ? "Invitation locked after too many incorrect activation codes." : "Incorrect activation code." } };
       }
       if (!validEmail(matchingCode.email) || !validNewPin(pin)) return { status: 400, body: { message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." } };
+      const subscription = subscriptionFor(state, matchingCode.chamaId);
+      if (!subscriptionIsActive(subscription)) return { status: 402, body: { message: "This chama is in view-only access because its subscription is unpaid or expired. Contact the Chairperson to arrange a plan or renewal.", subscription: subscriptionView(subscription) } };
+      const memberCap = memberCapFor(state, matchingCode.chamaId);
+      const activeMembers = scopeToChama(state.users, matchingCode.chamaId).filter(item => item.status === "active").length;
+      if (memberCap !== null && activeMembers >= memberCap) return { status: 409, body: { message: `This chama has reached its ${memberCap}-member plan limit. Ask its Chairperson to renew or change plans before activating this invitation.` } };
       const updated = structuredClone(state); const saved = updated.invitations.find(item => item.id === matchingCode.id && item.chamaId === matchingCode.chamaId); saved.usedAt = now(); saved.usedCodeHash = codeDigest;
       const inviter = scopeToChama(updated.users, saved.chamaId).find(item => item.id === saved.invitedBy);
       const chamaUsers = scopeToChama(updated.users, saved.chamaId);
@@ -1686,8 +1833,8 @@ function recordManualPayment(forcedPaymentType = null) {
   return commit(req, res, next, updated, 201, { message: "Payment recorded successfully.", data: transaction }, undefined, () => publishFinancialUpdate(req.user.chamaId));
   });
 }
-app.post("/api/payments", requireAuth, requirePinChanged, requireRole("treasurer"), recordManualPayment());
-app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("treasurer"), idempotent((req, res, next) => {
+app.post("/api/payments", requireAuth, requirePinChanged, requireRole("treasurer"), requireActiveSubscription, recordManualPayment());
+app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("treasurer"), requireActiveSubscription, idempotent((req, res, next) => {
   const memberId = clean(req.body?.memberId);
   const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
   if (foreignMember) return res.status(404).json({ message: "Member not found." });
@@ -1720,7 +1867,7 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   }
   return commit(req, res, next, updated, 201, { message: "Contribution recorded successfully.", data: transaction }, undefined, () => publishFinancialUpdate(req.user.chamaId));
 }));
-app.post("/api/settings/meeting-date", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
+app.post("/api/settings/meeting-date", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const month = clean(req.body?.month); const date = clean(req.body?.date);
   if (!/^\d{4}-\d{2}$/.test(month) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date.slice(0, 7) !== month || Number.isNaN(Date.parse(date))) return res.status(400).json({ message: "Enter a month (YYYY-MM) and a meeting date inside that month." });
   const updated = structuredClone(state);
@@ -1761,9 +1908,9 @@ function repayLoan() {
     return commit(req, res, next, updated, 201, { message: "Loan repayment recorded successfully.", data: transaction }, undefined, () => publishFinancialUpdate(req.user.chamaId));
   });
 }
-app.post("/api/loans/repay", requireAuth, requirePinChanged, requireRole("treasurer"), repayLoan());
+app.post("/api/loans/repay", requireAuth, requirePinChanged, requireRole("treasurer"), requireActiveSubscription, repayLoan());
 // Once a month's deadline has passed, every active member who paid less than the welfare fee by then gets one outstanding penalty.
-app.post("/api/penalties/assess", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
+app.post("/api/penalties/assess", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const month = clean(req.body?.month) || todayInNairobi().slice(0, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ message: "Enter the month as YYYY-MM." });
   const deadline = scheduledMeetingDate(month);
@@ -1818,7 +1965,7 @@ app.post("/api/dividends/calculate", requireAuth, requirePinChanged, requireRole
   if (preview.totalShareCapital <= 0) return res.status(409).json({ message: "No share capital to distribute against." });
   return res.json({ message: "Dividend preview. Nothing has been paid out yet.", data: preview });
 });
-app.post("/api/dividends/commit", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), idempotent((req, res, next) => {
+app.post("/api/dividends/commit", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), requireActiveSubscription, idempotent((req, res, next) => {
   const input = dividendCycleInput(req.body);
   if (!input || !Array.isArray(req.body?.payouts)) return res.status(400).json({ message: "Send the cycle dates, admin expenses, and the payouts from the preview." });
   const preview = dividendPreview(input, state, req.user.chamaId);
@@ -1843,8 +1990,8 @@ app.post("/api/dividends/commit", requireAuth, requirePinChanged, requireRole("c
   updated.auditLog.push(auditEntry("dividend.distributed", cycle.id, req.user, { cycleStartDate: input.start, cycleEndDate: input.end, adminExpenses: input.adminExpenses, distributablePool: preview.distributablePool, distributed, members: expected.length }));
   return commit(req, res, next, updated, 201, { message: "Dividends added to share capital.", data: cycle });
 }));
-app.post("/api/loan-repayment", requireAuth, requirePinChanged, requireRole("treasurer"), repayLoan());
-app.post("/api/loans", requireAuth, requirePinChanged, idempotent((req, res, next) => {
+app.post("/api/loan-repayment", requireAuth, requirePinChanged, requireRole("treasurer"), requireActiveSubscription, repayLoan());
+app.post("/api/loans", requireAuth, requirePinChanged, requireActiveSubscription, idempotent((req, res, next) => {
   const amount = Number(req.body?.amount); const months = Number(req.body?.months); const interestModel = clean(req.body?.interestModel) || "reducing";
   if (!Number.isSafeInteger(amount) || amount < 1 || ![1, 2, 3, 6].includes(months) || !["reducing", "flat"].includes(interestModel)) return res.status(400).json({ message: "Enter a whole amount, a repayment period of 1, 2, 3, or 6 months, and an interest model of reducing or flat." });
   const guarantorIds = req.body?.guarantorIds;
@@ -1871,7 +2018,7 @@ app.post("/api/loans", requireAuth, requirePinChanged, idempotent((req, res, nex
   updated.auditLog.push(auditEntry("loan.requested", loan.id, req.user, { amount, months, interestModel, guarantors: loanGuarantors.map(({ memberId, pledged }) => ({ memberId, pledged })) }));
   return commit(req, res, next, updated, 201, { message: "Loan request submitted. Your request is waiting for approval.", data: loan }, undefined, () => { publishLoanUpdate(loan, req.user.chamaId); publishFinancialUpdate(req.user.chamaId); });
 }));
-app.post("/api/loans/:id/decisions", requireAuth, requirePinChanged, requireRole("chairperson", "secretary", "treasurer", "member"), idempotent((req, res, next) => {
+app.post("/api/loans/:id/decisions", requireAuth, requirePinChanged, requireRole("chairperson", "secretary", "treasurer", "member"), requireActiveSubscription, idempotent((req, res, next) => {
   const decision = clean(req.body?.decision); const reason = clean(req.body?.reason);
   if (!["approve", "reject"].includes(decision)) return res.status(400).json({ message: "Decision must be approve or reject." });
   if (reason.length < 5 || reason.length > 500) return res.status(400).json({ message: "Enter a reason between 5 and 500 characters." });
@@ -1929,7 +2076,7 @@ app.get("/api/leadership-elections", requireAuth, requirePinChanged, async (req,
     return res.json({ data, notifications: dashboardFor(req.user).notifications });
   } catch (error) { return next(error); }
 });
-app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const role = clean(req.body?.role);
   const scheduledDate = clean(req.body?.scheduledDate);
   const rawCandidateIds = Array.isArray(req.body?.candidateIds) ? req.body.candidateIds : [];
@@ -1950,7 +2097,7 @@ app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRol
   applyScheduledElections(updated);
   return commit(req, res, next, updated, 201, { message: `Election scheduled for ${scheduledDate}. Voting is open only on that date.`, data: safeElectionView(election, req.user) }, undefined, () => { scheduleLeadershipElectionCheck(); publishMemberUpdate(req.user.chamaId); });
 }));
-app.post("/api/leadership-elections/:id/runoff", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections/:id/runoff", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const election = electionById(req.params.id, req.user.chamaId);
   const scheduledDate = clean(req.body?.scheduledDate);
   if (!election || election.status !== "runoff-needed") return res.status(404).json({ message: "Election tie awaiting a runoff was not found." });
@@ -1968,7 +2115,7 @@ app.post("/api/leadership-elections/:id/runoff", requireAuth, requirePinChanged,
   applyScheduledElections(updated);
   return commit(req, res, next, updated, 201, { message: `Runoff scheduled for ${scheduledDate}.`, data: safeElectionView(runoff, req.user) }, undefined, () => { scheduleLeadershipElectionCheck(); publishMemberUpdate(req.user.chamaId); });
 }));
-app.post("/api/leadership-elections/:id/decline", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections/:id/decline", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const election = electionById(req.params.id, req.user.chamaId);
   if (!election) return res.status(404).json({ message: "Election not found." });
   if (election.scheduledDate) return res.status(409).json({ message: "Scheduled elections cannot be declined after their date is set." });
@@ -1980,7 +2127,7 @@ app.post("/api/leadership-elections/:id/decline", requireAuth, requirePinChanged
   addNotifications(updated, saved, `The ${saved.role} election proposal was declined. The Secretary may submit a new proposal.`, saved.declinedAt);
   return commit(req, res, next, updated, 200, { message: "Election proposal declined. The Secretary can submit a new proposal.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
 }));
-app.post("/api/leadership-elections/:id/accept", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections/:id/accept", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const election = electionById(req.params.id, req.user.chamaId);
   if (!election) return res.status(404).json({ message: "Election not found." });
   if (election.scheduledDate) return res.status(409).json({ message: "Scheduled elections open automatically on their election date." });
@@ -1996,7 +2143,7 @@ app.post("/api/leadership-elections/:id/accept", requireAuth, requirePinChanged,
   updated.auditLog.push(auditEntry("leadership.election.accepted", saved.id, req.user, { role: saved.role, eligibleVoters: saved.eligibleVoterIds.length }));
   return commit(req, res, next, updated, 200, { message: "Election accepted. Members can now vote.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
 }));
-app.post("/api/leadership-elections/:id/vote", requireAuth, requirePinChanged, idempotent(async (req, res, next) => {
+app.post("/api/leadership-elections/:id/vote", requireAuth, requirePinChanged, requireActiveSubscription, idempotent(async (req, res, next) => {
   const updated = structuredClone(state);
   applyScheduledElections(updated);
   const election = scopeToChama(updated.leadershipChanges, req.user.chamaId).find(item => isElection(item) && item.id === req.params.id);
@@ -2016,7 +2163,7 @@ app.post("/api/leadership-elections/:id/vote", requireAuth, requirePinChanged, i
   const view = electionView(election, voter, scopeToChama(updated.users, req.user.chamaId), voterToken);
   return commit(req, res, next, updated, 200, { message: "Your secret vote has been recorded.", data: view }, undefined, () => publishMemberUpdate(req.user.chamaId));
 }));
-app.post("/api/leadership-elections/:id/close", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections/:id/close", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const election = electionById(req.params.id, req.user.chamaId);
   if (!election) return res.status(404).json({ message: "Election not found." });
   if (election.scheduledDate) return res.status(409).json({ message: "Scheduled elections close automatically at the end of their election date." });
@@ -2028,7 +2175,7 @@ app.post("/api/leadership-elections/:id/close", requireAuth, requirePinChanged, 
   addNotifications(updated, saved, `Voting for ${saved.role} is closed. The Chairperson is verifying the result.`, saved.closedAt);
   return commit(req, res, next, updated, 200, { message: "Voting is closed. The Chairperson can verify the result.", data: safeElectionView(saved, req.user) }, undefined, () => publishMemberUpdate(req.user.chamaId));
 }));
-app.post("/api/leadership-elections/:id/verify", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-elections/:id/verify", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const election = electionById(req.params.id, req.user.chamaId);
   if (!election) return res.status(404).json({ message: "Election not found." });
   if (election.scheduledDate) return res.status(409).json({ message: "Scheduled election results are calculated automatically when voting closes." });
@@ -2069,7 +2216,7 @@ app.post("/api/leadership-elections/:id/verify", requireAuth, requirePinChanged,
   return commit(req, res, next, updated, 200, { message: "Result verified. The group portal roles will update in 24 hours.", data: safeElectionView(saved, req.user) }, undefined, () => { scheduleLeadershipElectionCheck(); publishMemberUpdate(req.user.chamaId); });
 }));
 
-app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const role = clean(req.body?.role); const incomingUserId = clean(req.body?.incomingUserId);
   const foreignIncoming = state.users.find(item => item.id === incomingUserId && item.chamaId !== req.user.chamaId);
   if (foreignIncoming) return res.status(404).json({ message: "Member not found." });
@@ -2086,7 +2233,7 @@ app.post("/api/leadership-changes", requireAuth, requirePinChanged, requireRole(
   if (confirmedImmediately) record.audit.push({ action: "confirmed", by: req.user.id, at: proposedAt });
   const updated = structuredClone(state); if (confirmedImmediately) { const savedOutgoing = record.outgoingUserId && scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.outgoingUserId); const savedIncoming = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === record.incomingUserId); if (savedOutgoing) savedOutgoing.role = "member"; savedIncoming.role = record.role; } updated.leadershipChanges.push(record); updated.auditLog.push(auditEntry(confirmedImmediately ? "leadership.confirmed" : "leadership.proposed", record.id, req.user, { role, incomingUserId: incoming.id, outgoingUserId: outgoing?.id || null })); return commit(req, res, next, updated, 201, { message: confirmedImmediately ? "Officer assignment approved by the Chairperson." : "Officer assignment proposed and awaiting another officer.", data: record });
 }));
-app.post("/api/leadership-changes/:id/confirm", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), idempotent((req, res, next) => {
+app.post("/api/leadership-changes/:id/confirm", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const updated = structuredClone(state); const record = scopeToChama(updated.leadershipChanges, req.user.chamaId).find(item => item.id === req.params.id && item.status === "pending"); if (!record) return res.status(404).json({ message: "Pending leadership change not found." });
   if (record.type !== "appointment" || !record.bootstrap) return res.status(409).json({ message: "Officer changes after initial setup must use a member election." });
   if (record.proposedBy === req.user.id) return res.status(409).json({ message: "A different officer must confirm this leadership change." });
@@ -2094,7 +2241,7 @@ app.post("/api/leadership-changes/:id/confirm", requireAuth, requirePinChanged, 
   updated.auditLog.push(auditEntry("leadership.confirmed", record.id, req.user, { role: record.role, incomingUserId: record.incomingUserId, outgoingUserId: record.outgoingUserId }));
   return commit(req, res, next, updated, 200, { message: "Officer assignment confirmed.", data: record });
 }));
-app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, requireRole("chairperson"), idempotent((req, res, next) => {
+app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, requireRole("chairperson"), requireActiveSubscription, idempotent((req, res, next) => {
   const reason = clean(req.body?.reason);
   if (reason.length < 5 || reason.length > 500) return res.status(400).json({ message: "Enter a reason of 5-500 characters." });
   const updated = structuredClone(state);
@@ -2205,7 +2352,79 @@ app.post("/api/payments/simulate", requireAuth, requirePinChanged, requireRole("
   return commit(req, res, next, updated, 201, body);
 }));
 
-app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "M-Pesa callback settlement is disabled until requests can be authenticated and matched." }));
+app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "STK payment requests are not implemented. No payment request was sent or subscription activated." }));
+app.post("/api/mpesa/c2b/validation", (req, res) => {
+  const config = getC2bSubscriptionConfig(process.env);
+  if (!config.enabled) return res.status(503).json({ ResultCode: 1, ResultDesc: "Sandbox C2B subscription verification is not configured." });
+  if (!isTrustedCallbackIp(req.ip, process.env)) return res.status(403).json({ ResultCode: 1, ResultDesc: "Untrusted callback source." });
+  const payment = parseC2bPayment(req.body);
+  if (!payment) return res.status(400).json({ ResultCode: 1, ResultDesc: "Invalid callback data." });
+  if (!pendingSubscriptionForPayment(state, payment, config)) return res.status(200).json({ ResultCode: 1, ResultDesc: "No matching pending subscription." });
+  return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted." });
+});
+app.post("/api/mpesa/c2b/confirmation", async (req, res, next) => {
+  const config = getC2bSubscriptionConfig(process.env);
+  if (!config.enabled) return res.status(503).json({ ResultCode: 1, ResultDesc: "Sandbox C2B subscription verification is not configured." });
+  if (!isTrustedCallbackIp(req.ip, process.env)) return res.status(403).json({ ResultCode: 1, ResultDesc: "Untrusted callback source." });
+  const payment = parseC2bPayment(req.body);
+  if (!payment) return res.status(400).json({ ResultCode: 1, ResultDesc: "Invalid callback data." });
+  const mappedChamaId = config.shortcodeToChama.get(payment.shortcode);
+  const duplicate = (state.pendingMpesas || []).find(item => String(item.mpesaReceiptNumber || "").toUpperCase() === payment.transactionId);
+  if (duplicate) {
+    const samePayment = duplicate.chamaId === mappedChamaId
+      && String(duplicate.reference || "").toUpperCase() === payment.reference
+      && duplicate.status === "Verified";
+    return res.status(200).json(samePayment
+      ? { ResultCode: 0, ResultDesc: "Already recorded." }
+      : { ResultCode: 1, ResultDesc: "Receipt already used." });
+  }
+  const match = pendingSubscriptionForPayment(state, payment, config);
+  if (!match) return res.status(200).json({ ResultCode: 1, ResultDesc: "No matching pending subscription." });
+
+  const updated = structuredClone(state);
+  const chama = updated.chamas.find(item => item.id === match.chama.id);
+  const current = chama.subscription || {};
+  const verifiedAt = new Date().toISOString();
+  const verifiedMs = Date.parse(verifiedAt);
+  const oldEndsAt = Date.parse(current.endsAt);
+  const periodStart = subscriptionIsActive(current, verifiedMs) && Number.isFinite(oldEndsAt)
+    ? new Date(Math.max(verifiedMs, oldEndsAt)) : new Date(verifiedMs);
+  const periodEnd = addSubscriptionPeriod(periodStart, match.pending.billing);
+  if (!periodEnd) return res.status(200).json({ ResultCode: 1, ResultDesc: "Invalid subscription term." });
+  const startedAt = periodStart.toISOString();
+  const endsAt = periodEnd.toISOString();
+  const history = [...(Array.isArray(current.history) ? current.history : []), {
+    type: "subscription.verified", at: verifiedAt, provider: "mpesa-c2b",
+    reference: match.pending.reference, receiptNumber: payment.transactionId,
+    tier: match.plan.label, billing: match.pending.billing, amount: payment.amount,
+    currency: "KES", startedAt, endsAt,
+  }];
+  chama.subscription = {
+    ...current, status: "active", tier: match.plan.label, billing: match.pending.billing,
+    currency: "KES", expectedAmount: payment.amount, annualSavings: match.pending.annualSavings,
+    maxMembers: match.plan.maxMembers, startedAt, endsAt,
+    reference: match.pending.reference, verifiedAt, provider: "mpesa-c2b",
+    pendingPayment: { ...match.pending, status: "paid", paidAt: verifiedAt, transactionId: payment.transactionId },
+    history,
+  };
+  if (!Array.isArray(updated.pendingMpesas)) updated.pendingMpesas = [];
+  updated.pendingMpesas.push({
+    id: newId(), chamaId: chama.id, callbackKey: `C2B:${payment.transactionId}`,
+    mpesaReceiptNumber: payment.transactionId, reference: payment.reference,
+    amount: payment.amount, currency: "KES", status: "Verified", processed: true,
+    receivedAt: verifiedAt,
+    payload: { type: "subscription-c2b-confirmation", shortcode: payment.shortcode, reference: payment.reference, amount: payment.amount, currency: "KES", transactionTime: payment.transactionTime },
+  });
+  updated.auditLog.push(auditEntry("subscription.verified", match.pending.reference,
+    { id: "mpesa-c2b", name: "M-PESA C2B verification", role: "system" }, {
+      chamaId: chama.id, tier: match.plan.label, billing: match.pending.billing,
+      amount: payment.amount, currency: "KES", receiptNumber: payment.transactionId,
+    }));
+  try {
+    await persist(updated);
+    return res.status(200).json({ ResultCode: 0, ResultDesc: "Subscription verified." });
+  } catch (error) { return next(error); }
+});
 
 // OTP phone-auth (Phase 1)
 // Alternative sign-in via SMS OTP — supplements the existing PIN login.

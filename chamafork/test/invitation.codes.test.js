@@ -38,7 +38,7 @@ async function stopProcess(server) {
 async function startServer() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-invitation-test-"));
   const dataFile = path.join(directory, "data.json");
-  fs.writeFileSync(dataFile, JSON.stringify({ version: 2, users: [user("chair", "Test Chair", "+254711000001", "chairperson"), user("secretary", "Test Secretary", "+254711000002", "secretary")], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
+  fs.writeFileSync(dataFile, JSON.stringify({ version: 2, chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }], users: [user("chair", "Test Chair", "+254711000001", "chairperson"), user("secretary", "Test Secretary", "+254711000002", "secretary")], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const server = { directory, dataFile, port: 32000 + (process.pid % 15000) + servers.length, baseUrl: "", child: null };
   server.baseUrl = `http://127.0.0.1:${server.port}`;
   server.start = () => startProcess(server);
@@ -69,7 +69,7 @@ after(async () => { for (const server of servers) await server.stop(); });
 test("Chairperson can invite both Secretary and Treasurer directly during initial setup", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-bootstrap-test-"));
   const dataFile = path.join(directory, "data.json");
-  fs.writeFileSync(dataFile, JSON.stringify({ version: 2, users: [user("chair", "Chair Only", "+254711000090", "chairperson")], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
+  fs.writeFileSync(dataFile, JSON.stringify({ version: 2, chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }], users: [user("chair", "Chair Only", "+254711000090", "chairperson")], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const server = { directory, dataFile, port: 32000 + (process.pid % 15000) + servers.length, baseUrl: "", child: null };
   server.baseUrl = `http://127.0.0.1:${server.port}`;
   server.start = () => startProcess(server);

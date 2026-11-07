@@ -32,7 +32,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     const check = setInterval(() => { if (output.includes(`localhost:${port}`)) { clearTimeout(timer); clearInterval(check); resolve(); } }, 20);
     child.once("exit", code => { clearTimeout(timer); clearInterval(check); reject(new Error(`Server exited (${code}): ${output}`)); });
   });
-  const server = { baseUrl: `http://127.0.0.1:${port}`, phone, legacyPhone, stop: async () => { if (child.exitCode === null) { child.kill(); await new Promise(resolve => child.once("exit", resolve)); } fs.rmSync(directory, { recursive: true, force: true }); } };
+  const server = { baseUrl: `http://127.0.0.1:${port}`, phone, legacyPhone, dataFile, stop: async () => { if (child.exitCode === null) { child.kill(); await new Promise(resolve => child.once("exit", resolve)); } fs.rmSync(directory, { recursive: true, force: true }); } };
   servers.push(server);
   return server;
 }
@@ -55,6 +55,8 @@ test("invitation activation rejects a four-digit PIN", async () => {
   const setup = await fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456" }) });
   assert.equal(setup.status, 201);
   const cookie = setup.headers.getSetCookie()[0].split(";")[0];
+  const savedState = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
+  await require("./active-subscription-fixture").activateTestSubscription({ dataFile: server.dataFile, baseUrl: server.baseUrl, chamaId: savedState.chamas[0].id });
   const invite = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": "auth-invite-test" }, body: JSON.stringify({ name: "Test Member", phone: "0711000002", email: "member@example.test", role: "member" }) });
   assert.equal(invite.status, 201);
   const { activationCode } = await json(invite);

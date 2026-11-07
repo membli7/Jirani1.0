@@ -29,6 +29,7 @@ const thirdMember = { id: "third", name: "Third Member", phone: "+254711000005",
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users: [chair, treasurer, member, otherMember, thirdMember],
   transactions: [],
   loans: [],

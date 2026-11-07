@@ -20,7 +20,7 @@ async function startServer({ emailEnabled = true, mailFails = false, resetTtlMs 
   const phone = "+254711123456";
   fs.writeFileSync(dataFile, JSON.stringify({
     version: 2,
-    chamas: [{ id: "chama-1", name: "Test Chama" }],
+    chamas: [{ id: "chama-1", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
     users: [{ id: "member-1", name: "Test Member", phone, email, role: "chairperson", status: "active", pinHash: pinHash("123456"), mustChangePin: false, chamaId: "chama-1" }],
     transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {},
   }));

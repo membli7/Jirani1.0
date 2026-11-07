@@ -26,19 +26,114 @@ const idleLimitMs = 15 * 60 * 1000;
 const menuToggle = $("#menu-toggle");
 const menuBar = $("#menu-bar");
 
-function openPricingModal(button) {
+async function openPricingModal(button) {
   const dialog = $("#pricing-modal");
-  const selection = $("#pricing-modal-selection");
-  if (!dialog || !selection) return;
-  selection.textContent = `You selected ${button.dataset.pricingTier} — ${button.dataset.memberCap}: ${button.dataset.pricingPrice}.`;
+  if (!dialog || !button || button.disabled) return;
+  const copy = $("#pricing-modal-copy");
+  const referencePanel = $("#pricing-reference-panel");
+  const referenceOutput = $("#pricing-modal-reference");
+  const copyButton = $("#pricing-copy-reference");
+  const copyStatus = $("#pricing-reference-copy-status");
+  $("#pricing-modal-tier").textContent = button.dataset.pricingTier;
+  $("#pricing-modal-cap").textContent = button.dataset.memberCap;
+  $("#pricing-modal-billing").textContent = button.dataset.pricingBilling;
+  $("#pricing-modal-total").textContent = button.dataset.pricingTotal;
+  $("#pricing-modal-savings").textContent = button.dataset.pricingSavings;
+  if (referencePanel) referencePanel.hidden = true;
+  if (referenceOutput) referenceOutput.textContent = "";
+  if (copyButton) copyButton.disabled = true;
+  if (copyStatus) copyStatus.textContent = "";
+  if (copy) copy.textContent = "Choose a plan to review it. A signed-in chairperson can request a pending reference for the chama. No payment request is sent, and choosing a plan does not activate access.";
   dialog.showModal();
+  dialog.scrollTop = 0;
+  $("#pricing-modal-title")?.focus({ preventScroll: true });
+
+  const billing = String(button.dataset.pricingBilling || "").toLowerCase();
+  if (billing === "custom") {
+    if (copy) copy.textContent = "Enterprise / Investment plans use custom member limits and pricing. Contact our team to discuss your group; no payment request is sent and access is not activated by selecting this option.";
+    return;
+  }
+  if (!authenticated || !state?.user) {
+    if (copy) copy.textContent = "Sign in through Member Login as the chama chairperson to request a pending reference. You can also contact our team for next steps. No payment request is sent and plan selection does not activate access.";
+    return;
+  }
+  if (state.user.role !== "chairperson") {
+    if (copy) copy.textContent = "Only the chama chairperson can request a pending reference. Please contact your chairperson or our team. No payment request was sent and access was not activated.";
+    return;
+  }
+  const tier = ({ Basic: "basic", "Growth Chama": "growth" })[button.dataset.pricingTier];
+  if (!tier || !["monthly", "annual"].includes(billing)) {
+    if (copy) copy.textContent = "This plan cannot be selected here. Contact our team for the next steps.";
+    return;
+  }
+
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (copy) copy.textContent = "Saving the plan selection and requesting a pending reference. This does not send a payment request.";
+  try {
+    const result = await api("/api/subscription/selection", {
+      method: "POST",
+      body: { tier, billing },
+      write: button,
+      validateResponse: data => typeof data?.plan?.reference === "string"
+        && /^JC[A-F0-9]{12}$/.test(data.plan.reference)
+        && data.plan.paymentEnabled === false
+        && data.plan.paymentRequestStarted === false,
+    });
+    if (referenceOutput) referenceOutput.textContent = result.plan.reference;
+    if (referencePanel) referencePanel.hidden = false;
+    if (copyButton) copyButton.disabled = false;
+    if (copy) copy.textContent = result.message || "Pending reference created. Contact our team for payment instructions. No payment request was sent; access activates only after a matching M-PESA C2B confirmation.";
+    if (copyStatus && result.plan.expiresAt) {
+      const expires = new Date(result.plan.expiresAt);
+      const formatted = Number.isNaN(expires.getTime()) ? "" : new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" }).format(expires);
+      copyStatus.textContent = formatted ? `Reference expires ${formatted} (Nairobi time).` : "Copy this reference when contacting our team.";
+    } else if (copyStatus) copyStatus.textContent = "Copy this reference when contacting our team.";
+  } catch (error) {
+    if (error.status === 401) dialog.close();
+    if (copy) {
+      if (error.status === 503) copy.textContent = "Verified M-PESA references are not configured for this chama yet. No payment request was sent and no access was activated. Please contact our team for next steps.";
+      else if (error.uncertain) copy.textContent = "We could not confirm the reference was saved. No payment request is sent by this flow. Please retry or contact our team if the issue continues.";
+      else copy.textContent = error.message || "The plan could not be selected. No payment request was sent.";
+    }
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
 }
 
-document.querySelectorAll("[data-pricing-plan]").forEach(button => {
+document.querySelectorAll("[data-pricing-tier]").forEach(button => {
   button.addEventListener("click", () => openPricingModal(button));
 });
 $("#pricing-modal-cancel")?.addEventListener("click", () => $("#pricing-modal")?.close());
 $("#pricing-contact")?.addEventListener("click", () => $("#pricing-modal")?.close());
+$("#pricing-copy-reference")?.addEventListener("click", async () => {
+  const reference = $("#pricing-modal-reference")?.textContent?.trim();
+  const status = $("#pricing-reference-copy-status");
+  if (!reference || !status) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+    await navigator.clipboard.writeText(reference);
+    status.textContent = "Reference copied.";
+  } catch {
+    status.textContent = "Copy is unavailable here. Select and copy the reference above.";
+  }
+});
+const landingMenuToggle = $("#landing-menu-toggle");
+const landingMobileNav = $("#landing-mobile-nav");
+landingMenuToggle?.addEventListener("click", () => {
+  const open = landingMenuToggle.getAttribute("aria-expanded") !== "true";
+  landingMenuToggle.setAttribute("aria-expanded", String(open));
+  landingMenuToggle.setAttribute("aria-label", t(open ? "landingNavClose" : "landingNavOpen"));
+  landingMenuToggle.textContent = t(open ? "landingNavClose" : "landingNavMenu");
+  landingMobileNav.hidden = !open;
+});
+landingMobileNav?.addEventListener("click", () => {
+  landingMenuToggle?.setAttribute("aria-expanded", "false");
+  landingMenuToggle?.setAttribute("aria-label", t("landingNavOpen"));
+  if (landingMenuToggle) landingMenuToggle.textContent = t("landingNavMenu");
+  landingMobileNav.hidden = true;
+});
 
 async function api(path, { method = "GET", body, write = false, validateResponse, silentForbidden = false } = {}) {
   if (write) {
@@ -46,6 +141,7 @@ async function api(path, { method = "GET", body, write = false, validateResponse
       return await writeRequester.submit({ owner: write === true ? {} : write, path, method, body, validate: validateResponse });
     } catch (error) {
       if (error.status === 401 && path !== "/api/login") showLogin();
+      if (error.status === 402) notice(error.message, true);
       if (error.status === 403 && !error.data?.mustChangePin) notice("You do not have permission to perform that action.", true);
       throw error;
     }
@@ -54,6 +150,7 @@ async function api(path, { method = "GET", body, write = false, validateResponse
   const response = await fetch(path, { method, credentials: "same-origin", cache: "no-store", headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 && path !== "/api/login") showLogin();
+  if (response.status === 402) notice(data.message || "Subscription renewal is required to create records.", true);
   if (response.status === 403 && !data.mustChangePin && !silentForbidden) notice("You do not have permission to perform that action.", true);
   if (!response.ok) { const error = new Error(data.message || `Request failed (${response.status}).`); error.status = response.status; error.data = data; throw error; }
   return data;
@@ -141,13 +238,14 @@ function meetingDateToday() {
 }
 
 function render() {
-  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges, leadershipElections = [], notifications = [] } = state;
+  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges, leadershipElections = [], notifications = [], subscription } = state;
   if (!authenticated) {
     authenticated = true;
     lastActivity = Date.now();
     lastActivityPing = 0;
     startActivityMonitor();
   }
+  document.body.classList.remove("landing-mode");
   $(".topbar")?.classList.add("is-authenticated");
   setNavigationOpen(false);
   $("#identity").textContent = `${user.name} (${roleName(user.role)})`;
@@ -155,6 +253,15 @@ function render() {
   $("#logout").hidden = false;
   $("#role-label").textContent = `${roleName(user.role)} ${t("dashboard")}`;
   $("#greeting").textContent = `${t("welcome")}, ${user.name}`;
+  const subscriptionNotice = $("#subscription-notice");
+  if (subscriptionNotice) {
+    const renewalMessage = subscription?.renewalMessage || "";
+    const subscriptionNoticeCopy = $("#subscription-notice-copy");
+    const subscriptionRenewalLink = $("#subscription-renewal-link");
+    if (subscriptionNoticeCopy) subscriptionNoticeCopy.textContent = renewalMessage;
+    if (subscriptionRenewalLink) subscriptionRenewalLink.hidden = !renewalMessage;
+    subscriptionNotice.hidden = !renewalMessage;
+  }
   renderChairpersonSetupChecklist(user, members, invitations);
   const balance = $("#balance");
   const contributions = $("#contributions");
@@ -642,7 +749,7 @@ async function refresh() {
   }
   catch (error) {
     if (error.data?.mustChangePin) {
-      authenticated = false; $("#app").hidden = true; $("#login").hidden = true; $("#pin-change").hidden = false; $("#current-pin").focus();
+      authenticated = false; document.body.classList.remove("landing-mode"); $("#app").hidden = true; $("#login").hidden = true; $("#pin-change").hidden = false; $("#current-pin").focus();
     } else if (!/session has expired/i.test(error.message)) { notice(error.message || t("retryError"), true); $("#retry").hidden = false; }
   }
 }
@@ -728,7 +835,7 @@ function clearAppData() {
   for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
-function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
+function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; document.body.classList.add("landing-mode"); setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
 
 $("#setup-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);

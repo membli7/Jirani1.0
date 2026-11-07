@@ -48,7 +48,7 @@ async function login(phone) {
 before(async () => {
   fs.writeFileSync(dataFile, JSON.stringify({
     version: 2,
-    chamas: [{ id: "chama-a", name: "Chama A" }, { id: "chama-b", name: "Chama B" }],
+    chamas: [{ id: "chama-a", name: "Chama A", subscription: require("./active-subscription-fixture").activeSubscription() }, { id: "chama-b", name: "Chama B", subscription: require("./active-subscription-fixture").activeSubscription() }],
     users: [
       account("a-chair", "A Chair", "+254711100001", "chairperson", "chama-a"),
       account("a-secretary", "A Secretary", "+254711100005", "secretary", "chama-a"),

@@ -120,7 +120,7 @@ before(async () => {
     ["treasurer", "Test Treasurer", "0700000003", "treasurer", "345678"],
     ["member", "Test Member", "0700000004", "member", "456789"],
   ].map(([id, name, phone, role, pin]) => ({ id, name, phone: `+254${phone.slice(1)}`, email: `${id}@example.test`, role, status: "active", chamaId, pinHash: pinHash(pin), mustChangePin: false, shareCapital: 0 }));
-  fs.writeFileSync(dataFile(), JSON.stringify({ version: 2, chamas: [{ id: chamaId, name: "Test Chama", createdAt: new Date().toISOString() }], users, transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [] }));
+  fs.writeFileSync(dataFile(), JSON.stringify({ version: 2, chamas: [{ id: chamaId, name: "Test Chama", createdAt: new Date().toISOString(), subscription: require("./active-subscription-fixture").activeSubscription() }], users, transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [] }));
   server = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
     env: {

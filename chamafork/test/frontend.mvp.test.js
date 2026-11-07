@@ -10,6 +10,7 @@ const frontend = path.join(__dirname, "..", "..", "en public");
 const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
 const css = fs.readFileSync(path.join(frontend, "chama.css"), "utf8");
+const landingTheme = fs.readFileSync(path.join(frontend, "landing-theme.css"), "utf8");
 const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
 const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
@@ -168,34 +169,96 @@ test("landing page uses muted color backgrounds without photos", () => {
   assert.doesNotMatch(css, /chama-(?:hero|community)-background\.webp/);
 });
 
-test("landing pricing presents capped tiers and transparent payment enquiries without a payment integration", () => {
+test("public landing palette is scoped to signed-out mode and remains responsive", () => {
+  assert.match(html, /<body class="landing-mode">/);
+  assert.match(html, /href="\/landing-theme\.css\?v=/);
+  assert.match(landingTheme, /body\.landing-mode\s*\{/);
+  assert.match(landingTheme, /--green:\s*#236a52/);
+  assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*rgba\(23, 61, 54, \.98\)/);
+  assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*linear-gradient\(145deg, #173d36/);
+  assert.match(landingTheme, /body\.landing-mode \.pricing-card-featured\s*\{[\s\S]*?background:\s*linear-gradient\(145deg, #173d36/);
+  assert.match(landingTheme, /body\.landing-mode \.login-brand::after[\s\S]*?right:\s*32px/);
+  assert.match(landingTheme, /body\.landing-mode \.feature-card[\s\S]*?background:\s*#fff/);
+  assert.match(landingTheme, /body\.landing-mode #faq details/);
+  assert.match(landingTheme, /body\.landing-mode #contact \.contact-intro-panel/);
+  assert.match(landingTheme, /@media \(max-width: 600px\)/);
+  assert.match(landingTheme, /@media \(max-width: 390px\)/);
+  assert.match(script, /document\.body\.classList\.remove\("landing-mode"\)/);
+  assert.match(script, /document\.body\.classList\.add\("landing-mode"\)/);
+});
+
+test("landing footer remains reachable inside the scrollable sign-in overlay", () => {
+  assert.match(html, /<section class="login-overlay" id="login"[\s\S]*?<footer class="site-footer">[\s\S]*?<\/footer>\s*<\/section>/);
+  assert.match(css, /\.login-overlay\s*\{[\s\S]*?overflow-y:\s*auto/);
+  assert.match(css, /#login\.login-overlay\s*\{\s*align-content:\s*start;\s*\}/);
+  assert.match(css, /#login\.login-overlay > \.site-footer\s*\{[\s\S]*?width:\s*calc/);
+});
+
+test("landing pricing presents capped tiers and transparent enquiries without initiating payment", () => {
   assert.match(html, /<section id="pricing"[^>]*aria-labelledby="pricing-title"/);
-  assert.match(html, /<h3 id="entry-plan-title">Entry<\/h3>/);
+  assert.match(html, /<h3 id="basic-plan-title">Basic<\/h3>/);
   assert.match(html, /Up to 10 members/);
   assert.match(html, /KSh 300<span>\/month<\/span>/);
   assert.match(html, /Annual: KSh 2,880\/year — save KSh 720 \(KSh 240\/month equivalent\)\./);
-  assert.match(html, /data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 300\/month"/);
-  assert.match(html, /data-pricing-tier="Entry" data-member-cap="Up to 10 members" data-pricing-price="KSh 2,880\/year \(KSh 240\/month equivalent\)"/);
+  assert.match(html, /data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Monthly"/);
+  assert.match(html, /data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Annual"/);
   assert.match(html, /<h3 id="growth-plan-title">Growth Chama<\/h3>/);
   assert.match(html, /Up to 30 members/);
   assert.match(html, /KSh 600<span>\/month<\/span>/);
-  assert.match(html, /data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-price="KSh 600\/month"/);
+  assert.match(html, /Annual: KSh 5,760\/year — save KSh 1,440 \(KSh 480\/month equivalent\)\./);
+  assert.match(html, /data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-billing="Monthly"/);
   assert.match(html, /<h3 id="enterprise-plan-title">Enterprise \/ Investment<\/h3>/);
   assert.match(html, /Custom member caps for groups above 30 members/);
   assert.match(html, /Custom pricing<span>Contact us<\/span>/);
-  assert.match(html, /data-pricing-tier="Enterprise \/ Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-price="Custom pricing — Contact us"/);
+  assert.match(html, /data-pricing-tier="Enterprise \/ Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-billing="Custom" data-pricing-price="Custom pricing — Contact sales"/);
   assert.match(html, /id="pricing-modal"[^>]*aria-labelledby="pricing-modal-title"/);
-  assert.match(html, /Online payment is not yet available in Jirani Chama/);
-  assert.match(html, /id="pricing-contact"[^>]*href="#contact"/);
-  assert.match(script, /function openPricingModal\(button\)/);
-  const pricingModalSource = script.match(/function openPricingModal\(button\) \{[\s\S]*?\n\}/)?.[0];
+  for (const id of ["pricing-modal-tier", "pricing-modal-cap", "pricing-modal-billing", "pricing-modal-total", "pricing-modal-savings"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /A signed-in chairperson can request a pending reference for the chama/);
+  assert.match(html, /No payment request is sent, and choosing a plan does not activate access/);
+  for (const id of ["pricing-reference-panel", "pricing-modal-reference", "pricing-copy-reference", "pricing-reference-copy-status"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /id="pricing-contact"[^>]*href="#contact">Contact us about this plan/);
+  assert.match(script, /async function openPricingModal\(button\)/);
+  const pricingModalSource = script.match(/async function openPricingModal\(button\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(pricingModalSource, "pricing modal opener is present");
   assert.match(pricingModalSource, /button\.dataset\.pricingTier/);
   assert.match(pricingModalSource, /button\.dataset\.memberCap/);
+  assert.match(pricingModalSource, /state\.user\.role !== "chairperson"/);
+  assert.match(pricingModalSource, /api\("\/api\/subscription\/selection"/);
+  assert.match(pricingModalSource, /write:\s*button/);
+  assert.match(pricingModalSource, /paymentEnabled === false/);
+  assert.match(pricingModalSource, /paymentRequestStarted === false/);
+  assert.match(pricingModalSource, /JC\[A-F0-9\]\{12\}/);
+  assert.match(script, /document\.querySelectorAll\("\[data-pricing-tier\]"\)/);
   assert.match(pricingModalSource, /dialog\.showModal\(\)/);
-  assert.doesNotMatch(pricingModalSource, /api\(|fetch\(/);
+  assert.match(html, /<h2 id="pricing-modal-title" tabindex="-1">Review your plan<\/h2>/);
+  assert.ok(pricingModalSource.includes("dialog.scrollTop = 0;"));
+  assert.ok(pricingModalSource.includes('$("#pricing-modal-title")?.focus({ preventScroll: true });'));
+  assert.doesNotMatch(pricingModalSource, /api\("\/api\/mpesa\//);
+  assert.doesNotMatch(pricingModalSource, /fetch\(/);
   assert.match(css, /\.pricing-grid\s*\{/);
   assert.match(css, /\.pricing-card-featured\s*\{\s*border: 2px solid var\(--green\)/);
+});
+
+test("subscription rollout copy keeps access activation server-verified and makes expiry view-only", () => {
+  const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  assert.doesNotMatch(server, /SUBSCRIPTION_TRIAL_DAYS/);
+  assert.match(server, /function unpaidSubscription/);
+  assert.match(server, /function requireActiveSubscription/);
+  assert.match(server, /app\.post\("\/api\/invitations"[\s\S]*?requireActiveSubscription/);
+  assert.match(server, /app\.post\("\/api\/payments"[\s\S]*?requireActiveSubscription/);
+  assert.match(server, /memberCap !== null && activeOrInvited >= memberCap/);
+  assert.match(server, /app\.post\("\/api\/loans\/:id\/decisions"[\s\S]*?requireActiveSubscription/);
+  assert.match(server, /app\.post\("\/api\/mpesa\/callback"[\s\S]*?STK payment requests are not implemented/);
+  assert.match(server, /app\.post\("\/api\/mpesa\/c2b\/validation"/);
+  assert.match(server, /app\.post\("\/api\/mpesa\/c2b\/confirmation"/);
+  assert.match(html, /The app does not assess penalties automatically/);
+  assert.match(html, /Clicking a plan or reporting that you paid never activates access/);
+  assert.match(html, /Your financial history remains available to view and export/);
+  assert.match(html, /New financial records, member invitations, loan decisions, and other subscription-gated actions are blocked for unpaid or expired groups/);
+  assert.match(html, /href="\/privacy\.html"/);
+  assert.match(html, /href="\/terms\.html"/);
+  assert.match(html, /id="landing-menu-toggle"/);
+  assert.match(script, /landingMenuToggle\?\.addEventListener/);
 });
 
 test("landing contact section offers accessible localized routes for members and new groups", () => {
@@ -318,6 +381,8 @@ test("member invitations send the required email address", () => {
   assert.match(inviteHandler, /namedItem\("email"\)/);
   assert.match(inviteHandler, /email:\s*emailField\.value\.trim\(\)/);
   assert.match(inviteHandler, /if \(!values\.email\)/);
+  assert.match(html, /<input id="invite-name" name="name" autocomplete="name" required>/);
+  assert.match(html, /<input id="invite-phone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required>/);
 });
 
 test("registration signs in and opens the dashboard when setup was already completed", async () => {
@@ -354,7 +419,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261107\.2" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.5" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -398,8 +463,10 @@ test("root app tolerates the absence of standalone authentication forms", async 
   assert.ok(loginSource, "root page should define its signed-out state");
 
   const nodes = new Map([["#logout", {}], ["#app", {}], ["#login", {}], ["#identity", {}], ["#menu-identity", {}]]);
+  const bodyClasses = new Set();
   const context = {
     $: selector => nodes.get(selector) || null,
+    document: { body: { classList: { add: name => bodyClasses.add(name), remove: name => bodyClasses.delete(name) } } },
     fetch: async url => url === "/api/health"
       ? { ok: true }
       : { ok: true, json: async () => ({ requiresSetup: false }) },
@@ -422,6 +489,7 @@ test("root app tolerates the absence of standalone authentication forms", async 
 
   assert.equal(nodes.get("#app").hidden, true);
   assert.equal(nodes.get("#login").hidden, false);
+  assert.ok(bodyClasses.has("landing-mode"));
 });
 
 test("root renderer tolerates summary cards absent from the current dashboard markup", () => {
@@ -471,8 +539,8 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261107\.2"/);
-  assert.match(html, /src="\/chama\.js\?v=20261107\.2"/);
+  assert.match(html, /href="\/chama\.css\?v=20261107\.5"/);
+  assert.match(html, /src="\/chama\.js\?v=20261107\.5"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);

@@ -35,6 +35,7 @@ const contribution = (id, memberId, amount, date) => ({ id, at: `${date}T08:00:0
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
+  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
   users: people.map(person => ({ id: person.id, name: person.name, phone: person.phone, role: person.role, status: person.status, pinHash: pinHash(person.pin), mustChangePin: false, shareCapital: 0 })),
   transactions: [
     contribution("t-short", "short", 300, "2026-08-03"),

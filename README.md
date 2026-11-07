@@ -97,7 +97,7 @@ Browser behaviour has not been tested. The front-end tests check that the expect
 
 - **Browser testing:** the UI has not been exercised in a browser. Please open the dashboard as each role before relying on it.
 - **Language:** English and Kiswahili are available in the interface. Translation completeness and wording have not been reviewed end to end.
-- **Payments:** no M-Pesa, bank reconciliation, or STK push. Cash only.
+- **Payments:** the app does not initiate M-PESA STK requests or live subscription charges. A sandbox-only inbound C2B subscription verifier is disabled until public HTTPS validation/confirmation URLs are registered and the shortcode-to-group map is valid. Bank reconciliation is not available; existing cash entries remain unchanged.
 - **Messages:** general chat, broadcast, and email delivery are not available. Invitation codes can be delivered through Africa's Talking when configured; live provider delivery has not been verified. Otherwise the one-time code is shown in the app.
 - **Security:** no two-factor authentication or tamper-evident audit chain. Same-origin write protections, role checks, and write serialization have source review and regression coverage; this is not an independent penetration test or deployment verification.
 - **Data:** `DATA_BACKEND` selects JSON or PostgreSQL; it defaults to JSON for development, while production startup requires PostgreSQL. The PostgreSQL snapshot writer allows only one server process per database. See [production readiness limits](docs/docs/production-readiness.md) for the verified local state and infrastructure items that still need deployment evidence.
