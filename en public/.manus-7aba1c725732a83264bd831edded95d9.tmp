@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Jirani Chama</title>
+        <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
+        <link rel="stylesheet" href="/chama.css?v=20261107.5">
+    </head>
+<body>
+ <header class="topbar">
+     <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg" alt=""></span>
+        <span>Jirani Chama <small>GROUP SAVINGS</small></span>
+               <!--==================== Landing Page Navigation ================================================-->
+      <nav class="topbar-nav" aria-label="Landing Page Navigation">
+          <a href="#features" class="topbar-nav-link">Features</a>
+          <a href="#how-it-works" class="topbar-nav-link">How It Works</a>
+          <a href="#pricing" class="topbar-nav-link">Pricing</a>
+          <a href="#security" class="topbar-nav-link">Security</a>
+          <a href="#faq" class="topbar-nav-link">FAQ</a>
+          <a href="#contact" class="topbar-nav-link" data-i18n="getInTouchNav">Get in touch</a>
+      </nav>
+      <button id="landing-menu-toggle" class="mini-btn landing-menu-toggle" type="button" aria-label="Open landing navigation" data-i18n-aria-label="landingNavOpen" aria-expanded="false" aria-controls="landing-mobile-nav" data-i18n="landingNavMenu">Menu</button>
+      <nav id="landing-mobile-nav" class="landing-mobile-nav" aria-label="Landing page navigation" data-i18n-aria-label="landingNavLabel" hidden>
+        <a href="#features" data-i18n="landingNavFeatures">Features</a><a href="#how-it-works" data-i18n="landingNavHowItWorks">How it works</a><a href="#pricing" data-i18n="landingNavPricing">Pricing</a><a href="#security" data-i18n="landingNavSecurity">Security</a><a href="#faq" data-i18n="landingNavFaq">FAQ</a><a href="#contact" data-i18n="landingNavContact">Contact</a>
+      </nav>
+     </div>
+     <nav class="dashboard-tabs" id="dashboard-tabs" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews">
+       <button class="dashboard-tab is-active" type="button" role="tab" data-dashboard-tab="you" aria-controls="you-dashboard" aria-selected="true" tabindex="0">
+         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5"></path></svg>
+         <span data-i18n="youTab">You</span>
+       </button>
+       <button class="dashboard-tab" type="button" role="tab" data-dashboard-tab="group" aria-controls="dashboard" aria-selected="false" tabindex="-1">
+         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"></circle><circle cx="17" cy="9" r="2.5"></circle><path d="M3 20c.7-3.3 2.6-5 6-5s5.3 1.7 6 5M15 15c3.3-.3 5.2 1.3 6 4"></path></svg>
+         <span data-i18n="groupTab">Group</span>
+       </button>
+     </nav>
+     <div class="top-actions">
+         <button id="notification-button" class="header-icon-button notification-button" type="button" aria-label="Open group messages" title="Messages" aria-controls="chat-panel">
+           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+         </button>
+         <div class="profile-menu-wrap">
+         <button id="profile-icon" class="profile-icon" type="button" aria-label="Profile" aria-expanded="false" aria-controls="profile-menu" title="Profile">
+           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+             <circle cx="12" cy="8" r="3.5"></circle>
+             <path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5"></path>
+           </svg>
+         </button>
+         <div id="profile-menu" class="profile-menu" hidden>
+           <a href="/profile.html?mode=view">View profile</a>
+           <a href="/profile.html?mode=edit">Edit profile</a>
+           <a href="/register.html?new-chama=1">Create new chama</a>
+           <a href="/member-login.html?switch-chama=1">Switch chama</a>
+         </div>
+         </div>
+         <button
+           id="menu-toggle"
+           class="mini-btn hamburger-btn"
+           type="button"
+           aria-label="Open navigation menu"
+           aria-expanded="false"
+           aria-controls="menu-bar"
+         >
+           <span class="ham-bar"></span>
+           <span class="ham-bar"></span>
+           <span class="ham-bar"></span>
+         </button>
+          <span id="connection-status" class="connection-status" role="status" aria-live="polite" aria-label="Checking server" data-status="ready"><span class="connection-status-dot" aria-hidden="true"></span><span id="connection-status-label" class="screen-reader-only">Checking server…</span></span>
+         <span id="identity"></span>
+         <button id="logout" class="mini-btn" type="button" hidden>Sign out</button>
+     </div>
+     <!-- Mobile nav drawer (cloned into here by JS on narrow viewports) -->
+ </header>
+ <main class="app-shell" id="app" hidden>
+   <nav class="menu-bar" id="menu-bar" aria-label="Sections" data-i18n-aria-label="sectionsLabel" aria-hidden="false">
+      <a href="#dashboard" data-panel="dashboard">Dashboard</a>
+      <a href="#ledger-panel" data-panel="ledger-panel">Ledger</a>
+      <a href="#payment-panel" data-panel="payment-panel" data-i18n="payment">Record a cash payment</a>
+      <div class="nav-dropdown" id="nav-dropdown-loans">
+        <button type="button" class="nav-dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+          <span>Loans</span>
+          <span class="nav-dropdown-arrow" aria-hidden="true">▼</span>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="#loan-request-panel" data-panel="loan-request-panel">Request loan</a>
+          <a href="#loans-panel" data-panel="loans-panel">Loan</a>
+        </div>
+      </div>
+      <a href="#members-panel" data-panel="members-panel">Members</a>
+      <a href="#attendance-panel" data-panel="attendance-panel">Attendance</a>
+      <div class="nav-dropdown" id="nav-dropdown-admin">
+        <button type="button" class="nav-dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+          <span>Admin</span>
+          <span class="nav-dropdown-arrow" aria-hidden="true">▼</span>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="#leadership-panel" data-panel="leadership-panel">Officers</a>
+          <a href="#leadership-elections-panel" data-panel="leadership-elections-panel">Elections</a>
+          <a href="#penalty-panel" data-panel="penalty-panel">Penalties</a>
+          <a href="#audit-panel" data-panel="audit-panel">Audit log</a>
+          <a href="#dividend-panel" data-panel="dividend-panel">Dividends</a>
+          <a href="#cash-flows-panel" data-panel="cash-flows-panel">Cash flow</a>
+          <a href="#invite-panel" data-panel="invite-panel">Invite</a>
+        </div>
+      </div>
+      <a href="#chat-panel" data-panel="chat-panel">Group chat</a>
+      <div class="menu-tools">
+        <label class="language-control" for="language-switch" data-i18n="language">Language<select id="language-switch" aria-label="Language" data-i18n-aria-label="language">
+          <option value="en" data-i18n="englishOption">English</option><option value="sw" data-i18n="swahili">Kiswahili</option>
+        </select></label>
+      </div>
+      <div class="menu-account">
+        <p id="menu-identity"></p>
+        <button id="menu-logout" class="menu-logout" type="button" data-i18n="signOut">Sign out</button>
+      </div>
+  </nav>
+  <p id="notice" class="notice" role="status" aria-live="polite"></p>
+  <p id="subscription-notice" class="notice subscription-notice" role="status" aria-live="polite" hidden><span id="subscription-notice-copy"></span> <a id="subscription-renewal-link" href="mailto:09elim3@gmail.com?subject=Chama%20subscription%20renewal" hidden>Contact us about a plan or renewal</a></p>
+  <button id="retry" class="button-primary retry-button" type="button" hidden>Try again</button>
+  <section class="page-heading">
+    <div>
+     <p class="eyebrow" id="role-label"></p>
+     <h1 id="greeting"></h1>
+     <p class="heading-copy">Your role controls what you can see and do.</p>
+    </div>
+  </section>
+  <button id="setup-checklist-open" class="mini-btn" type="button" data-i18n="setupChecklistShow" hidden>Show setup checklist</button>
+  <section id="chairperson-setup-checklist" class="panel setup-checklist" aria-labelledby="setup-checklist-title" hidden>
+    <div class="panel-heading">
+      <div>
+        <h2 id="setup-checklist-title" data-i18n="setupChecklistTitle">Set up your chama</h2>
+        <p data-i18n="setupChecklistCopy">Complete these steps when you are ready. You can skip any step.</p>
+      </div>
+      <button id="setup-checklist-dismiss" class="mini-btn" type="button" data-i18n="setupChecklistDismiss">Dismiss</button>
+    </div>
+    <ul id="setup-checklist-items" class="setup-checklist-items"></ul>
+  </section>
+  <section class="financial-view" id="you-dashboard" role="tabpanel" tabindex="0" aria-labelledby="you-dashboard-title" hidden>
+    <div class="finance-view-heading">
+        <h2 id="you-dashboard-title" data-i18n="yourFinances">Your finances</h2>
+        <p data-i18n="yourFinancesCopy">Only your own records are shown here.</p>
+    </div>
+    <p class="finance-data-notice" id="you-data-notice" role="status" aria-live="polite" hidden></p>
+    <div class="finance-view-layout">
+      <div class="finance-table-grid">
+        <section class="finance-section" aria-labelledby="you-contributions-title">
+          <h3 id="you-contributions-title" data-i18n="yourContributions">Your contributions</h3>
+          <div class="table-wrap finance-table-wrap">
+            <table class="finance-data-table">
+                <caption class="screen-reader-only" data-i18n="yourContributions">Your contributions</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" data-i18n="date">Date</th>
+                        <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        <th scope="col" data-i18n="note">Note</th>
+                    </tr>
+                </thead>
+                <tbody id="you-contributions"></tbody>
+            </table>
+        </div>
+        </section>
+        <section class="finance-section" aria-labelledby="you-fines-title">
+          <h3 id="you-fines-title" data-i18n="yourFines">Your fines</h3>
+          <div class="table-wrap finance-table-wrap">
+            <table class="finance-data-table">
+                <caption class="screen-reader-only" data-i18n="yourFines">Your fines</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" data-i18n="date">Date</th>
+                        <th scope="col" data-i18n="reason">Reason</th>
+                        <th scope="col" data-i18n="amountDue">Amount due</th>
+                    </tr>
+                </thead>
+                <tbody id="you-fines"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="finance-section" aria-labelledby="you-loans-title">
+            <h3 id="you-loans-title" data-i18n="yourLoanBalances">Your loan balances</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="yourLoanBalances">Your loan balances</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="date">Date</th>
+                            <th scope="col" data-i18n="status">Status</th>
+                            <th scope="col" data-i18n="balanceDue">Balance due</th>
+                        </tr>
+                    </thead>
+                    <tbody id="you-loans"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="you-arrears-title">
+            <h3 id="you-arrears-title" data-i18n="yourArrears">Your arrears</h3>
+            <p class="finance-section-copy" data-i18n="arrearsIncludedCopy">Based on recorded outstanding loan balances and assessed unpaid fines.</p>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="yourArrears">Your arrears</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="dueItem">Amount due</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="you-arrears"></tbody>
+                </table>
+            </div>
+        </section>
+      </div>
+      <aside class="finance-chart-section" aria-labelledby="you-chart-title">
+        <h3 id="you-chart-title">Your monthly financial trends (KES)</h3>
+        <div class="dashboard-chart" id="you-chart"></div>
+      </aside>
+    </div>
+  </section>
+  <section class="financial-view" id="dashboard" role="tabpanel" tabindex="0" aria-labelledby="group-dashboard-title" hidden>
+    <div class="finance-view-heading">
+        <h2 id="group-dashboard-title" data-i18n="groupFinances">Group finances</h2>
+        <p data-i18n="groupFinancesCopy">Group totals are shown without individual member records.</p>
+    </div>
+    <p class="finance-data-notice" id="group-data-notice" role="status" aria-live="polite" hidden></p>
+    <div class="finance-view-layout">
+      <div class="group-finance-summary" id="group-finance-summary" aria-label="Group financial totals">
+        <article class="finance-summary-card"><span>This month’s contributions</span><strong id="group-contributions-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Outstanding loans</span><strong id="group-loans-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Group balance</span><strong id="group-balance-total">Loading…</strong></article>
+        <article class="finance-summary-card"><span>Active members</span><strong id="group-members-total">Loading…</strong></article>
+      </div>
+      <div class="finance-table-grid">
+        <section class="finance-section" aria-labelledby="group-balance-title">
+            <h3 id="group-balance-title" data-i18n="balance">Chama balance</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="balanceHistory">Chama balance by month</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="balance-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-contributions-title">
+            <h3 id="group-contributions-title" data-i18n="contributionHistory">Monthly contributions</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="contributionHistory">Monthly contributions</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contributions-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-loans-title">
+            <h3 id="group-loans-title" data-i18n="loanApprovalHistory">Loan amounts approved each month</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="loanApprovalHistory">Loan amounts approved each month</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="outstanding-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-loan-balances-title">
+            <h3 id="group-loan-balances-title" data-i18n="groupLoanBalances">Group loan balance</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="groupLoanBalances">Group loan balance</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="dueItem">Due item</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="group-loan-balances"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-investments-title">
+            <h3 id="group-investments-title" data-i18n="shareCapitalToDate">Share capital (all time)</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="investmentHistory">Share capital by month</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="investments-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-fines-title">
+            <h3 id="group-fines-title" data-i18n="penaltiesToDate">Penalties recorded (all time)</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="fineHistory">Penalties by month</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fines-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-expenses-title">
+            <h3 id="group-expenses-title" data-i18n="expensesToDate">Expenses (all time)</h3>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="expenseHistory">Expenses by month</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="month">Month</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenses-history"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="finance-section" aria-labelledby="group-arrears-title">
+            <h3 id="group-arrears-title" data-i18n="groupArrears">Group arrears</h3>
+            <p class="finance-section-copy" data-i18n="arrearsIncludedCopy">Based on recorded outstanding loan balances and assessed unpaid fines.</p>
+            <div class="table-wrap finance-table-wrap">
+                <table class="finance-data-table">
+                    <caption class="screen-reader-only" data-i18n="groupArrears">Group arrears</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" data-i18n="dueItem">Amount due</th>
+                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="group-arrears"></tbody>
+                </table>
+            </div>
+        </section>
+      </div>
+      <aside class="finance-chart-section" aria-labelledby="group-chart-title">
+        <h3 id="group-chart-title">Group monthly financial trends (KES)</h3>
+        <div class="dashboard-chart" id="group-chart"></div>
+      </aside>
+    </div>
+  </section>
+  <section class="panel attendance-panel" id="attendance-panel" aria-labelledby="attendance-title">
+    <div class="panel-heading">
+      <div>
+        <h2 id="attendance-title">Meetings · attendance register</h2>
+        <p>Choose a meeting date to record attendance or review meeting history.</p>
+      </div>
+      <span id="attendance-readonly-label" class="status-pill" hidden>View-only for non-Secretary</span>
+    </div>
+    <div class="form-body">
+      <label class="field" for="attendance-date">Meeting date<input id="attendance-date" type="date" required></label>
+      <div id="attendance-editor" hidden>
+        <div class="attendance-quick-actions">
+          <button id="attendance-all-present" class="mini-btn" type="button">Mark all present</button>
+          <button id="attendance-all-absent" class="mini-btn" type="button">Mark all absent</button>
+        </div>
+        <div id="attendance-members" class="attendance-members" role="group" aria-label="Member attendance" data-i18n-aria-label="memberAttendance"></div>
+        <div class="attendance-summary-actions">
+          <strong id="attendance-count" aria-live="polite"></strong>
+          <button id="attendance-save" class="button-primary" type="button">Save register</button>
+        </div>
+      </div>
+      <div id="attendance-view" hidden>
+        <p id="attendance-personal-label" class="form-note" hidden></p>
+        <div id="attendance-view-members" class="attendance-members"></div>
+      </div>
+      <p id="attendance-attribution" class="form-note"></p>
+      <details id="attendance-edit-history" hidden>
+        <summary>Edit history</summary>
+        <div id="attendance-history" class="schedule-body"></div>
+      </details>
+      <div>
+        <h3 class="attendance-history-title">Meeting history</h3>
+        <div id="attendance-registers" class="schedule-body" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+  <section class="panel loan-panel" id="loans-panel" aria-labelledby="loans-title">
+    <div class="panel-heading">
+      <div>
+        <h2 id="loans-title">Loan requests</h2>
+        <p id="loan-copy"></p>
+      </div>
+      <span class="status-pill">Three-role review</span>
+    </div>
+    <div class="loan-panel-body">
+      <p class="form-note">A loan needs three role decisions; borrowers cannot decide their own requests. If the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. This app records the decision; it does not transfer loan funds.</p>
+      <div id="loans" class="loan-list" aria-live="polite"></div>
+    </div>
+  </section>
+  <div class="main-grid">
+    <div class="column">
+       <section class="panel" id="ledger-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Transactions</h2>
+                <p id="transaction-copy"></p>
+            </div>
+            <button id="export-csv" class="mini-btn" type="button">Export transactions & attendance CSV</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Member</th>
+                        <th>Amount</th>
+                        <th>Method</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions">
+                    <tr>
+                        <td colspan="5" class="skeleton" data-i18n="loading">Loading…</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="transaction-pagination" class="transaction-pagination" role="navigation" aria-label="Transaction pages" data-i18n-aria-label="transactionPages" hidden>
+            <button id="transactions-previous" class="mini-btn" type="button" data-i18n="previousPage" disabled>Previous</button>
+            <span id="transactions-page-info" role="status" aria-live="polite"></span>
+            <button id="transactions-next" class="mini-btn" type="button" data-i18n="nextPage" disabled>Next</button>
+        </div>
+    </section>
+    <section class="panel" id="members-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Members</h2>
+                <p>Member and invitation history</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="members">
+
+                </tbody>
+            </table>
+        </div>
+    </section>
+    </div>
+    <aside class="column">
+    <section class="panel" id="payment-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Record cash</h2>
+                <p>Record cash received or paid out. This app records the entry; it does not transfer money.</p>
+            </div>
+        </div>
+        <form id="payment-form" class="form-body">
+            <label class="field" for="cash-direction" data-i18n="cashFlow">Cash flow<select name="flowDirection" id="cash-direction">
+                <option value="in" data-i18n="cashIn">Cash in</option>
+                <option value="out" data-i18n="cashOut">Cash out</option></select>
+            </label>
+            <label class="field" id="payment-member-field" for="payment-member" data-i18n="memberLabel">Member<select name="memberId" id="payment-member"></select>
+            </label>
+            <label class="field" for="cash-amount" data-i18n="amountKes">Amount (KES)<input id="cash-amount" name="amount" type="number" min="1" step="1" required></label>
+            <label class="field" for="cash-reference" data-i18n="receiptReference">Receipt reference<input id="cash-reference" name="referenceNumber" maxlength="80"></label>
+            <label class="field" for="cash-date" data-i18n="date">Date<input id="cash-date" name="date" type="date" required>
+                <small data-i18n="cashDateLimit">Dates can be backdated up to 30 days.</small>
+            </label>
+            <label class="field" id="payment-type-field" for="payment-type">Type<select name="paymentType" id="payment-type">
+                <option value="Monthly Contribution" data-i18n="monthlyContribution">Monthly Contribution</option>
+                <option value="Loan Repayment" data-i18n="repayment">Loan Repayment</option>
+                <option value="Fine" data-i18n="fine">Fine</option>
+                <option value="Other Income" data-i18n="otherIncome">Other Income</option>
+            </select>
+        </label>
+        <div id="cash-out-fields" hidden>
+            <label class="field" for="cash-out-type" data-i18n="cashOutType">Cash-out type<select name="cashOutType" id="cash-out-type">
+                <option value="Finance" data-i18n="finance">Finance</option>
+                <option value="Expenses" data-i18n="expenses">Expenses</option>
+                <option value="Loan" data-i18n="loan">Loan</option>
+                <option value="Fine" data-i18n="fine">Fine</option>
+                <option value="Other" data-i18n="other">Other</option>
+            </select></label>
+            <label class="field" id="custom-cash-out-field" for="custom-cash-out-type" data-i18n="otherType" hidden>Other type<input id="custom-cash-out-type" name="customType" maxlength="80"></label>
+            <label class="field" id="cash-out-loan-field" for="cash-out-loan" data-i18n="approvedLoan" hidden>Approved loan<select name="cashOutLoanId" id="cash-out-loan"></select></label>
+        </div>
+        <label class="field" id="repayment-field" for="payment-loan" hidden>Loan<select name="loanId" id="payment-loan"></select>
+        </label>
+        <input type="hidden" name="method" value="Cash">
+        <label class="field" for="cash-note" data-i18n="reason">Reason<textarea name="reason" id="cash-note" minlength="3" maxlength="500" required placeholder="e.g. Cash received at the weekly meeting" data-i18n-placeholder="cashNotePlaceholder"></textarea>
+        </label>
+        <button class="button-primary" type="submit">Record cash</button>
+        </form>
+        <section class="finance-section simulated-payment-section" id="simulated-payment-section" aria-labelledby="simulated-payment-title">
+            <h3 id="simulated-payment-title" data-i18n="simulatedInboxTitle">Simulated payment inbox (local test only)</h3>
+            <p class="finance-section-copy" data-i18n="simulatedInboxCopy">Use fake TEST-* values only. This does not connect to M-Pesa or any payment provider. Saving a simulation never changes a balance.</p>
+            <form id="simulated-payment-form" class="form-body">
+                <label class="field" for="simulated-transaction-id" data-i18n="simulatedTransactionId">Test transaction ID
+                    <input id="simulated-transaction-id" name="transactionId" type="text" pattern="TEST-[A-Za-z0-9][A-Za-z0-9-]{2,60}" maxlength="65" placeholder="TEST-PAY-2026-001" required>
+                </label>
+                <label class="field" for="simulated-phone-number" data-i18n="fakePhoneIdentifier">Fake phone identifier
+                    <input id="simulated-phone-number" name="phoneNumber" type="text" pattern="TEST-[A-Za-z0-9][A-Za-z0-9-]{2,60}" maxlength="65" placeholder="TEST-PHONE-001" required>
+                </label>
+                <label class="field" for="simulated-amount" data-i18n="simulatedAmount">Amount (KES)
+                    <input id="simulated-amount" name="amount" type="number" min="0.01" max="10000000" step="0.01" required>
+                </label>
+                <label class="field" for="simulated-reference" data-i18n="simulatedReference">Reference
+                    <input id="simulated-reference" name="reference" type="text" maxlength="80" placeholder="TEST-REF-001" required>
+                </label>
+                <label class="field" for="simulated-timestamp" data-i18n="simulatedTimestamp">Payment timestamp
+                    <input id="simulated-timestamp" name="timestamp" type="datetime-local" required>
+                </label>
+                <button class="button-primary" type="submit" data-i18n="createSimulation">Add unverified test payment</button>
+            </form>
+            <div class="finance-table-wrap simulated-payment-table-wrap">
+                <table class="finance-data-table simulated-payment-table">
+                    <thead><tr>
+                        <th scope="col" data-i18n="simulatedTransactionId">Test transaction ID</th>
+                        <th scope="col" data-i18n="fakePhoneIdentifier">Fake phone identifier</th>
+                        <th scope="col" data-i18n="amountKes">Amount (KES)</th>
+                        <th scope="col" data-i18n="simulatedReference">Reference</th>
+                        <th scope="col" data-i18n="receivedAt">Received</th>
+                        <th scope="col" data-i18n="status">Status</th>
+                        <th scope="col" data-i18n="rawTestPayload">Test payload</th>
+                    </tr></thead>
+                    <tbody id="simulated-payment-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+   <section class="panel" id="loan-request-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Request a loan</h2>
+                <p>For your own account</p>
+            </div>
+        </div>
+        <form id="loan-form" class="form-body">
+            <label class="field" for="loan-amount">Amount (KES)<input id="loan-amount" name="amount" type="number" min="1" step="1" required>
+            </label>
+            <label class="field" for="loan-months">Repayment period<select id="loan-months" name="months">
+                <option value="1">1 month</option>
+                <option value="2">2 months</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                </select>
+            </label>
+            <label class="field" for="loan-guarantor-1">First guarantor<select id="loan-guarantor-1" name="guarantorIds" required></select></label>
+            <label class="field" for="loan-guarantor-2">Second guarantor<select id="loan-guarantor-2" name="guarantorIds" required></select></label>
+           <button class="button-primary" type="submit">Submit request</button>
+        </form>
+   </section>
+   <section class="panel" id="invite-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Invite a member</h2>
+                <p><span>The activation code is sent by SMS when configured; otherwise share it privately.</span> <span>During initial setup, the Chairperson can invite a Secretary and Treasurer together. After setup, officers are selected through secret-ballot elections.</span> <span>The Chairperson or Secretary can invite Members directly.</span></p>
+            </div>
+        </div>
+        <form id="initial-officials-form" class="form-body" hidden>
+            <h3 data-i18n="initialOfficialsTitle">Invite both officials</h3>
+            <p data-i18n="initialOfficialsDescription">Enter one person for each office. If SMS is not configured, share each activation code privately.</p>
+            <fieldset class="initial-official-fields">
+                <legend data-i18n="secretary">Secretary</legend>
+                <label class="field" for="initial-secretary-name">
+                    <span data-i18n="inviteName">Name</span>
+                    <input id="initial-secretary-name" name="secretaryName" required maxlength="100">
+                </label>
+                <label class="field" for="initial-secretary-phone">
+                    <span data-i18n="invitePhone">Kenyan phone</span>
+                    <input id="initial-secretary-phone" name="secretaryPhone" type="tel" placeholder="0712 345 678" required>
+                </label>
+                <label class="field" for="initial-secretary-email">
+                    <span data-i18n="inviteEmail">Email address</span>
+                    <input id="initial-secretary-email" name="secretaryEmail" type="email" autocomplete="email" maxlength="254" required>
+                </label>
+            </fieldset>
+            <fieldset class="initial-official-fields">
+                <legend data-i18n="treasurer">Treasurer</legend>
+                <label class="field" for="initial-treasurer-name">
+                    <span data-i18n="inviteName">Name</span>
+                    <input id="initial-treasurer-name" name="treasurerName" required maxlength="100">
+                </label>
+                <label class="field" for="initial-treasurer-phone">
+                    <span data-i18n="invitePhone">Kenyan phone</span>
+                    <input id="initial-treasurer-phone" name="treasurerPhone" type="tel" placeholder="0712 345 678" required>
+                </label>
+                <label class="field" for="initial-treasurer-email">
+                    <span data-i18n="inviteEmail">Email address</span>
+                    <input id="initial-treasurer-email" name="treasurerEmail" type="email" autocomplete="email" maxlength="254" required>
+                </label>
+            </fieldset>
+            <button class="button-primary" type="submit" data-i18n="inviteBothOfficials">Invite both officials</button>
+        </form>
+        <form id="invite-form" class="form-body">
+            <label class="field" for="invite-name">Name<input id="invite-name" name="name" required></label>
+            <label class="field" for="invite-phone">Kenyan phone<input id="invite-phone" name="phone" type="tel" placeholder="0712 345 678" required></label>
+            <label class="field" for="invite-email">Email address<input id="invite-email" name="email" type="email" autocomplete="email" maxlength="254" required></label>
+            <label class="field" for="invite-role">Requested role<select id="invite-role" name="role">
+                <option value="member" data-i18n="member">Member</option>
+                <option value="secretary" data-i18n="secretary">Secretary</option>
+                <option value="treasurer" data-i18n="treasurer">Treasurer</option>
+                </select>
+            </label>
+            <button class="button-primary" type="submit">Create invitation</button>
+        </form>
+        <div id="invite-result" class="invite-result" role="status" aria-live="polite" hidden>
+            <p id="invite-result-message"></p>
+            <div class="invite-code-row">
+                <output id="invite-code" aria-label="One-time activation code" data-i18n-aria-label="activationCodeLabel"></output>
+                <button id="copy-invite-code" class="mini-btn" type="button" data-i18n="copyCode" hidden>Copy code</button>
+            </div>
+        </div>
+    </section>
+    <section class="panel" id="leadership-panel" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2>Officer assignments</h2>
+                <p>After setup, the Secretary proposes officer candidates. Eligible group accounts vote by secret ballot; the Chairperson opens and closes voting and verifies the result. Verified changes take effect after 24 hours.</p>
+            </div>
+        </div>
+        <form id="leadership-form" class="form-body">
+            <label class="field" for="leadership-role">Office<select name="role" id="leadership-role">
+                <option value="chairperson" data-i18n="chairperson">Chairperson</option>
+                <option value="secretary" data-i18n="secretary">Secretary</option>
+                <option value="treasurer" data-i18n="treasurer">Treasurer</option>
+              </select>
+            </label>
+            <label class="field" for="incoming-user">Incoming official<select name="incomingUserId" id="incoming-user" required></select>
+            </label>
+            <label class="field" for="effective-date">Effective date<input id="effective-date" name="effectiveDate" type="date" required></label>
+            <button class="button-primary" type="submit">Propose assignment</button>
+        </form>
+        <div id="leadership-list" class="schedule-body"></div>
+    </section>
+    <section class="panel" id="leadership-elections-panel" aria-labelledby="leadership-elections-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="leadership-elections-title">Leadership elections</h2>
+                <p>The Chairperson or Secretary schedules candidates and a date. Eligible chama accounts can cast one secret vote on that date only, from midnight to 11:59 p.m. Nairobi time. The highest vote count wins and takes office when voting closes; a tie requires a scheduled runoff.</p>
+            </div>
+        </div>
+        <form id="election-proposal-form" class="form-body" hidden>
+            <h3>Schedule an election</h3>
+            <label class="field" for="election-date">Election date<input id="election-date" name="scheduledDate" type="date" required></label>
+            <label class="field" for="election-role">Office<select id="election-role" name="role" required>
+                <option value="chairperson">Chairperson</option>
+                <option value="secretary">Secretary</option>
+                <option value="treasurer">Treasurer</option>
+            </select></label>
+            <label class="field" for="election-candidates">Candidates (choose at least two active Members)
+                <select id="election-candidates" name="candidateIds" multiple size="6" required></select>
+            </label>
+            <button class="button-primary" type="submit">Schedule election</button>
+        </form>
+        <h3>Election notices</h3>
+        <div id="election-notifications" class="election-notifications" aria-live="polite"></div>
+        <h3>Ballots and results</h3>
+        <div id="leadership-elections" class="leadership-elections" aria-live="polite"></div>
+    </section>
+    <section class="panel" id="audit-panel" aria-labelledby="audit-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="audit-title">Audit log</h2>
+                <p>Payments, loan decisions, and officer changes, newest first. Filter and page through entries; audit records cannot be edited or deleted.</p>
+            </div>
+        </div>
+        <p id="audit-notice" class="notice" role="status" hidden></p>
+        <div class="audit-controls">
+          <label class="audit-search" for="audit-search">Filter audit entries<input id="audit-search" type="search" placeholder="Name, action, or date" autocomplete="off"></label>
+          <div class="audit-pagination" role="navigation" aria-label="Audit log pages">
+            <button id="audit-previous" class="mini-btn" type="button" disabled>Previous</button>
+            <span id="audit-page-info" role="status" aria-live="polite">0 / 0 · 0 entries</span>
+            <button id="audit-next" class="mini-btn" type="button" disabled>Next</button>
+          </div>
+        </div>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Audit log entries. Scroll within this area to review older entries." tabindex="0">
+            <table class="audit-table audit-log-table">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>What happened</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-list" aria-live="polite"></tbody>
+            </table>
+        </div>
+        <div class="panel-heading">
+            <div><h3 data-i18n="cashFlowTableTitle">Recent cash flows</h3></div>
+        </div>
+        <p id="audit-cash-flows-notice" class="notice" role="status" hidden></p>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries in the audit log. Scroll within this area to review entries." tabindex="0">
+            <table class="audit-table cash-flow-table">
+                <thead>
+                    <tr>
+                        <th data-i18n="flow">Flow</th>
+                        <th data-i18n="type">Type</th>
+                        <th data-i18n="memberLabel">Member</th>
+                        <th data-i18n="amountKes">Amount</th>
+                        <th data-i18n="date">Date</th>
+                        <th data-i18n="time">Time</th>
+                        <th data-i18n="recordedBy">Recorded by</th>
+                        <th data-i18n="reason">Reason</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-cash-flows-list" aria-live="polite"></tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" id="cash-flows-panel" aria-labelledby="cash-flows-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="cash-flows-title" data-i18n="cashFlowTableTitle">Recent cash flows</h2>
+            </div>
+        </div>
+        <p id="cash-flows-notice" class="notice" role="status" hidden></p>
+        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries. Scroll within this area to review entries." tabindex="0">
+            <table class="audit-table cash-flow-table">
+                <thead>
+                    <tr>
+                        <th data-i18n="flow">Flow</th>
+                        <th data-i18n="type">Type</th>
+                        <th data-i18n="memberLabel">Member</th>
+                        <th data-i18n="amountKes">Amount</th>
+                        <th data-i18n="date">Date</th>
+                        <th data-i18n="time">Time</th>
+                        <th data-i18n="recordedBy">Recorded by</th>
+                        <th data-i18n="reason">Reason</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="cash-flows-list" aria-live="polite"></tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" id="penalty-panel" aria-labelledby="penalty-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="penalty-title">Monthly penalties</h2>
+                <p data-i18n="penaltyExplanation">After the configured deadline, active members who have not met the chama's configured welfare contribution may be charged the configured penalty.</p>
+            </div>
+        </div>
+        <form id="penalty-form" class="form-body">
+            <label class="field" for="penalty-month">Month<input id="penalty-month" name="month" type="month" required></label>
+            <button class="button-primary" type="submit">Assess monthly penalties</button>
+        </form>
+        <p id="penalty-result" class="form-note" role="status"></p>
+    </section>
+    <section class="panel" id="dividend-panel" aria-labelledby="dividend-title" hidden>
+        <div class="panel-heading">
+            <div>
+                <h2 id="dividend-title">Dividends</h2>
+                <p data-i18n="dividendExplanation">Preview each member's pro-rata share of a cycle's interest and penalties, after admin expenses. Nothing is paid out until you commit.</p>
+            </div>
+        </div>
+        <form id="dividend-form" class="form-body">
+            <label class="field" for="dividend-start" data-i18n="cycleStart">Cycle start<input id="dividend-start" name="cycleStartDate" type="date" required></label>
+            <label class="field" for="dividend-end" data-i18n="cycleEnd">Cycle end<input id="dividend-end" name="cycleEndDate" type="date" required></label>
+            <label class="field" for="dividend-expenses" data-i18n="adminExpensesKes">Admin expenses (KES)<input id="dividend-expenses" name="adminExpenses" type="number" min="0" step="1" required></label>
+            <button class="button-primary" type="submit">Calculate</button>
+        </form>
+        <div id="dividend-preview" aria-live="polite"></div>
+        <div class="form-body">
+            <button id="dividend-commit" class="button-primary" type="button" hidden>Commit dividends to share capital</button>
+        </div>
+    </section>
+    <section class="panel" id="chat-panel" aria-labelledby="chat-title">
+        <div class="panel-heading">
+            <div>
+                <h2 id="chat-title">Group chat</h2>
+                <p>Visible to all active members. Messages cannot be edited or deleted. Showing the latest 100.</p>
+            </div>
+        </div>
+        <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+        <form id="chat-form" class="form-body">
+            <label class="field" for="chat-text">Message<textarea id="chat-text" name="text" maxlength="500" required></textarea></label>
+            <button class="button-primary" type="submit">Send</button>
+        </form>
+    </section>
+  </aside></div>
+ </main>
+  <section class="login-overlay" id="login" aria-label="Sign in to Jirani Chama" data-i18n-aria-label="signInLabel">
+    <div class="login-content">
+        <div class="login-brand">
+            <div class="login-logo-wrap">
+                <img src="/brand-lockup.svg" alt="Jirani Chama — group savings, together" width="440" height="112">
+            </div>
+            <h1><span data-i18n="landingHeroLead">Run contributions,</span> <span class="hero-accent" data-i18n="landingHeroHighlight">loan approvals, and records</span> <span data-i18n="landingHeroTail">in one accountable place.</span></h1>
+            <p class="login-intro" data-i18n="landingHeroSubtitle">Give your chama a clear shared record of what was contributed, approved, and decided.</p>
+        </div>
+                <div id="landing-view" class="login-card">
+            <h2 data-i18n="welcomePortal">Welcome to Jirani Chama</h2>
+            <p data-i18n="manageGroup">Manage contributions, loans, and group decisions in one trusted place.</p>
+            <div class="landing-actions">
+                <a class="button-primary" id="landing-register" href="/register.html" data-i18n="registerNewChama">Register a New Chama</a>
+                <a class="button-primary button-secondary" id="landing-login" href="/member-login.html" data-i18n="memberLogin">Member Login</a>
+                <button class="button-primary button-outline" id="landing-invite" type="button">Enter Invite Code</button>
+            </div>
+        </div>
+        <div class="landing-sections-container">
+            <section id="features" class="landing-section">
+                <div class="section-inner">
+                    <header class="section-header">
+                        <span class="section-eyebrow">Capabilities</span>
+                        <h2 class="section-heading">What Your Chama Can Do</h2>
+                        <p class="section-subheading">Modern financial management designed for Kenyan table-banking and savings groups.</p>
+                    </header>
+                    <div class="features-grid">
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
+                                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/>
+                                    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
+                                </svg>
+                            </div>
+                            <h3>Clear contribution records</h3>
+                            <p>Record contributions and keep each member’s balance visible alongside the group’s shared records.</p>
+                        </article>
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                            <h3>Savings and loan records</h3>
+                            <p>Keep contribution schedules, loan requests, repayments, and outstanding balances organized together.</p>
+                        </article>
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                </svg>
+                            </div>
+                            <h3>Digital Governance</h3>
+                            <p>Support group decisions with meeting attendance, officer roles, loan approvals, and recorded rules.</p>
+                        </article>
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                            </div>
+                            <h3>Security &amp; Transparency</h3>
+                            <p>PIN-protected accounts, role-based access, and a record of important changes help your group stay accountable.</p>
+                        </article>
+                    </div>
+                </div>
+            </section>
+            <section id="how-it-works" class="landing-section">
+                <div class="section-inner">
+                    <header class="section-header">
+                        <span class="section-eyebrow">Getting Started</span>
+                        <h2 class="section-heading">How It Works</h2>
+                        <p class="section-subheading">Get your group operational in four easy steps.</p>
+                    </header>
+                    <ol class="steps-list">
+                        <li class="step-card">
+                            <span class="step-badge" aria-hidden="true">1</span>
+                            <div class="step-body">
+                                <h3>Register Profile</h3>
+                                <p>Provide your name, phone number, and establish a private 6–12 digit security PIN.</p>
+                            </div>
+                        </li>
+                        <li class="step-card">
+                            <span class="step-badge" aria-hidden="true">2</span>
+                            <div class="step-body">
+                                <h3>Invite Members</h3>
+                                <p>Send direct invitation codes for members, officers, and role-based access approvals.</p>
+                            </div>
+                        </li>
+                        <li class="step-card">
+                            <span class="step-badge" aria-hidden="true">3</span>
+                            <div class="step-body">
+                                <h3>Track Records</h3>
+                                <p>Record contributions, payments, meetings, and loan decisions with a shared audit trail.</p>
+                            </div>
+                        </li>
+                        <li class="step-card">
+                            <span class="step-badge" aria-hidden="true">4</span>
+                            <div class="step-body">
+                                <h3>Review &amp; Report</h3>
+                                <p>Monitor balances, review committee decisions, and prepare exports when you need a snapshot.</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+            <section id="security" class="landing-section">
+                <div class="section-inner">
+                    <header class="section-header">
+                        <span class="section-eyebrow">Security</span>
+                        <h2 class="section-heading">Built for Trust and Accountability</h2>
+                        <p class="section-subheading">The platform keeps sensitive treasury and member data visible only where it is needed.</p>
+                    </header>
+                    <ul class="security-list">
+                        <li class="security-card">
+                            <div class="security-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 11V7a3 3 0 1 1 6 0v4"/>
+                                    <path d="M5 11h14v9H5z"/>
+                                </svg>
+                            </div>
+                            <div class="security-text"><strong>Role-scoped access.</strong> Officers and members can see only the parts of the chama they are meant to manage.</div>
+                        </li>
+                        <li class="security-card">
+                            <div class="security-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3v6"/>
+                                    <path d="M12 21v-6"/>
+                                    <path d="M3 12h6"/>
+                                    <path d="M15 12h6"/>
+                                    <circle cx="12" cy="12" r="4"/>
+                                </svg>
+                            </div>
+                            <div class="security-text"><strong>Two-step approvals.</strong> Sensitive changes like leadership and loans require review and confirmation before they take effect.</div>
+                        </li>
+                        <li class="security-card">
+                            <div class="security-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                    <path d="M6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2z"/>
+                                    <path d="M8 7h9"/>
+                                    <path d="M8 11h9"/>
+                                    <path d="M8 15h6"/>
+                                </svg>
+                            </div>
+                            <div class="security-text"><strong>Audit clarity.</strong> Every action is recorded so the group can trace who approved, changed, or recorded each event.</div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+            <section id="pricing" class="landing-section pricing-section" aria-labelledby="pricing-title">
+                <div class="section-inner">
+                    <header class="section-header pricing-header">
+                        <span class="section-eyebrow">Pricing</span>
+                        <h2 id="pricing-title" class="section-heading">Simple pricing for every chama</h2>
+                        <p class="section-subheading">Choose the billing schedule that works best for your group.</p>
+                    </header>
+                    <div class="pricing-grid">
+                        <article class="pricing-card" aria-labelledby="basic-plan-title">
+                            <h3 id="basic-plan-title">Basic</h3>
+                            <p class="pricing-cap">Up to 10 members</p>
+                            <p class="pricing-amount">KSh 300<span>/month</span></p>
+                            <p class="pricing-copy">Flexible month-to-month access for your chama.</p>
+                            <p class="pricing-saving">Annual: KSh 2,880/year — save KSh 720 (KSh 240/month equivalent).</p>
+                            <div class="pricing-plan-actions">
+                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Monthly" data-pricing-price="KSh 300/month" data-pricing-total="KSh 300" data-pricing-savings="No annual discount" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Basic" data-member-cap="Up to 10 members" data-pricing-billing="Annual" data-pricing-price="KSh 2,880/year" data-pricing-total="KSh 2,880" data-pricing-savings="Save KSh 720 · KSh 240/month equivalent" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
+                            </div>
+                        </article>
+                        <article class="pricing-card pricing-card-featured" aria-labelledby="growth-plan-title">
+                            <p class="pricing-badge">Growing groups</p>
+                            <h3 id="growth-plan-title">Growth Chama</h3>
+                            <p class="pricing-cap">Up to 30 members</p>
+                            <p class="pricing-amount">KSh 600<span>/month</span></p>
+                            <p class="pricing-copy">More room for a larger chama to manage its records together.</p>
+                            <p class="pricing-saving">Annual: KSh 5,760/year — save KSh 1,440 (KSh 480/month equivalent).</p>
+                            <div class="pricing-plan-actions">
+                                <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-billing="Monthly" data-pricing-price="KSh 600/month" data-pricing-total="KSh 600" data-pricing-savings="No annual discount" aria-haspopup="dialog" aria-controls="pricing-modal">Choose monthly</button>
+                                <button class="button-primary button-outline pricing-plan-button" type="button" data-pricing-tier="Growth Chama" data-member-cap="Up to 30 members" data-pricing-billing="Annual" data-pricing-price="KSh 5,760/year" data-pricing-total="KSh 5,760" data-pricing-savings="Save KSh 1,440 · KSh 480/month equivalent" aria-haspopup="dialog" aria-controls="pricing-modal">Choose annual · Save 20%</button>
+                            </div>
+                        </article>
+                        <article class="pricing-card" aria-labelledby="enterprise-plan-title">
+                            <h3 id="enterprise-plan-title">Enterprise / Investment</h3>
+                            <p class="pricing-cap">Custom member caps for groups above 30 members</p>
+                            <p class="pricing-amount pricing-amount-custom">Custom pricing<span>Contact us</span></p>
+                            <p class="pricing-copy">Tailored for scale and the added administration of contribution tracking and loan approvals.</p>
+                            <button class="button-primary pricing-plan-button" type="button" data-pricing-tier="Enterprise / Investment" data-member-cap="Custom member cap for groups above 30 members" data-pricing-billing="Custom" data-pricing-price="Custom pricing — Contact sales" data-pricing-total="Agreed with sales" data-pricing-savings="Tailored plan" aria-haspopup="dialog" aria-controls="pricing-modal">Contact us for pricing</button>
+                        </article>
+                    </div>
+                </div>
+            </section>
+            <!--FAQ SECTION-->
+            <section id="faq">
+                <div class="faq-container">
+                    <h2>Frequently Asked Questions</h2>
+                    <div class="faq-list">
+                        <details>
+                         <summary>What is Jirani Chama?</summary>
+                            <div class="faq-answer">
+                               <p>A modern financial management platform designed for Kenyan table-banking and savings groups to keep contributions, loans, and decisions in one secure space.</p>
+                            </div>
+                        </details>
+
+                       <details>
+                            <summary>How do I get my group started?</summary>
+                            <div class="faq-answer">
+                                <p>Register your profile with a private PIN, use direct invitation codes to invite members, assign officer roles, and start tracking records instantly.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Can we track individual contributions and balances?</summary>
+                            <div class="faq-answer">
+                                <p>Yes. Members and officers can review recorded contributions, balances, loans, and repayments. Money is still received and paid outside the app.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Are our group's money and data secure?</summary>
+                            <div class="faq-answer">
+                                <p>Accounts use private PINs and role-based permissions. Important changes are recorded so officers can review group activity.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How are monthly contributions split between welfare and share capital?</summary>
+                            <div class="faq-answer">
+                                <p>The chairperson sets the monthly welfare amount during chama registration. Each member's first contribution payment of the month covers that amount, and any remainder is allocated to share capital.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How does the platform handle loan approvals and repayments?</summary>
+                            <div class="faq-answer">
+                                <p>Loans require three role-based approvals and support 1, 2, 3, or 6 month terms with reducing-balance or flat interest models. The monthly interest rate defaults to 5% and can be changed during chama registration. Repayments clear interest first, followed by principal, starting with the earliest installment.</p>
+                            </div>
+                        </details>
+
+                        <details><summary>How are late-payment penalties assessed?</summary><div class="faq-answer"><p>After the configured deadline, the Chairperson or Secretary runs the penalty assessment. The app does not assess penalties automatically. At most one outstanding penalty is assessed for an eligible member and month.</p></div></details>
+                        <details><summary>Which plan fits our group?</summary><div class="faq-answer"><p>Basic supports up to 10 members. Growth Chama supports up to 30 members. Enterprise / Investment is for groups above 30 members and is arranged with sales. Member limits are enforced by the server when members are invited or activated.</p></div></details>
+                        <details><summary>How does the annual discount work?</summary><div class="faq-answer"><p>Basic is KSh 2,880 per year instead of KSh 3,600, saving KSh 720. Growth Chama is KSh 5,760 per year instead of KSh 7,200, saving KSh 1,440. Both annual options are 20% off the equivalent monthly total.</p></div></details>
+                        <details><summary>When does payment confirm our subscription?</summary><div class="faq-answer"><p>A subscription becomes active only after the server verifies a real provider transaction for the expected KES amount and the group’s reference. Clicking a plan or reporting that you paid never activates access. Online payment collection is not enabled yet.</p></div></details>
+                        <details><summary>What happens when a subscription expires?</summary><div class="faq-answer"><p>Your financial history remains available to view and export. New financial records, member invitations, loan decisions, and other subscription-gated actions are blocked for unpaid or expired groups. Online payments are not enabled yet; contact us about pricing and renewal.</p></div></details>
+                    </div>
+                 </div>
+            </section>
+            <section id="contact" class="contact-section" aria-labelledby="get-in-touch">
+              <div class="contact-shell">
+                <aside class="contact-intro-panel">
+                  <div>
+                    <p class="contact-kicker" data-i18n="contactSectionLabel">CONTACT</p>
+                    <h2 id="get-in-touch" data-i18n="getInTouchTitle">Get in touch</h2>
+                    <p class="contact-description" data-i18n="contactDescription">Tell us how we can help. Your message goes directly to our team.</p>
+                  </div>
+                  <div class="contact-direct">
+                    <p class="contact-direct-label" data-i18n="contactDirectLabel">Prefer email?</p>
+                    <a class="contact-email" href="mailto:09elim3@gmail.com">09elim3@gmail.com</a>
+                    <p class="contact-direct-copy" data-i18n="contactDirectCopy">You can also email our team directly.</p>
+                  </div>
+                </aside>
+                <div class="contact-content-panel">
+                  <div class="contact-form-heading">
+                    <h3 id="contact-form-title" data-i18n="contactFormTitle">Send us a message</h3>
+                    <p data-i18n="contactFormCopy">Fill in the form and we’ll get your message to the right person.</p>
+                  </div>
+                  <form id="contact-form" class="contact-form" method="post" action="/api/contact" aria-labelledby="contact-form-title">
+                    <div class="contact-form-fields">
+                      <label class="contact-field" for="contact-name">
+                        <span data-i18n="contactNameLabel">Your name</span>
+                        <input id="contact-name" name="name" type="text" autocomplete="name" maxlength="100" required>
+                      </label>
+                      <label class="contact-field" for="contact-email">
+                        <span data-i18n="contactEmailLabel">Email address</span>
+                        <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                      </label>
+                      <label class="contact-field contact-field--full" for="contact-subject">
+                        <span data-i18n="contactSubjectLabel">Subject</span>
+                        <input id="contact-subject" name="subject" type="text" maxlength="120" required>
+                      </label>
+                      <label class="contact-field contact-field--full" for="contact-message">
+                        <span data-i18n="contactMessageLabel">Message</span>
+                        <textarea id="contact-message" name="message" rows="5" minlength="10" maxlength="3000" required></textarea>
+                      </label>
+                    </div>
+                    <div class="contact-form-actions">
+                      <button id="contact-submit" class="contact-submit" type="submit"><span data-i18n="contactSubmitLabel">Send message</span><span aria-hidden="true">→</span></button>
+                      <p class="contact-privacy-note" data-i18n="contactPrivacyNote">Your message is sent privately to our team.</p>
+                    </div>
+                    <p id="contact-feedback" class="contact-feedback" role="status" aria-live="polite" hidden></p>
+                  </form>
+                  <nav class="contact-route-links" aria-label="Other ways to get in touch" data-i18n-aria-label="contactMoreOptions">
+                    <a class="contact-route-link" href="/member-login.html"><span data-i18n="contactMemberRoute">Already a member? Sign in</span><span aria-hidden="true">→</span></a>
+                    <a class="contact-route-link" href="/register.html"><span data-i18n="contactCreateRoute">Starting a chama? Create one</span><span aria-hidden="true">→</span></a>
+                  </nav>
+                </div>
+              </div>
+            </section>
+        </div>
+    </div>
+
+
+    <!--===============================================INVITATION DIALOG================================================================-->
+    <dialog id="invite-modal" aria-labelledby="invite-modal-title">
+        <form id="invite-modal-form" class="login-card">
+            <h2 id="invite-modal-title">Join an existing chama</h2>
+            <p>Enter your activation code. You will confirm your phone number and choose a PIN next.</p>
+            <label class="field" for="invite-modal-code">Activation code
+                <input id="invite-modal-code" class="invite-code-input" name="code" autocomplete="one-time-code" minlength="6" maxlength="10" required>
+            </label>
+            <div class="dialog-actions">
+                <button id="invite-modal-cancel" class="mini-btn" type="button">Cancel</button>
+                <button id="invite-modal-submit" class="button-primary" type="submit">Continue</button>
+            </div>
+        </form>
+    </dialog>
+    <dialog id="pricing-modal" aria-labelledby="pricing-modal-title" aria-describedby="pricing-modal-selection pricing-modal-copy">
+        <div class="pricing-modal-content">
+            <h2 id="pricing-modal-title" tabindex="-1">Review your plan</h2>
+            <dl id="pricing-modal-selection" class="pricing-modal-details"><div><dt>Tier</dt><dd id="pricing-modal-tier"></dd></div><div><dt>Member cap</dt><dd id="pricing-modal-cap"></dd></div><div><dt>Billing</dt><dd id="pricing-modal-billing"></dd></div><div><dt>Total</dt><dd id="pricing-modal-total"></dd></div><div><dt>Annual saving</dt><dd id="pricing-modal-savings"></dd></div></dl>
+            <p id="pricing-modal-copy">Online payment is not enabled yet. Contact our team to discuss this plan and the next steps. Selecting a plan or reporting payment does not activate access.</p>
+            <div class="dialog-actions">
+                <button id="pricing-modal-cancel" class="mini-btn" type="button">Not now</button>
+                <a id="pricing-contact" class="button-primary" href="#contact">Contact us about this plan</a>
+            </div>
+        </div>
+    </dialog>
+    <footer class="site-footer">
+       <p>Built for Kenyan savings groups.</p>
+       <p>© 2026 Jirani Chama. All rights reserved.</p>
+       <nav class="site-footer-links" aria-label="Footer links">
+           <a href="/privacy.html">Privacy</a>
+           <span aria-hidden="true">·</span>
+           <a href="/terms.html">Terms</a>
+       </nav>
+    </footer>
+</section>
+ <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
+    <form method="dialog" id="cash-confirm-form">
+        <h2 id="cash-confirm-title" data-i18n="confirmCashEntry">Confirm cash entry</h2>
+        <p>This records cash already received; it does not transfer money.</p>
+        <p id="cash-confirm-summary"></p>
+        <div class="dialog-actions">
+            <button value="cancel" class="mini-btn" type="submit" data-i18n="cancel">Cancel</button>
+            <button value="confirm" class="button-primary" type="submit" data-i18n="confirmCashEntry">Confirm cash entry</button>
+        </div>
+    </form>
+</dialog>
+ <dialog id="attendance-overwrite-dialog" aria-labelledby="attendance-overwrite-title">
+    <form method="dialog">
+        <h2 id="attendance-overwrite-title">Update attendance register?</h2>
+        <p>This meeting already has a register. Saving will replace its attendance and record the changes.</p>
+        <div class="dialog-actions">
+            <button value="cancel" class="mini-btn" type="submit">Cancel</button>
+            <button value="confirm" class="button-primary" type="submit">Continue</button>
+        </div>
+    </form>
+ </dialog>
+ <script src="/i18n.js?v=20261104.2" defer></script>
+ <script src="/write-requests.js?v=20261016.1" defer></script>
+ <script src="/chama.js?v=20261107.4" defer></script>
+ <script src="/contact.js?v=20261106.1" defer></script>
+</body>
+</html>
