@@ -40,10 +40,10 @@
 - [ ] Complete manual role-by-role and phone/tablet walkthroughs, then run a participating-chama pilot. No real-chama pilot has been performed.
 
 ## Step 0: setup
-- [x] Create branch `review-fixes`; it contains local work that has not been pushed to `origin/review-fixes`.
+- [x] Historical: initial readiness work used `review-fixes`. The current branch is `codex/subscription-access`; safeguards and month-end review commit `c7149c9` is local and has not been pushed.
 - [x] Save the security report as `docs/review.md`. The UX plan currently lives at `docs/docs/docs/ux-plan.md` (the earlier `docs/ux-plan.md` path is stale).
 - [x] Add `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, and `TASKS.md`.
-- [ ] Commit the current local deployment-readiness fixes after verification; do not push as part of local readiness work.
+- [x] Commit the verified local safeguards and month-end review changes; do not push as part of local readiness work.
 
 ## Step 2: security and server (Codex, one branch each)
 - [ ] F-01: PIN policy and login throttling implemented; manual role walkthrough and merge remain in Step 5.
