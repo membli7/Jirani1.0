@@ -22,6 +22,7 @@ function pinHash(pin) {
 
 const chair = { id: "chair", name: "Test Chair", phone: "+254711000001", role: "chairperson", status: "active", pinHash: pinHash("123456"), mustChangePin: false };
 const treasurer = { id: "treasurer", name: "Test Treasurer", phone: "+254711000002", role: "treasurer", status: "active", pinHash: pinHash("234567"), mustChangePin: false };
+const secretary = { id: "secretary", name: "Test Secretary", phone: "+254711000006", role: "secretary", status: "active", pinHash: pinHash("678901"), mustChangePin: false };
 // Legacy accounts: no shareCapital field and no welfareReserve or penalties arrays in the saved file.
 const member = { id: "member", name: "Test Member", phone: "+254711000003", role: "member", status: "active", pinHash: pinHash("345678"), mustChangePin: false };
 const otherMember = { id: "other", name: "Other Member", phone: "+254711000004", role: "member", status: "active", pinHash: pinHash("456789"), mustChangePin: false };
@@ -30,7 +31,7 @@ const thirdMember = { id: "third", name: "Third Member", phone: "+254711000005",
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
   chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
-  users: [chair, treasurer, member, otherMember, thirdMember],
+  users: [chair, treasurer, secretary, member, otherMember, thirdMember],
   transactions: [],
   loans: [],
   payouts: [],
@@ -208,6 +209,119 @@ test("a late contribution uses the configured penalty amount", async () => {
   assert.equal(transaction.penaltyAmount, 125);
   assert.equal(transaction.shareCapitalAmount, 125);
   assert.equal(persistedState().penalties.at(-1).amount, 125);
+});
+
+test("monthly close is a read-only officer report over existing chama records", async () => {
+  const before = persistedState();
+  const response = await fetch(`${baseUrl}/api/monthly-close?month=2026-10`, { headers: { Cookie: treasurerCookie } });
+  assert.equal(response.status, 200);
+  const { data } = await response.json();
+  assert.equal(data.month, "2026-10");
+  assert.equal(data.totals.contributionCount, 4);
+  assert.equal(data.totals.contributionTotal, 3400);
+  assert.equal(data.totals.welfareAmount, 1050);
+  assert.equal(data.totals.shareCapitalAmount, 2225);
+  assert.equal(data.totals.repaymentTotal, 0);
+  assert.equal(data.entries.length, 4);
+  assert.equal(data.exceptions.incompleteReferences.length, 0);
+  assert.ok(data.exceptions.membersWithoutContribution.some(item => item.id === chair.id));
+  assert.deepEqual(data.exceptions.pendingLoanRequests, []);
+  assert.deepEqual(data.exceptions.outstandingPenalties, []);
+
+  const memberCookie = await login(member, "345678");
+  assert.equal((await fetch(`${baseUrl}/api/monthly-close?month=2026-10`, { headers: { Cookie: memberCookie } })).status, 403);
+  assert.equal((await fetch(`${baseUrl}/api/monthly-close?month=9999-01`, { headers: { Cookie: treasurerCookie } })).status, 400);
+  const after = persistedState();
+  assert.deepEqual(after.transactions, before.transactions, "a report must not create or change ledger rows");
+  assert.deepEqual(after.auditLog, before.auditLog, "a report must not create audit mutations");
+});
+
+test("ordinary members cannot backdate contributions, and invalid or future dates change nothing", async () => {
+  const before = persistedState();
+  const memberCookie = await login(member, "345678");
+  const memberBackdate = await fetch(`${baseUrl}/api/contributions`, {
+    method: "POST",
+    headers: { Cookie: memberCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ memberId: thirdMember.id, amount: 500, method: "Cash", note: "Attempted backdate", referenceNumber: "RCPT-MEMBER", date: "2026-10-03" }),
+  });
+  assert.equal(memberBackdate.status, 403, "member role cannot write a backdated cash entry");
+
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const tomorrow = new Date(`${values.year}-${values.month}-${values.day}T00:00:00.000Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  assert.equal((await contribute(thirdMember.id, { amount: 500, date: tomorrow.toISOString().slice(0, 10), referenceNumber: "RCPT-FUTURE" })).status, 400);
+  assert.equal((await contribute(thirdMember.id, { amount: 500, date: "2026-02-30", referenceNumber: "RCPT-IMPOSSIBLE" })).status, 400);
+
+  const after = persistedState();
+  assert.equal(after.transactions.length, before.transactions.length);
+  assert.equal(after.auditLog.length, before.auditLog.length);
+});
+
+test("contribution date correction is authorized, same-month, classification-safe, and auditable", async () => {
+  const before = persistedState();
+  const transaction = before.transactions.find(item => item.referenceNumber === "RCPT-1000");
+  assert.ok(transaction);
+  const sendCorrection = (cookie, body, key = crypto.randomUUID()) => fetch(`${baseUrl}/api/contributions/${transaction.id}/correct-date`, {
+    method: "POST",
+    headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": key },
+    body: JSON.stringify(body),
+  });
+
+  const memberCookie = await login(member, "345678");
+  const secretaryCookie = await login(secretary, "678901");
+  assert.equal((await sendCorrection(memberCookie, { date: "2026-10-03", reason: "Unauthorized" })).status, 403);
+  assert.equal((await sendCorrection(secretaryCookie, { date: "2026-10-03", reason: "Unauthorized" })).status, 403);
+  assert.equal((await sendCorrection(treasurerCookie, { date: "2026-10-03", reason: "   " })).status, 400, "a blank reason is rejected after trimming");
+
+  const firstBody = { date: "2026-10-03", reason: "Receipt date was entered incorrectly" };
+  const firstKey = crypto.randomUUID();
+  const [firstResponse, concurrentReplay] = await Promise.all([
+    sendCorrection(treasurerCookie, firstBody, firstKey),
+    sendCorrection(treasurerCookie, firstBody, firstKey),
+  ]);
+  assert.equal(firstResponse.status, 200);
+  assert.equal(concurrentReplay.status, 200);
+  const first = (await firstResponse.json()).data;
+  const replay = (await concurrentReplay.json()).data;
+  assert.equal(first.audit.id, replay.audit.id, "concurrent retries with the same idempotency key reuse one audit event");
+  assert.equal(first.audit.by.id, treasurer.id);
+  assert.equal(first.audit.by.role, "treasurer");
+  assert.ok(Number.isFinite(Date.parse(first.audit.at)), "the audit event has a timestamp");
+  assert.equal(first.audit.oldDate, transaction.date);
+  assert.equal(first.audit.newDate, firstBody.date);
+  assert.equal(first.audit.reason, firstBody.reason);
+
+  const chairCookie = await login(chair, "123456");
+  const secondBody = { date: "2026-10-04", reason: "Verified against the original cash receipt" };
+  const secondResponse = await sendCorrection(chairCookie, secondBody);
+  assert.equal(secondResponse.status, 200);
+  const second = (await secondResponse.json()).data;
+  assert.equal(second.audit.by.id, chair.id);
+  assert.equal(second.audit.by.role, "chairperson");
+  assert.equal(second.audit.oldDate, firstBody.date);
+  assert.equal(second.audit.newDate, secondBody.date);
+  assert.equal(second.audit.reason, secondBody.reason);
+
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const tomorrow = new Date(`${values.year}-${values.month}-${values.day}T00:00:00.000Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const rejected = [
+    [{ date: "2026-02-30", reason: "Invalid calendar date" }, 400],
+    [{ date: tomorrow.toISOString().slice(0, 10), reason: "Future date" }, 400],
+    [{ date: "2026-11-01", reason: "Cross-month change" }, 409],
+    [{ date: "2026-10-06", reason: "Would change on-time status" }, 409],
+    [{ date: secondBody.date, reason: "No actual date change" }, 409],
+  ];
+  for (const [body, status] of rejected) assert.equal((await sendCorrection(treasurerCookie, body)).status, status);
+
+  const after = persistedState();
+  const correctedTransaction = after.transactions.find(item => item.id === transaction.id);
+  assert.deepEqual(correctedTransaction, { ...transaction, date: secondBody.date }, "amount, member, allocations, and other fields remain unchanged");
+  assert.deepEqual(after.auditLog.slice(0, before.auditLog.length), before.auditLog, "corrections append audit entries without rewriting history");
+  const correctionEvents = after.auditLog.filter(item => item.type === "contribution.date_corrected");
+  assert.equal(correctionEvents.length, 2, "the concurrent idempotent retry must not duplicate an audit event");
 });
 
 test("a legacy file gains the penalties ledger and member share capital", async () => {

@@ -26,6 +26,19 @@
 - Personal and group financial charts show monthly contribution and loan-repayment trends for the last six months, using existing dated transaction records and a visible data table.
 - These election decisions supersede the 2026-10-20 opening, closing, verification, and activation timing: either the Chairperson or Secretary schedules 2-20 active ordinary Member candidates and a date. Voting opens at 12:00 a.m. and closes at 11:59 p.m. Africa/Nairobi time on that date. All active chama accounts are eligible, secret ballots are limited to one per eligible account, the highest total wins without a quorum, and a tie requires a separately scheduled runoff limited to tied candidates. A winner's role and portal access switch automatically when the election closes.
 - Scheduled dates are stored as `scheduledDate` in the existing JSONB leadership record; no SQL column or migration is added. Existing elections without a scheduled date retain the legacy flow for compatibility.
+
+## Verified safeguards and product additions (2026-11-08)
+- [x] Contribution-entry dates must be real calendar dates no later than the Africa/Nairobi current date; ordinary Members cannot submit contribution entries.
+- [x] Only the Chairperson or Treasurer may correct the date of an existing confirmed cash contribution. A non-empty reason is required; the date must remain in the original month and preserve on-time/late classification. Only the date field changes; an audit event appends actor, timestamp, old/new dates, and reason. The audit store is not tamper-evident.
+- [x] Non-read API writes are serialized; the JSON snapshot uses an atomic file replacement and PostgreSQL snapshot saves use one transaction, so a corrected date and its audit event persist together. Synthetic idempotent-retry coverage prevents duplicate corrections/audit events.
+- [x] Cross-chama application checks and tenant batch pre-validation are covered by synthetic foreign-read/write tests. No schema migration or destructive database change was run; reviewed relational tenant constraints remain a staging migration task before production.
+- [x] In-app group chat remains available. Redis event-publish/startup failure falls back to same-instance SSE; the client polls during outages, reconciles periodically while connected, and reconnects when network access returns.
+- [x] The officer-only month-end close review is read-only and summarizes recorded cash entries, tracked open loan balances, and items for review. It does not reconcile bank/M-PESA settlement or move money.
+- [x] Public copy and README claims now distinguish three-role loan decisions, manual monthly penalty assessment, application-level audit history, in-app chat, and recorded cash versus moving/settling money.
+- [x] The Kiswahili registration work is already in the current branch ancestry; no cherry-pick or reset was needed.
+- [x] A backup/restore regression uses synthetic JSON data and a disposable temporary directory only. Production backup scheduling, PostgreSQL backup, and production restore remain unverified.
+- [ ] Complete manual role-by-role and phone/tablet walkthroughs, then run a participating-chama pilot. No real-chama pilot has been performed.
+
 ## Step 0: setup
 - [x] Create branch `review-fixes`; it contains local work that has not been pushed to `origin/review-fixes`.
 - [x] Save the security report as `docs/review.md`. The UX plan currently lives at `docs/docs/docs/ux-plan.md` (the earlier `docs/ux-plan.md` path is stale).

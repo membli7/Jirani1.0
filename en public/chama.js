@@ -40,6 +40,7 @@ let activeAppPage = "overview";
 let auditEntries = [];
 let auditPage = 0;
 const auditPageSize = 25;
+let monthlyCloseData = null;
 let lastActivity = Date.now();
 let lastActivityPing = 0;
 const idleLimitMs = 15 * 60 * 1000;
@@ -300,6 +301,12 @@ function render() {
   $("#audit-panel").hidden = !permissions.viewAuditLog;
   $("#penalty-panel").hidden = !permissions.assessPenalties;
   $("#dividend-panel").hidden = !permissions.manageDividends;
+  $("#cash-flows-panel").hidden = user.role === "member";
+  const monthCloseInput = $("#month-close-month");
+  if (monthCloseInput) {
+    monthCloseInput.max = meetingDateToday().slice(0, 7);
+    if (!monthCloseInput.value) monthCloseInput.value = meetingDateToday().slice(0, 7);
+  }
   $("#leadership-form").hidden = !permissions.bootstrapLeadership;
   $("#leadership-elections-panel").hidden = false;
   $("#election-proposal-form").hidden = !permissions.proposeLeadershipElection;
@@ -311,7 +318,13 @@ function render() {
   if (user.mustChangePin) notice("Change your temporary PIN before making any records.", true);
   renderMessages(state.messages || []);
 
-  $("#transactions").innerHTML = transactions.map(item => `<tr><td data-label="Date">${esc(fmtDate(item.at))}</td><td data-label="Member">${esc(item.memberName)}<span class="schedule-sub">${esc(item.payer || item.recordedByName || "")}</span></td><td data-label="Amount">${money(item.amount)}</td><td data-label="Method">${esc(item.method)}${item.ref ? `<span class="schedule-sub">${esc(item.ref)}</span>` : ""}</td><td data-label="Type">${esc(item.paymentType)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-state">No transactions available.</td></tr>';
+  const canCorrectContributionDates = ["chairperson", "treasurer"].includes(user.role);
+  $("#transactions").innerHTML = transactions.map(item => {
+    const contributionDate = item.date || item.at;
+    const canCorrect = canCorrectContributionDates && item.status === "confirmed" && item.paymentType === "Monthly Contribution" && item.method === "Cash" && /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || ""));
+    const correctionButton = canCorrect ? `<button class="mini-btn" type="button" data-correct-contribution="${esc(item.id)}">${esc(t("correctDate"))}</button>` : "";
+    return `<tr><td data-label="Date">${esc(fmtDate(contributionDate))}</td><td data-label="Member">${esc(item.memberName)}<span class="schedule-sub">${esc(item.payer || item.recordedByName || "")}</span></td><td data-label="Amount">${money(item.amount)}</td><td data-label="Method">${esc(item.method)}${item.ref ? `<span class="schedule-sub">${esc(item.ref)}</span>` : ""}</td><td data-label="Type">${esc(item.paymentType)}</td><td data-label="${esc(t("transactionActions"))}">${correctionButton}</td></tr>`;
+  }).join("") || '<tr><td colspan="6" class="empty-state">No transactions available.</td></tr>';
   const memberRow = member => {
     const status = memberStatusPresentation(member.status);
     const activeRoleChange = (leadershipChanges || []).slice().reverse().find(change =>
@@ -680,6 +693,38 @@ function renderFinancialTrend(selector, months, series) {
   const table = `<table class="trend-data"><thead><tr><th>Month</th>${series.map(item => `<th>${esc(item.label)}</th>`).join("")}</tr></thead><tbody>${months.map((month, index) => `<tr><th scope="row">${esc(month.label)}</th>${series.map(item => `<td>${esc(money(item.values[index]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   container.innerHTML = `<div class="financial-trend-legend">${legend}</div><svg class="financial-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly financial trends for the last six months">${grid}${paths}${monthLabels}</svg><div class="trend-data-wrap" role="region" aria-label="Monthly financial trend data. Scroll horizontally to view all series." tabindex="0">${table}</div>`;
 }
+function renderMonthlyClose(data) {
+  if (!data) return;
+  monthlyCloseData = data;
+  const totals = data.totals || {};
+  const exceptions = data.exceptions || {};
+  const count = value => Number(value) || 0;
+  const summaryCards = [
+    { label: t("monthCloseContributions"), value: money(totals.contributionTotal), detail: `${count(totals.contributionCount)} ${t("monthCloseContributionCount")} · ${t("monthCloseWelfare")} ${money(totals.welfareAmount)} · ${t("monthCloseShareCapital")} ${money(totals.shareCapitalAmount)}` },
+    { label: t("monthCloseRepayments"), value: money(totals.repaymentTotal), detail: `${count(totals.repaymentCount)} ${t("monthCloseRepaymentCount")}` },
+    { label: t("monthCloseOpenLoans"), value: money(totals.openLoanBalance), detail: t("monthCloseNoTransferNote") },
+  ];
+  $("#month-close-summary").innerHTML = summaryCards.map(card => `<article class="month-close-stat"><h3>${esc(card.label)}</h3><strong>${esc(card.value)}</strong><p>${esc(card.detail)}</p></article>`).join("");
+
+  const exceptionCards = [
+    { key: "membersWithoutContribution", title: t("monthCloseNoContribution"), format: item => esc(item.name), note: t("monthCloseMissingContributionNote") },
+    { key: "pendingLoanRequests", title: t("monthClosePendingLoans"), format: item => `${esc(item.memberName || t("member"))} · ${esc(money(item.amount))}` },
+    { key: "outstandingPenalties", title: t("monthCloseUnpaidPenalties"), format: item => `${esc(item.memberName || t("member"))} · ${esc(money(item.amount))}${item.reason ? ` · ${esc(item.reason)}` : ""}` },
+    { key: "incompleteReferences", title: t("monthCloseIncompleteReferences"), format: item => `${esc(item.memberName || t("member"))} · ${esc(item.paymentType)} · ${esc(money(item.amount))}` },
+  ];
+  $("#month-close-exceptions").innerHTML = exceptionCards.map(card => {
+    const items = Array.isArray(exceptions[card.key]) ? exceptions[card.key] : [];
+    const details = items.length ? `<ul>${items.map(item => `<li>${card.format(item)}</li>`).join("")}</ul>` : `<p class="month-close-empty">${esc(t("monthCloseNoItems"))}</p>`;
+    const note = card.note ? `<p class="month-close-note">${esc(card.note)}</p>` : "";
+    return `<article class="month-close-exception"><div class="month-close-exception-heading"><h4>${esc(card.title)}</h4><span>${items.length}</span></div>${details}${note}</article>`;
+  }).join("");
+
+  const entries = Array.isArray(data.entries) ? data.entries : [];
+  const entryCards = entries.map(item => `<article class="month-close-entry"><div class="month-close-entry-heading"><h4>${esc(item.memberName || t("member"))}</h4><strong>${esc(money(item.amount))}</strong></div><p>${esc(item.date)} · ${esc(item.type)}</p><p>${esc(t("monthCloseReference"))}: ${esc(item.referenceNumber || "—")} · ${esc(t("monthCloseRecordedBy"))}: ${esc(item.recordedByName || "—")}</p></article>`).join("");
+  const omitted = count(data.entriesOmittedCount) > 0 ? `<p class="month-close-note">${esc(t("monthCloseLatest100"))}</p>` : "";
+  $("#month-close-entries").innerHTML = entryCards || `<p class="month-close-empty">${esc(t("monthCloseNoEntries"))}</p>`;
+  if (omitted) $("#month-close-entries").insertAdjacentHTML("afterbegin", omitted);
+}
 function financialMonths(count = 6) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
   const year = Number(parts.find(item => item.type === "year").value), month = Number(parts.find(item => item.type === "month").value);
@@ -787,18 +832,24 @@ function setConnectionStatus(status) {
   node.setAttribute("aria-label", labels[status] || status);
   node.dataset.status = status;
 }
-function startPollingFallback() {
-  if (pollingTimer) return;
-  setConnectionStatus(navigator.onLine ? "polling" : "offline");
-  pollingTimer = setInterval(() => { if (navigator.onLine) refresh(); else setConnectionStatus("offline"); }, 30000);
-  if (!chatPollingTimer) chatPollingTimer = setInterval(async () => {
+function setChatPolling(intervalMs) {
+  if (chatPollingTimer) { clearInterval(chatPollingTimer); chatPollingTimer = null; }
+  if (!intervalMs || intervalMs < 1) return;
+  chatPollingTimer = setInterval(async () => {
     if (!navigator.onLine || !authenticated || !state) return;
     try { state.messages = (await api("/api/messages")).data || []; renderMessages(state.messages); } catch {}
-  }, 5000);
+  }, intervalMs);
+}
+function startPollingFallback() {
+  if (!pollingTimer) {
+    setConnectionStatus(navigator.onLine ? "polling" : "offline");
+    pollingTimer = setInterval(() => { if (navigator.onLine) refresh(); else setConnectionStatus("offline"); }, 30000);
+  }
+  setChatPolling(5000);
 }
 function stopPollingFallback() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
-  if (chatPollingTimer) { clearInterval(chatPollingTimer); chatPollingTimer = null; }
+  setChatPolling(authenticated && state ? 30000 : 0);
 }
 function startActivityMonitor() {
   if (activityTimer) return;
@@ -846,19 +897,23 @@ function connectEventStream() {
 }
 function clearAppData() {
   state = null;
+  monthlyCloseData = null;
   attendanceData = null;
+  $("#contribution-date-dialog")?.close();
+  $("#contribution-date-form")?.reset();
   guarantorMembers = [];
   dividendDraft = null;
-  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
+  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#month-close-notice", "#month-close-summary", "#month-close-exceptions", "#month-close-entries", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
     const node = $(selector); if (node) node.textContent = "";
   }
   $("#attendance-editor").hidden = true;
   $("#attendance-view").hidden = true;
   $("#attendance-readonly-label").hidden = true;
   $("#invite-result").hidden = true;
+  $("#month-close-notice").hidden = true;
   $("#copy-invite-code").hidden = true;
   for (const selector of ["#payment-member", "#payment-loan", "#incoming-user"]) $(selector)?.replaceChildren();
-  for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
+  for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#month-close-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
 function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; document.body.classList.add("landing-mode"); setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
@@ -892,6 +947,48 @@ $("#chat-form")?.addEventListener("submit", async event => {
     notice(result.message || "Message sent.");
   } catch (error) {
     notice(error.message || t("retryError"), true);
+  } finally { setButton(form, false); }
+});
+
+const contributionDateDialog = $("#contribution-date-dialog");
+$("#transactions").addEventListener("click", event => {
+  const button = event.target.closest("[data-correct-contribution]");
+  if (!button || !state?.transactions) return;
+  const transaction = state.transactions.find(item => item.id === button.dataset.correctContribution);
+  if (!transaction?.date || !/^\d{4}-\d{2}-\d{2}$/.test(transaction.date)) return;
+  const month = transaction.date.slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const input = $("#contribution-correction-date");
+  input.min = `${month}-01`;
+  const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+  input.max = meetingDateToday() < monthEnd ? meetingDateToday() : monthEnd;
+  input.value = transaction.date;
+  $("#contribution-correction-reason").value = "";
+  $("#contribution-date-notice").hidden = true;
+  $("#contribution-date-form").dataset.transactionId = transaction.id;
+  contributionDateDialog.showModal();
+});
+$("#contribution-date-cancel").addEventListener("click", () => contributionDateDialog.close());
+$("#contribution-date-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  setButton(form, true);
+  try {
+    const result = await api(`/api/contributions/${encodeURIComponent(form.dataset.transactionId)}/correct-date`, {
+      method: "POST", body: Object.fromEntries(new FormData(form)), write: form,
+    });
+    form.reset();
+    contributionDateDialog.close();
+    notice(result.message || t("contributionDateCorrected"));
+    await refresh();
+  } catch (error) {
+    const message = $("#contribution-date-notice");
+    message.textContent = window.jiraniI18n?.translateText(error.message) || error.message;
+    message.classList.add("error");
+    message.hidden = false;
   } finally { setButton(form, false); }
 });
 
@@ -959,7 +1056,43 @@ $("#attendance-save").addEventListener("click", async event => {
   }
 });
 $("#retry").addEventListener("click", () => { $("#retry").disabled = true; refresh().finally(() => { $("#retry").disabled = false; }); });
-window.addEventListener("online", () => { setConnectionStatus("reconnecting"); if (authenticated) refresh(); else checkBackendConnection(); });
+$("#month-close-form")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const noticeNode = $("#month-close-notice");
+  if (noticeNode) {
+    noticeNode.textContent = t("monthCloseLoading");
+    noticeNode.classList.remove("error");
+    noticeNode.hidden = false;
+  }
+  setButton(form, true);
+  try {
+    const result = await api(`/api/monthly-close?month=${encodeURIComponent($("#month-close-month").value)}`);
+    renderMonthlyClose(result.data);
+    if (noticeNode) noticeNode.textContent = t("monthCloseReady");
+  } catch (error) {
+    if (noticeNode) {
+      noticeNode.textContent = error.status === 403 ? t("forbidden") : error.status === 400 ? t("monthCloseSelectMonth") : t("monthCloseFailed");
+      noticeNode.classList.add("error");
+    }
+  } finally {
+    setButton(form, false);
+  }
+});
+$("#language-switch")?.addEventListener("change", () => {
+  if (monthlyCloseData) {
+    renderMonthlyClose(monthlyCloseData);
+    const status = $("#month-close-notice");
+    if (status && !status.classList.contains("error") && !status.hidden) status.textContent = t("monthCloseReady");
+  }
+});
+window.addEventListener("online", () => {
+  setConnectionStatus("reconnecting");
+  if (streamRetryTimer) { clearTimeout(streamRetryTimer); streamRetryTimer = null; }
+  if (eventStream) { eventStream.close(); eventStream = null; }
+  if (authenticated) { startPollingFallback(); refresh(); } else checkBackendConnection();
+});
 window.addEventListener("offline", () => { if (eventStream) { eventStream.close(); eventStream = null; } setConnectionStatus("offline"); startPollingFallback(); });
 
 document.body.insertAdjacentHTML("beforeend", '<section class="login-overlay" id="pin-change" hidden><form id="pin-form" class="login-card"><h2>Change your PIN</h2><p>Choose a private 6–12 digit PIN before using the dashboard.</p><label class="field" for="current-pin">Current PIN<input id="current-pin" name="currentPin" type="password" inputmode="numeric" required></label><label class="field" for="new-pin">New PIN<input id="new-pin" name="newPin" type="password" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label><button class="button-primary">Save PIN</button></form></section>');

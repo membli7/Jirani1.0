@@ -28,12 +28,17 @@ function createTenantRepository(table) {
       return result.rows;
     },
     async replace(client, chamaId, rows) {
-      await client.query(`DELETE FROM ${name} WHERE chama_id = $1`, [chamaId]);
-      for (const row of rows) {
+      if (!Array.isArray(rows)) throw new TypeError(`Repository ${name} rows must be an array.`);
+      const inserts = rows.map(row => {
+        if (!row || typeof row !== "object" || Array.isArray(row)) throw new TypeError(`Repository ${name} rows must be objects.`);
         if (row.chama_id !== chamaId) throw new Error(`Repository ${name} received a row for another chama.`);
         const columns = Object.keys(row);
-        await client.query(insertSql(name, columns), columns.map(column => row[column]));
-      }
+        return { sql: insertSql(name, columns), values: columns.map(column => row[column]) };
+      });
+      // saveState runs replacements inside a tenant-scoped PostgreSQL transaction;
+      // validate the full batch before deleting, so ownership errors are non-destructive.
+      await client.query(`DELETE FROM ${name} WHERE chama_id = $1`, [chamaId]);
+      for (const insert of inserts) await client.query(insert.sql, insert.values);
     },
     async clear(client, chamaId) {
       await client.query(`DELETE FROM ${name} WHERE chama_id = $1`, [chamaId]);

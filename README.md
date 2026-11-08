@@ -1,6 +1,6 @@
 # Jirani Chama — MVP
 
-A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, monthly penalties, dividends, and an audit log. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript and English/Kiswahili language support. Translation coverage still needs a review.
+A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, penalties, dividends, in-app group chat, and a read-only month-end close review. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript and English/Kiswahili language support. Translation coverage still needs a review.
 
 This README describes the state at the end of the sprint. Anything not listed under "What it does" is not built.
 
@@ -8,12 +8,14 @@ This README describes the state at the end of the sprint. Anything not listed un
 
 **Contributions** (`POST /api/contributions`)
 - Cash only. Each entry needs a member, an amount, a 3–40 character reference number, a date (YYYY-MM-DD), and a note.
+- The server rejects impossible and future dates. Only the Treasurer can record a contribution; ordinary Members cannot submit or backdate one.
+- A confirmed cash contribution's date can be corrected only by the Chairperson or Treasurer, with a non-empty reason. The new date must stay in the original month and preserve on-time/late status; the amount, member, and other transaction fields do not change. The correction appends an audit event with actor, time, old/new dates, and reason.
 - The KES 500 welfare fee is charged on a member's first payment in each calendar month. The rest goes to the member's share capital, and the welfare fee goes to the welfare reserve.
 - Payments are applied in this order: outstanding penalties, then the welfare fee, then share capital. The amount must cover penalties plus the welfare fee.
 - Legacy payments were backfilled once with the same split. Backfill is idempotent.
 
 **Penalties**
-- A payment logged after the month's deadline charges a KES 200 penalty. The default deadline is the 5th of each month.
+- A late-dated contribution can create the configured late-payment penalty when the Treasurer records it. The default deadline is the 5th of each month.
 - `POST /api/settings/meeting-date` (Chairperson or Secretary) sets a different deadline for one month.
 - `POST /api/penalties/assess` (Chairperson or Secretary) runs after a month's deadline. It gives an outstanding KES 200 penalty to each active member who paid less than KES 500 by then. Each member is penalised once per month, and members with a late-payment penalty for that month are skipped.
 
@@ -21,7 +23,7 @@ This README describes the state at the end of the sprint. Anything not listed un
 - Limit: up to 3 times the borrower's share capital.
 - Guarantors: exactly two different active members, not the borrower. Their unpledged share capital must cover the principal. Pledges are locked until the loan is repaid or rejected.
 - Interest: 5% a month. Reducing balance is the default; flat rate can be requested. The schedule is created on approval. Terms are 1, 2, 3, or 6 months.
-- Approval needs three role decisions, as before. The repayment form records cash only. The app records the schedule and balances; it does not move money.
+- Approval needs three distinct role decisions; borrowers cannot decide their own request, and the Secretary fills the Chairperson or Treasurer seat when that officer is the borrower. The repayment form records cash only. The app records the schedule and balances; it does not move or disburse money.
 - Repayments pay interest first on the earliest installment, then principal. Guarantor pledges are released as principal falls.
 
 **Dividends** (`POST /api/dividends/calculate`, `POST /api/dividends/commit`; Chairperson or Treasurer)
@@ -32,12 +34,20 @@ This README describes the state at the end of the sprint. Anything not listed un
 **Attendance**
 - The Secretary can record and revise meeting attendance registers. Edits are retained in the audit trail.
 
+**In-app group chat** (`GET /api/messages`, `POST /api/messages`)
+- Active accounts can exchange group messages within their chama. The authenticated event stream carries message updates; clients poll while the stream is unavailable and continue periodic reconciliation after reconnecting.
+- WhatsApp/SMS broadcasts and chat by email are not available.
+
+**Month-end close review** (`GET /api/monthly-close?month=YYYY-MM`)
+- Chairperson, Secretary, and Treasurer can view a read-only summary of recorded cash contributions and repayments, tracked open loan balances, and items to review such as pending loans or incomplete cash references.
+- It does not reconcile bank or M-PESA statements, verify external settlement, or move money. It is a practical close checklist, not a claim that records are externally settled.
+
 **Leadership elections**
 - After initial setup, the Secretary proposes 2–20 active ordinary members for an officer seat. The Chairperson opens voting and manually closes it; each eligible chama account may cast one secret ballot. The Chairperson verifies the result, and the role change takes effect 24 hours later. A tie for the highest vote opens a runoff among tied candidates; no quorum threshold applies.
 
 **Audit log** (`GET /api/audit-log`; Chairperson or Treasurer)
-- Records payments, contributions, penalties, loan requests, decisions, repayments, pledge releases, officer changes, meeting-date changes, backfill, and dividend batches.
-- The app has no endpoint that edits or deletes entries. The log is not tamper-evident: anyone with access to the JSON file can change it.
+- Records payments, contributions and date corrections, penalties, loan requests and decisions, repayments, pledge releases, officer changes, meeting-date changes, backfill, and dividend batches.
+- A contribution correction changes only the stored date and appends its before/after details to the audit log. The app has no endpoint that edits or deletes audit entries, but the log is not tamper-evident: anyone with access to the underlying storage can change it.
 
 ## Install and run
 
@@ -89,20 +99,21 @@ From `chamafork`:
 npm test
 ```
 
-This runs the Node.js built-in test runner (`node --test`) over `chamafork/test/`. Each integration suite starts its own server with temporary data. On 2026-11-01, 134 tests passed and one PostgreSQL tenant-foreign-key integration test was skipped because `TENANT_FK_TEST_DATABASE_URL` was not configured. Test mode ignores `chamafork/.env` and uses in-process sessions so local PostgreSQL and Redis settings cannot leak into test runs.
+This runs the Node.js built-in test runner (`node --test`) over `chamafork/test/`. Each integration suite starts its own server with temporary data. On 2026-11-08, `npm.cmd test` passed with 199 passed, 0 failed, and 1 skipped; the skipped PostgreSQL tenant-foreign-key integration requires `TENANT_FK_TEST_DATABASE_URL`. Test mode ignores `chamafork/.env` and uses in-process sessions; this run also removed payment, messaging, Redis, and database environment settings.
 
-Browser behaviour has not been tested. The front-end tests check that the expected HTML and script text is present. They do not click through the UI.
+The frontend suite includes responsive-layout, bilingual-copy, and interaction-wiring regressions. This code/test pass did not include a fresh manual browser/device walkthrough or a participating-chama pilot.
 
 ## Known limits (not built or not verified)
 
-- **Browser testing:** the UI has not been exercised in a browser. Please open the dashboard as each role before relying on it.
+- **Pilot and manual walkthrough:** automated frontend checks do not replace a role-by-role walkthrough with participating chamas. No real-chama pilot has been performed.
 - **Language:** English and Kiswahili are available in the interface. Translation completeness and wording have not been reviewed end to end.
 - **Payments:** the app does not initiate M-PESA STK requests or live subscription charges. A sandbox-only inbound C2B subscription verifier is disabled until public HTTPS validation/confirmation URLs are registered and the shortcode-to-group map is valid. Bank reconciliation is not available; existing cash entries remain unchanged.
-- **Messages:** general chat, broadcast, and email delivery are not available. Invitation codes can be delivered through Africa's Talking when configured; live provider delivery has not been verified. Otherwise the one-time code is shown in the app.
-- **Security:** no two-factor authentication or tamper-evident audit chain. Same-origin write protections, role checks, and write serialization have source review and regression coverage; this is not an independent penetration test or deployment verification.
+- **Messages:** in-app group chat is available with event-stream updates, polling during outages, and periodic reconciliation. External WhatsApp/SMS broadcasts and email chat are not available. Invitation-code SMS delivery is optional and live provider delivery has not been verified.
+- **Security:** no two-factor authentication or tamper-evident audit chain. Application-level cross-chama checks and tenant-safe write validation have regression coverage; the proposed relational tenant-constraint migration has not been applied. This is not an independent penetration test or deployment verification.
 - **Data:** `DATA_BACKEND` selects JSON or PostgreSQL; it defaults to JSON for development, while production startup requires PostgreSQL. The PostgreSQL snapshot writer allows only one server process per database. See [production readiness limits](docs/docs/production-readiness.md) for the verified local state and infrastructure items that still need deployment evidence.
 - **Legacy loans:** approved loans created before the schedule change have no schedule, so they carry no interest. They repay against principal only.
-- **Penalties:** the penalty-first rule works for outstanding penalties. Assessment only runs when someone calls the endpoint, so nothing is penalised automatically.
+- **Penalties:** outstanding penalties are applied before welfare and share capital. A late-dated contribution can add its configured late penalty at entry; the separate monthly assessment for members below the welfare threshold runs only when a Chairperson or Secretary calls the endpoint.
+- **Backup/restore:** a synthetic JSON backup and restore is verified in a temporary test directory. No production backup schedule, PostgreSQL backup, or production restore has been verified.
 - **Dividend preview:** it shows the combined pool, not the penalty and interest split.
 - **Document vault, minutes, noticeboard, goals, and welfare disbursements:** not built.
 - **Leadership elections:** post-setup officer changes use secret-ballot elections. General-purpose polls are not built.

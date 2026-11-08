@@ -1,5 +1,13 @@
 # Production readiness limits
 
+## Latest synthetic safeguards check (2026-11-08)
+
+- Focused financial, tenant-isolation, chat-event fallback, repository, and restore tests passed: 23 passed, 0 failed. The standalone frontend regression suite passed: 42 passed, 0 failed.
+- Full suite from `chamafork`: `npm.cmd test` passed with 199 passed, 0 failed, and 1 skipped. The skipped PostgreSQL tenant-foreign-key integration requires `TENANT_FK_TEST_DATABASE_URL`; no database connection was used.
+- The JSON restore test used only a generated synthetic snapshot and a disposable temporary directory, then verified authenticated reads from the restored local state. The other integration tests used isolated fixtures and loopback servers; M-PESA, email/SMS, Redis, and database environment settings were removed. No production or user records were read or changed, no migration was run, and no outbound payment or messaging provider was contacted.
+- Cross-chama behavior has application-level ownership checks and synthetic foreign-read/write regression coverage. The proposed relational tenant constraints remain unapplied; they require a reviewed migration and staging verification before production use.
+- These checks do not establish a production backup schedule, PostgreSQL backup, isolated production restore, public HTTPS/proxy configuration, or real-chama workflow. Those remain deployment gates; no participating-chama pilot has occurred.
+
 Evidence checked on 2026-10-20 for this checkout. This note records local observations; it is not proof of a production deployment.
 
 ## Local test and startup follow-up (2026-11-01)

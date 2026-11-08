@@ -15,6 +15,8 @@ let serverProcess;
 let baseUrl;
 let chairCookie;
 let borrowerCookie;
+let aTreasurerCookie;
+let bChairCookie;
 
 function pinHash(pin, salt) {
   return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
@@ -62,9 +64,9 @@ before(async () => {
       { id: "a-cash", at: "2026-10-01T08:00:00.000Z", memberId: "a-chair", memberName: "A Chair", amount: 100, status: "confirmed", chamaId: "chama-a" },
       { id: "b-cash", at: "2026-10-01T08:00:00.000Z", memberId: "b-chair", memberName: "B Chair", amount: 500000, status: "confirmed", chamaId: "chama-b" },
     ],
-    loans: [], payouts: [], invitations: [], leadershipChanges: [{ id: "due-startup-election", type: "election", chamaId: "chama-a", role: "treasurer", status: "verified", winnerId: "a-election-winner", candidateIds: ["a-election-winner"], candidateNames: [{ id: "a-election-winner", name: "A Election Winner" }], activationAt: new Date(Date.now() - 1000).toISOString() }], pendingMpesas: [], idempotency: {},
+    loans: [{ id: "b-pending-loan", chamaId: "chama-b", memberId: "b-chair", memberName: "B Chair", amount: 5000, status: "pending", approvalSteps: [] }], payouts: [], invitations: [], leadershipChanges: [{ id: "due-startup-election", type: "election", chamaId: "chama-a", role: "treasurer", status: "verified", winnerId: "a-election-winner", candidateIds: ["a-election-winner"], candidateNames: [{ id: "a-election-winner", name: "A Election Winner" }], activationAt: new Date(Date.now() - 1000).toISOString() }], pendingMpesas: [], idempotency: {},
     registers: [], auditLog: [], penalties: [], welfareReserve: 0,
-    settings: { defaultDeadlineDay: 5, meetingDates: {} }, dividendCycles: [], messages: [],
+    settings: { defaultDeadlineDay: 5, meetingDates: {} }, dividendCycles: [], messages: [{ id: "b-private-message", chamaId: "chama-b", authorId: "b-chair", authorName: "B Chair", text: "SYNTHETIC-B-PRIVATE", at: "2026-10-01T08:00:00.000Z" }],
   }), "utf8");
 
   const port = await freePort();
@@ -85,6 +87,8 @@ before(async () => {
   });
   chairCookie = await login("+254711100001");
   borrowerCookie = await login("+254711100002");
+  aTreasurerCookie = await login("+254711100006");
+  bChairCookie = await login("+254711200001");
 });
 
 after(async () => {
@@ -151,4 +155,59 @@ test("leadership elections reject outside-group candidates and voters, and overd
   assert.equal(outsideVote.status, 404);
   const insideElection = (await (await fetch(`${baseUrl}/api/leadership-elections`, { headers: { Cookie: chairCookie } })).json()).data.find(item => item.id === electionId);
   assert.equal(insideElection.votesCast, 0);
+});
+
+test("authenticated reads and writes remain isolated across chamas", async () => {
+  const aPost = await fetch(`${baseUrl}/api/messages`, {
+    method: "POST",
+    headers: { Cookie: chairCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ text: "SYNTHETIC-A-PRIVATE", chamaId: "chama-b" }),
+  });
+  assert.equal(aPost.status, 201);
+  assert.equal((await aPost.json()).data.chamaId, "chama-a", "tenant ownership must come from the authenticated account");
+  const bPost = await fetch(`${baseUrl}/api/messages`, {
+    method: "POST",
+    headers: { Cookie: bChairCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ text: "SYNTHETIC-B-PRIVATE" }),
+  });
+  assert.equal(bPost.status, 201);
+
+  const aMessages = (await (await fetch(`${baseUrl}/api/messages`, { headers: { Cookie: chairCookie } })).json()).data;
+  const bMessages = (await (await fetch(`${baseUrl}/api/messages`, { headers: { Cookie: bChairCookie } })).json()).data;
+  assert.ok(aMessages.some(item => item.text === "SYNTHETIC-A-PRIVATE"));
+  assert.ok(!aMessages.some(item => item.text.includes("SYNTHETIC-B")));
+  assert.ok(bMessages.some(item => item.text === "SYNTHETIC-B-PRIVATE"));
+  assert.ok(!bMessages.some(item => item.text.includes("SYNTHETIC-A")));
+
+  const aTransactions = (await (await fetch(`${baseUrl}/api/transactions`, { headers: { Cookie: chairCookie } })).json()).data;
+  const bTransactions = (await (await fetch(`${baseUrl}/api/transactions`, { headers: { Cookie: bChairCookie } })).json()).data;
+  assert.ok(aTransactions.some(item => item.id === "a-cash"));
+  assert.ok(!aTransactions.some(item => item.id === "b-cash"));
+  assert.ok(bTransactions.some(item => item.id === "b-cash"));
+  const aLoans = (await (await fetch(`${baseUrl}/api/loans`, { headers: { Cookie: chairCookie } })).json()).data;
+  assert.ok(!aLoans.some(item => item.id === "b-pending-loan"));
+
+  const before = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  const foreignContribution = await fetch(`${baseUrl}/api/contributions`, {
+    method: "POST",
+    headers: { Cookie: aTreasurerCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ memberId: "b-chair", amount: 500, method: "Cash", note: "Synthetic isolation check", referenceNumber: "QA-A-001", date: "2026-10-05" }),
+  });
+  assert.equal(foreignContribution.status, 404);
+  const foreignCorrection = await fetch(`${baseUrl}/api/contributions/b-cash/correct-date`, {
+    method: "POST",
+    headers: { Cookie: chairCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ date: "2026-10-02", reason: "Synthetic foreign record correction check" }),
+  });
+  assert.equal(foreignCorrection.status, 404);
+  const foreignDecision = await fetch(`${baseUrl}/api/loans/b-pending-loan/decisions`, {
+    method: "POST",
+    headers: { Cookie: chairCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ decision: "approve", reason: "Synthetic cross-tenant check" }),
+  });
+  assert.equal(foreignDecision.status, 404);
+  const after = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  assert.equal(after.transactions.length, before.transactions.length, "a foreign contribution must not create a ledger entry");
+  assert.equal(after.loans.find(item => item.id === "b-pending-loan").status, "pending", "a foreign loan must remain unchanged");
+  assert.equal(after.messages.find(item => item.text === "SYNTHETIC-B-PRIVATE").chamaId, "chama-b");
 });

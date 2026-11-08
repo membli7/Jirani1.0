@@ -19,6 +19,7 @@ const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = require("./security/mpesa-c2b-subscriptions");
 const { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor } = require("./leadership-elections");
+const { connectEventClients, createEventDelivery } = require("./event-delivery");
 if (process.env.NODE_ENV === "test") {
   // Tests use explicit disposable storage and must not connect to services in the local .env.
   process.env.REDIS_URL = "";
@@ -51,6 +52,7 @@ const REDIS_URL = process.env.REDIS_URL || "";
 let redisPub = null;   // publishes chama event messages
 let redisSub = null;   // subscribed to chama event messages, feeds local SSE clients
 let redisCache = null; // general-purpose cache (summary totals)
+let redisEventsReady = false;
 
 if (REDIS_URL) {
   redisPub   = makeRedisClient(REDIS_URL, "pub");
@@ -169,17 +171,15 @@ function broadcastLocalSse(chamaId, ssePayload) {
   }
 }
 
-// Publish to Redis so ALL app instances deliver the event to their SSE clients.
-// Falls back to local-only broadcast when Redis is not configured.
-function broadcastToChama(chamaId, ssePayload) {
-  if (!chamaId) return;
-  if (redisPub) {
-    redisPub.publish(`chama:${chamaId}:events`, ssePayload)
-      .catch(err => logger.error('Redis publish error', { err: err.message }));
-  } else {
-    broadcastLocalSse(chamaId, ssePayload);
-  }
-}
+// Publish to Redis so all app instances can deliver events. Local SSE remains
+// available when pub/sub is not ready or a publish fails; clients reconcile by polling.
+const deliverChamaEvent = createEventDelivery({
+  getPublisher: () => redisPub,
+  isReady: () => redisEventsReady,
+  broadcastLocal: broadcastLocalSse,
+  onError: err => logger.error("Redis publish error; used local SSE fallback", { err: err.message }),
+});
+function broadcastToChama(chamaId, ssePayload) { deliverChamaEvent(chamaId, ssePayload); }
 
 // Invalidate the cached dashboard summary after any write that changes totals.
 function invalidateSummaryCache(chamaId) {
@@ -408,6 +408,12 @@ function scheduledMeetingDate(month) {
 }
 function nairobiDate(value) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(value)); }
 function todayInNairobi() { return nairobiDate(new Date()); }
+function isValidCalendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+function isValidContributionDate(value) { return isValidCalendarDate(value) && value <= todayInNairobi(); }
 function transactionDate(item) { return item.date || nairobiDate(item.at); }
 function addMonthsToDate(date, months) { const next = new Date(`${date}T00:00:00Z`); next.setUTCMonth(next.getUTCMonth() + months); return next.toISOString().slice(0, 10); }
 function scopeToChama(collection, chamaId, getChamaId = item => item?.chamaId) {
@@ -1616,6 +1622,66 @@ app.get("/api/summary", requireAuth, requirePinChanged, async (req, res, next) =
   catch (error) { return next(error); }
 });
 
+function monthlyCloseForChama(chamaId, month) {
+  const recordDate = item => {
+    if (isValidCalendarDate(item.date)) return item.date;
+    const timestamp = Date.parse(item.at || "");
+    return Number.isFinite(timestamp) ? nairobiDate(timestamp) : "";
+  };
+  const monthEntries = scopeToChama(state.transactions, chamaId)
+    .filter(item => recordDate(item).slice(0, 7) === month && item.method === "Cash" &&
+      ["Monthly Contribution", "Loan Repayment"].includes(item.paymentType) &&
+      !["pending-member", "unverified", "pending"].includes(String(item.status || "").toLowerCase()));
+  const contributions = monthEntries.filter(item => item.paymentType === "Monthly Contribution");
+  const repayments = monthEntries.filter(item => item.paymentType === "Loan Repayment");
+  const sum = (items, field = "amount") => items.reduce((total, item) => total + (Number(item[field]) || 0), 0);
+  const contributedMembers = new Set(contributions.map(item => item.memberId));
+  const membersWithoutContribution = scopeToChama(state.users, chamaId)
+    .filter(item => item.status === "active" && !contributedMembers.has(item.id))
+    .map(item => ({ id: item.id, name: item.name }));
+  const pendingLoanRequests = scopeToChama(state.loans, chamaId)
+    .filter(item => item.status === "pending")
+    .map(item => ({ id: item.id, memberName: item.memberName, amount: Number(item.amount) || 0 }));
+  const outstandingPenalties = scopeToChama(state.penalties, chamaId)
+    .filter(item => item.status === "outstanding")
+    .map(item => ({ id: item.id, memberName: item.memberName, amount: Number(item.amount) || 0, reason: item.reason || "" }));
+  const incompleteReferences = monthEntries
+    .filter(item => !clean(item.referenceNumber) || !clean(item.recordedBy))
+    .map(item => ({ id: item.id, memberName: item.memberName, amount: Number(item.amount) || 0, paymentType: item.paymentType }));
+  const sortedEntries = monthEntries.slice().sort((left, right) =>
+    recordDate(right).localeCompare(recordDate(left)) || String(right.at || "").localeCompare(String(left.at || "")));
+  const approvedLoans = scopeToChama(state.loans, chamaId).filter(item => item.status === "approved");
+
+  return {
+    month,
+    generatedAt: now(),
+    totals: {
+      contributionCount: contributions.length,
+      contributionTotal: sum(contributions),
+      welfareAmount: sum(contributions, "welfareAmount"),
+      shareCapitalAmount: sum(contributions, "shareCapitalAmount"),
+      repaymentCount: repayments.length,
+      repaymentTotal: sum(repayments),
+      openLoanBalance: sum(approvedLoans, "outstanding"),
+    },
+    exceptions: { membersWithoutContribution, pendingLoanRequests, outstandingPenalties, incompleteReferences },
+    entries: sortedEntries.slice(0, 100).map(item => ({
+      date: recordDate(item), type: item.paymentType, memberName: item.memberName,
+      amount: Number(item.amount) || 0, referenceNumber: item.referenceNumber || "",
+      recordedByName: item.recordedByName || "",
+    })),
+    entriesOmittedCount: Math.max(0, sortedEntries.length - 100),
+  };
+}
+
+app.get("/api/monthly-close", requireAuth, requirePinChanged, requireRole("chairperson", "secretary", "treasurer"), (req, res) => {
+  const month = typeof req.query?.month === "string" ? req.query.month.trim() : "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || Number(month.slice(0, 4)) < 1900 || month > todayInNairobi().slice(0, 7)) {
+    return res.status(400).json({ message: "Choose a valid current or past month (YYYY-MM)." });
+  }
+  return res.json({ data: monthlyCloseForChama(req.user.chamaId, month) });
+});
+
 // ---------------------------------------------------------------------------
 // Phase 2: paginated list endpoints
 // Supports ?limit=N&offset=N (offset-based) and ?limit=N&before=<id> (cursor).
@@ -1839,7 +1905,7 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
   if (foreignMember) return res.status(404).json({ message: "Member not found." });
   const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const note = clean(req.body?.note); const referenceNumber = clean(req.body?.referenceNumber); const date = clean(req.body?.date);
-  if (!member || !Number.isSafeInteger(amount) || amount < 1 || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !/^[A-Za-z0-9/._-]{3,40}$/.test(referenceNumber) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, date, and a 3-500 character note." });
+  if (!member || !Number.isSafeInteger(amount) || amount < 1 || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !/^[A-Za-z0-9/._-]{3,40}$/.test(referenceNumber) || !isValidContributionDate(date)) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, a real non-future date, and a 3-500 character note." });
   const contributionMonth = date.slice(0, 7);
   const welfarePaid = scopeToChama(state.transactions, req.user.chamaId).some(item => item.memberId === member.id && item.contributionMonth === contributionMonth && item.welfareAmount > 0);
   const meetingDate = scheduledMeetingDate(contributionMonth);
@@ -1866,6 +1932,42 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
     updated.auditLog.push(auditEntry("penalty.paid", charge.id, req.user, { memberId: member.id, memberName: member.name, amount: charge.amount, transactionId: transaction.id }));
   }
   return commit(req, res, next, updated, 201, { message: "Contribution recorded successfully.", data: transaction }, undefined, () => publishFinancialUpdate(req.user.chamaId));
+}));
+// All non-read /api requests are serialized before reaching this handler, and commit persists the updated record plus audit event together.
+app.post("/api/contributions/:id/correct-date", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), requireActiveSubscription, idempotent((req, res, next) => {
+  const transactionId = clean(req.params.id);
+  const transaction = scopeToChama(state.transactions, req.user.chamaId).find(item => item.id === transactionId);
+  if (!transaction) return res.status(404).json({ message: "Contribution not found." });
+  const oldDate = typeof transaction.date === "string" ? transaction.date : "";
+  const date = clean(req.body?.date);
+  const reason = typeof req.body?.reason === "string" ? clean(req.body.reason) : "";
+  const contributionMonth = transaction.contributionMonth || oldDate.slice(0, 7);
+  if (transaction.paymentType !== "Monthly Contribution" || transaction.method !== "Cash" || transaction.status !== "confirmed" || !isValidCalendarDate(oldDate) || !/^\d{4}-\d{2}$/.test(contributionMonth) || oldDate.slice(0, 7) !== contributionMonth) {
+    return res.status(409).json({ message: "Only confirmed cash contribution dates with a valid original month can be corrected." });
+  }
+  if (!isValidContributionDate(date) || !reason || reason.length > 500) {
+    return res.status(400).json({ message: "Enter a real non-future date and a non-empty reason of up to 500 characters." });
+  }
+  if (date === oldDate) return res.status(409).json({ message: "The corrected date must differ from the recorded date." });
+  if (date.slice(0, 7) !== contributionMonth) {
+    return res.status(409).json({ message: "A date correction must remain within the original contribution month." });
+  }
+  const deadline = scheduledMeetingDate(contributionMonth);
+  if (!isValidCalendarDate(deadline) || (oldDate > deadline) !== (date > deadline)) {
+    return res.status(409).json({ message: "A date correction cannot change whether the contribution was on time or late." });
+  }
+  const updated = structuredClone(state);
+  const saved = scopeToChama(updated.transactions, req.user.chamaId).find(item => item.id === transactionId);
+  saved.date = date;
+  const correction = auditEntry("contribution.date_corrected", saved.id, req.user, {
+    memberId: saved.memberId, memberName: saved.memberName, referenceNumber: saved.referenceNumber || "",
+    oldDate, newDate: date, reason,
+  });
+  updated.auditLog.push(correction);
+  return commit(req, res, next, updated, 200, {
+    message: "Contribution date corrected and recorded in the audit log.",
+    data: { transaction: saved, audit: correction },
+  }, undefined, () => publishFinancialUpdate(req.user.chamaId));
 }));
 app.post("/api/settings/meeting-date", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const month = clean(req.body?.month); const date = clean(req.body?.date);
@@ -2556,12 +2658,15 @@ app.use((error, req, res, next) => {
 async function start() {
   await initializeStorage();
   await sessionBackend.connect();
-  if (redisPub && !redisPub.isOpen) await redisPub.connect();
-  if (redisSub && !redisSub.isOpen) {
-    await redisSub.connect();
-    await redisSub.pSubscribe("chama:*:events", (message, channel) => {
-      const match = channel.match(/^chama:(.+):events$/);
-      if (match) broadcastLocalSse(match[1], message);
+  if (redisPub && redisSub) {
+    redisEventsReady = await connectEventClients({
+      publisher: redisPub,
+      subscriber: redisSub,
+      subscribe: client => client.pSubscribe("chama:*:events", (message, channel) => {
+        const match = channel.match(/^chama:(.+):events$/);
+        if (match) broadcastLocalSse(match[1], message);
+      }),
+      onFailure: error => logger.warn("Redis event fanout unavailable; local SSE and polling fallback remain active", { err: error.message }),
     });
   }
   if (redisCache && !redisCache.isOpen) await redisCache.connect();

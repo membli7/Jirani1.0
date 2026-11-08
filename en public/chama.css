@@ -2405,3 +2405,37 @@ body { background: var(--bg); }
   #members-panel .members-table tr { padding: 10px 11px; }
   #members-panel .members-table td { grid-template-columns: minmax(5.55rem, 36%) minmax(0, 1fr); gap: 8px; }
 }
+
+
+/* Read-only month-close review: compact cards that stack cleanly on phones. */
+.month-close-form { display: grid; grid-template-columns: minmax(190px, 240px) auto; align-items: end; gap: 12px; padding: 0 17px 16px; }
+.month-close-form .field { margin: 0; }
+.month-close-form .button-primary { width: auto; min-width: 150px; }
+.month-close-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0 17px; }
+.month-close-stat { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.month-close-stat h3 { margin: 0 0 8px; color: var(--muted); font-size: 14px !important; line-height: 1.4; }
+.month-close-stat strong { display: block; overflow-wrap: anywhere; font-size: 22px !important; font-weight: 800; }
+.month-close-stat p { margin: 8px 0 0; color: var(--muted); font-size: 13px !important; line-height: 1.5; overflow-wrap: anywhere; }
+.month-close-section-title { margin: 22px 17px 10px; font-size: 18px !important; line-height: 1.3; }
+.month-close-exceptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 17px; }
+.month-close-exception { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.month-close-exception-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.month-close-exception-heading h4 { margin: 0; overflow-wrap: anywhere; font-size: 14px !important; line-height: 1.4; }
+.month-close-exception-heading span { flex: 0 0 auto; min-width: 28px; padding: 3px 8px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-weight: 800; text-align: center; }
+.month-close-exception ul { margin: 10px 0 0; padding-left: 20px; }
+.month-close-exception li { margin: 6px 0; overflow-wrap: anywhere; font-size: 13px !important; line-height: 1.45; }
+.month-close-empty { margin: 10px 0 0; color: var(--muted); font-size: 13px !important; line-height: 1.45; }
+.month-close-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; color: #53645a; background: #f5f8f5; font-size: 12px !important; line-height: 1.45; }
+.month-close-entries { display: grid; gap: 8px; padding: 0 17px 17px; }
+.month-close-entry { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.month-close-entry-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.month-close-entry-heading h4 { margin: 0; overflow-wrap: anywhere; font-size: 14px !important; }
+.month-close-entry-heading strong { color: var(--green); font-size: 15px !important; white-space: nowrap; }
+.month-close-entry p { margin: 6px 0 0; color: var(--muted); font-size: 13px !important; line-height: 1.45; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .month-close-form { grid-template-columns: minmax(0, 1fr); padding: 0 12px 14px; }
+  .month-close-form .button-primary { width: 100%; }
+  .month-close-summary, .month-close-exceptions { grid-template-columns: minmax(0, 1fr); padding-right: 12px; padding-left: 12px; }
+  .month-close-section-title { margin-right: 12px; margin-left: 12px; }
+  .month-close-entries { padding-right: 12px; padding-left: 12px; }
+}

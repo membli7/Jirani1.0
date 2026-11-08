@@ -171,14 +171,14 @@ test("landing page uses muted color backgrounds without photos", () => {
 
 test("public landing design system is scoped to signed-out mode and has a distinct responsive hierarchy", () => {
   assert.match(html, /<body class="landing-mode">/);
-  assert.match(html, /href="\/landing-theme\.css\?v=20261107\.5"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261108\.1"/);
   assert.match(landingTheme, /body\.landing-mode\s*\{[\s\S]*?--forest:\s*#153d33/);
   assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*var\(--forest\)/);
   assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*transparent/);
   assert.match(landingTheme, /body\.landing-mode \.login-brand h1\s*\{[\s\S]*?font-family:\s*Georgia/);
   assert.match(landingTheme, /body\.landing-mode \.login-brand::before[\s\S]*?background:\s*linear-gradient\(var\(--gold\)/);
   assert.match(landingTheme, /body\.landing-mode #login \.landing-sections-container\s*\{[\s\S]*?gap:\s*0/);
-  assert.match(landingTheme, /body\.landing-mode #features \.features-grid[\s\S]*?grid-template-columns:\s*repeat\(4/);
+  assert.match(landingTheme, /body\.landing-mode #features \.features-grid[\s\S]*?grid-template-columns:\s*repeat\(3/);
   assert.match(landingTheme, /body\.landing-mode #security\.landing-section\s*\{/);
   assert.match(landingTheme, /body\.landing-mode #pricing\.landing-section\s*\{/);
   assert.match(landingTheme, /body\.landing-mode #faq details\s*\{/);
@@ -193,6 +193,25 @@ test("public landing design system is scoped to signed-out mode and has a distin
   assert.match(landingTheme, /@media \(max-width: 390px\)/);
   assert.match(script, /document\.body\.classList\.remove\("landing-mode"\)/);
   assert.match(script, /document\.body\.classList\.add\("landing-mode"\)/);
+});
+
+test("landing features and FAQs distinguish chat, monthly close, approvals, penalties, and money handling", () => {
+  assert.equal((html.match(/class="feature-card"/g) || []).length, 6);
+  assert.match(html, /data-i18n="landingMonthCloseTitle"/);
+  assert.match(html, /data-i18n="landingChatTitle"/);
+  assert.match(landingTheme, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
+  assert.match(landingTheme, /@media \(max-width: 900px\)[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(landingTheme, /@media \(max-width: 600px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(html, /data-i18n="faqMonthCloseAnswer"/);
+  assert.match(html, /data-i18n="faqChatAnswer"/);
+  assert.match(html, /data-i18n="faqCorrectionAnswer"/);
+  assert.match(html, /data-i18n="faqMoneyAnswer"/);
+  assert.doesNotMatch(html, /Two-step approvals|Every action is recorded/);
+  assert.match(i18n, /landingMonthCloseTitle: "A clearer month-end close"/);
+  assert.match(i18n, /landingMonthCloseTitle: "Hitimisho la mwezi lililo wazi zaidi"/);
+  assert.match(i18n, /faqPenaltyAnswer: "[^"]*manual, not automatic\./);
+  assert.match(i18n, /faqSecurityAnswer: "[^"]*not tamper-evident/);
+  assert.match(i18n, /faqMoneyAnswer: "No\.[^"]*does not collect or disburse funds/);
 });
 
 test("landing footer remains reachable inside the scrollable sign-in overlay", () => {
@@ -259,7 +278,7 @@ test("subscription rollout copy keeps access activation server-verified and make
   assert.match(server, /app\.post\("\/api\/mpesa\/callback"[\s\S]*?STK payment requests are not implemented/);
   assert.match(server, /app\.post\("\/api\/mpesa\/c2b\/validation"/);
   assert.match(server, /app\.post\("\/api\/mpesa\/c2b\/confirmation"/);
-  assert.match(html, /The app does not assess penalties automatically/);
+  assert.match(html, /That assessment is manual, not automatic/);
   assert.match(html, /Clicking a plan or reporting that you paid never activates access/);
   assert.match(html, /Your financial history remains available to view and export/);
   assert.match(html, /New financial records, member invitations, loan decisions, and other subscription-gated actions are blocked for unpaid or expired groups/);
@@ -464,7 +483,7 @@ test("registration signs in and opens the dashboard when setup was already compl
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261107\.6" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261108\.2" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -585,8 +604,10 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261107\.6"/);
-  assert.match(html, /src="\/chama\.js\?v=20261107\.6"/);
+  assert.match(html, /href="\/chama\.css\?v=20261108\.2"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261108\.1"/);
+  assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
+  assert.match(html, /src="\/chama\.js\?v=20261108\.2"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);
@@ -603,7 +624,40 @@ test("chat renders server messages and reloads when a live message event arrives
   assert.match(script, /state\.messages = \(await api\("\/api\/messages"\)\)\.data \|\| \[\]/);
   assert.match(script, /addEventListener\("messages-updated"/);
   assert.match(script, /renderMessages\(state\.messages\)/);
-  assert.match(script, /setInterval\(async \(\) =>[\s\S]*?api\("\/api\/messages"\)[\s\S]*?\}, 5000\)/);
+  assert.match(script, /function setChatPolling\(intervalMs\)/);
+  assert.match(script, /setChatPolling\(5000\)/);
+  assert.match(script, /setChatPolling\(authenticated && state \? 30000 : 0\)/);
+  assert.match(script, /window\.addEventListener\("online", \(\) => \{[\s\S]*?clearTimeout\(streamRetryTimer\)/);
+});
+
+test("month-close review is read-only, bilingual, and laid out as responsive cards", () => {
+  assert.match(html, /id="cash-flows-panel"[^>]*hidden/);
+  assert.match(html, /id="month-close-form"/);
+  assert.match(html, /id="month-close-month"[^>]*type="month"/);
+  assert.match(html, /doesn't reconcile with bank or M-PESA statements or move money/);
+  assert.match(script, /function renderMonthlyClose\(data\)/);
+  assert.match(script, /api\(`\/api\/monthly-close\?month=\$\{encodeURIComponent/);
+  assert.match(script, /\$\("#cash-flows-panel"\)\.hidden = user\.role === "member"/);
+  assert.match(i18n, /monthCloseTitle: "Month-end review"/);
+  assert.match(i18n, /monthCloseTitle: "Mapitio ya mwisho wa mwezi"/);
+  assert.match(i18n, /monthCloseNoTransferNote: "These are recorded balances only; the app does not move money\."/);
+  assert.match(i18n, /monthCloseNoTransferNote: "Haya ni masalio yaliyorekodiwa tu; programu haihamishi pesa\."/);
+  assert.match(css, /\.month-close-summary\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 680px\) \{[\s\S]*?\.month-close-summary, \.month-close-exceptions \{ grid-template-columns: minmax\(0, 1fr\)/);
+});
+
+test("contribution date correction UI is reason-required, officer-only, and bilingual", () => {
+  assert.match(html, /<th data-i18n="transactionActions">Actions<\/th>/);
+  assert.match(html, /id="contribution-date-dialog"/);
+  assert.match(html, /id="contribution-correction-reason"[^>]*maxlength="500"[^>]*required/);
+  assert.match(script, /const canCorrectContributionDates = \["chairperson", "treasurer"\]\.includes\(user\.role\)/);
+  assert.match(script, /item\.status === "confirmed" && item\.paymentType === "Monthly Contribution" && item\.method === "Cash"/);
+  assert.match(script, /\/api\/contributions\/\$\{encodeURIComponent\(form\.dataset\.transactionId\)\}\/correct-date/);
+  assert.match(script, /input\.min = `\$\{month\}-01`/);
+  assert.match(i18n, /correctContributionDate: "Correct contribution date"/);
+  assert.match(i18n, /correctContributionDate: "Sahihisha tarehe ya mchango"/);
+  assert.match(i18n, /dateCorrectionRules: "Mwenyekiti au Mweka Hazina pekee/);
+  assert.match(i18n, /cashDateLimit: \["Dates must be real calendar dates and cannot be in the future\./);
 });
 
 test("header icons, profile actions, live dot, muted background, and short menu are usable", () => {

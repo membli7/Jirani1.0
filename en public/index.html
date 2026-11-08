@@ -5,8 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-        <link rel="stylesheet" href="/chama.css?v=20261107.6">
-        <link rel="stylesheet" href="/landing-theme.css?v=20261107.5">
+        <link rel="stylesheet" href="/chama.css?v=20261108.2">
+        <link rel="stylesheet" href="/landing-theme.css?v=20261108.1">
     </head>
 <body class="landing-mode">
  <header class="topbar">
@@ -102,7 +102,7 @@
           <a href="#penalty-panel" data-panel="penalty-panel">Penalties</a>
           <a href="#audit-panel" data-panel="audit-panel">Audit log</a>
           <a href="#dividend-panel" data-panel="dividend-panel">Dividends</a>
-          <a href="#cash-flows-panel" data-panel="cash-flows-panel">Cash flow</a>
+          <a href="#cash-flows-panel" data-panel="cash-flows-panel" data-i18n="monthCloseNav">Monthly close</a>
           <a href="#invite-panel" data-panel="invite-panel">Invite</a>
         </div>
       </div>
@@ -427,11 +427,12 @@
                         <th>Amount</th>
                         <th>Method</th>
                         <th>Type</th>
+                        <th data-i18n="transactionActions">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="transactions">
                     <tr>
-                        <td colspan="5" class="skeleton" data-i18n="loading">Loading…</td>
+                        <td colspan="6" class="skeleton" data-i18n="loading">Loading…</td>
                     </tr>
                 </tbody>
             </table>
@@ -763,32 +764,23 @@
             </table>
         </div>
     </section>
-    <section class="panel" id="cash-flows-panel" aria-labelledby="cash-flows-title" hidden>
+    <section class="panel" id="cash-flows-panel" aria-labelledby="cash-flows-title" aria-label="Monthly close review" data-i18n-aria-label="monthClosePanelLabel" hidden>
         <div class="panel-heading">
             <div>
-                <h2 id="cash-flows-title" data-i18n="cashFlowTableTitle">Recent cash flows</h2>
+                <h2 id="cash-flows-title" data-i18n="monthCloseTitle">Month-end review</h2>
+                <p data-i18n="monthCloseIntro">Review cash entries and open items recorded in this chama. This is a read-only ledger review; it doesn't reconcile with bank or M-PESA statements or move money.</p>
             </div>
         </div>
-        <p id="cash-flows-notice" class="notice" role="status" hidden></p>
-        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries. Scroll within this area to review entries." tabindex="0">
-            <table class="audit-table cash-flow-table">
-                <thead>
-                    <tr>
-                        <th data-i18n="flow">Flow</th>
-                        <th data-i18n="type">Type</th>
-                        <th data-i18n="memberLabel">Member</th>
-                        <th data-i18n="amountKes">Amount</th>
-                        <th data-i18n="date">Date</th>
-                        <th data-i18n="time">Time</th>
-                        <th data-i18n="recordedBy">Recorded by</th>
-                        <th data-i18n="reason">Reason</th>
-                        <th data-i18n="status">Status</th>
-                        <th data-i18n="actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="cash-flows-list" aria-live="polite"></tbody>
-            </table>
-        </div>
+        <form id="month-close-form" class="month-close-form">
+            <label class="field" for="month-close-month"><span data-i18n="monthCloseMonth">Review month</span><input id="month-close-month" name="month" type="month" required></label>
+            <button class="button-primary" type="submit" data-i18n="monthCloseLoad">Build review</button>
+        </form>
+        <p id="month-close-notice" class="notice" role="status" aria-live="polite" hidden></p>
+        <div id="month-close-summary" class="month-close-summary" aria-live="polite"></div>
+        <h3 class="month-close-section-title" data-i18n="monthCloseItemsTitle">Items to review</h3>
+        <div id="month-close-exceptions" class="month-close-exceptions" aria-live="polite"></div>
+        <h3 class="month-close-section-title" data-i18n="monthCloseEntriesTitle">Cash ledger entries for this month</h3>
+        <div id="month-close-entries" class="month-close-entries" aria-live="polite"></div>
     </section>
     <section class="panel" id="penalty-panel" aria-labelledby="penalty-title" hidden>
         <div class="panel-heading">
@@ -903,7 +895,28 @@
                                 </svg>
                             </div>
                             <h3>Security &amp; Transparency</h3>
-                            <p>PIN-protected accounts, role-based access, and a record of important changes help your group stay accountable.</p>
+                            <p data-i18n="landingAuditCopy">PIN-protected, role-scoped access and an application audit log support review. The log is not tamper-evident, so keep source receipts and backups.</p>
+                        </article>
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="5" width="16" height="16" rx="2"/>
+                                    <path d="M9 3h6v4H9z"/>
+                                    <path d="M8 12h8M8 16h8"/>
+                                </svg>
+                            </div>
+                            <h3 data-i18n="landingMonthCloseTitle">A clearer month-end close</h3>
+                            <p data-i18n="landingMonthCloseCopy">Bring recorded cash contributions, repayments, open loan balances, and items needing attention into one read-only monthly view. Compare it with receipts and statements yourself; the app does not verify settlement or move funds.</p>
+                        </article>
+                        <article class="feature-card">
+                            <div class="feature-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5 8.2 8.2 0 0 1-3.4-.7L4 20l1.7-4.5a7.5 7.5 0 1 1 15.3-4z"/>
+                                    <path d="M8 11h8M8 14h5"/>
+                                </svg>
+                            </div>
+                            <h3 data-i18n="landingChatTitle">Group chat, in context</h3>
+                            <p data-i18n="landingChatCopy">Active chama members can discuss within their group. Messages refresh through live updates with polling recovery when the connection drops; this is not a WhatsApp or SMS broadcast.</p>
                         </article>
                     </div>
                 </div>
@@ -974,7 +987,7 @@
                                     <circle cx="12" cy="12" r="4"/>
                                 </svg>
                             </div>
-                            <div class="security-text"><strong>Two-step approvals.</strong> Sensitive changes like leadership and loans require review and confirmation before they take effect.</div>
+                            <div class="security-text"><strong data-i18n="landingDecisionsTitle">Decisions with clear roles.</strong> <span data-i18n="landingDecisionsCopy">Loans need three distinct role decisions. After setup, officer seats follow a scheduled secret-ballot election.</span></div>
                         </li>
                         <li class="security-card">
                             <div class="security-icon" aria-hidden="true">
@@ -986,7 +999,7 @@
                                     <path d="M8 15h6"/>
                                 </svg>
                             </div>
-                            <div class="security-text"><strong>Audit clarity.</strong> Every action is recorded so the group can trace who approved, changed, or recorded each event.</div>
+                            <div class="security-text"><strong>Audit history.</strong> <span data-i18n="landingAuditCopy">PIN-protected, role-scoped access and an application audit log support review. The log is not tamper-evident, so keep source receipts and backups.</span></div>
                         </li>
                     </ul>
                 </div>
@@ -1045,41 +1058,45 @@
                         </details>
 
                        <details>
-                            <summary>How do I get my group started?</summary>
+                            <summary data-i18n="faqGettingStartedQuestion">How do I get my group started?</summary>
                             <div class="faq-answer">
-                                <p>Register your profile with a private PIN, use direct invitation codes to invite members, assign officer roles, and start tracking records instantly.</p>
+                                <p data-i18n="faqGettingStartedAnswer">Create your profile, invite members with one-time codes, and use scheduled secret-ballot elections for post-setup officer seats.</p>
                             </div>
                         </details>
 
                         <details>
-                            <summary>Can we track individual contributions and balances?</summary>
+                            <summary data-i18n="faqFinancialQuestion">Can we track individual contributions and balances?</summary>
                             <div class="faq-answer">
-                                <p>Yes. Members and officers can review recorded contributions, balances, loans, and repayments. Money is still received and paid outside the app.</p>
+                                <p data-i18n="faqFinancialAnswer">Members and officers can review recorded contributions, balances, loans, and repayments. The app records what the group entered; cash is received or paid outside it.</p>
                             </div>
                         </details>
 
                         <details>
-                            <summary>Are our group's money and data secure?</summary>
+                            <summary data-i18n="faqSecurityQuestion">Are our group's money and data secure?</summary>
                             <div class="faq-answer">
-                                <p>Accounts use private PINs and role-based permissions. Important changes are recorded so officers can review group activity.</p>
+                                <p data-i18n="faqSecurityAnswer">Access is role-scoped and key actions are recorded in an application audit log. The log is not tamper-evident; compare records with receipts and keep backups.</p>
                             </div>
                         </details>
 
                         <details>
-                            <summary>How are monthly contributions split between welfare and share capital?</summary>
+                            <summary data-i18n="faqContributionSplitQuestion">How are monthly contributions split between welfare and share capital?</summary>
                             <div class="faq-answer">
-                                <p>The chairperson sets the monthly welfare amount during chama registration. Each member's first contribution payment of the month covers that amount, and any remainder is allocated to share capital.</p>
+                                <p data-i18n="faqContributionSplitAnswer">The Chairperson sets the monthly welfare amount during setup. A contribution first settles outstanding penalties, then covers the member's welfare amount once per month; any remainder goes to share capital.</p>
                             </div>
                         </details>
 
                         <details>
-                            <summary>How does the platform handle loan approvals and repayments?</summary>
+                            <summary data-i18n="faqLoanQuestion">How does the platform handle loan approvals and repayments?</summary>
                             <div class="faq-answer">
-                                <p>Loans require three role-based approvals and support 1, 2, 3, or 6 month terms with reducing-balance or flat interest models. The monthly interest rate defaults to 5% and can be changed during chama registration. Repayments clear interest first, followed by principal, starting with the earliest installment.</p>
+                                <p data-i18n="faqLoanAnswer">A loan needs three distinct role decisions, and borrowers cannot decide their own request. When the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. Supported terms are 1, 2, 3, or 6 months; repayments clear interest before principal. The app records the obligation and cash repayment but does not disburse funds.</p>
                             </div>
                         </details>
 
-                        <details><summary>How are late-payment penalties assessed?</summary><div class="faq-answer"><p>After the configured deadline, the Chairperson or Secretary runs the penalty assessment. The app does not assess penalties automatically. At most one outstanding penalty is assessed for an eligible member and month.</p></div></details>
+                        <details><summary data-i18n="faqPenaltyQuestion">How are late-payment penalties assessed?</summary><div class="faq-answer"><p data-i18n="faqPenaltyAnswer">A late-dated contribution can create the configured late penalty when the Treasurer records it. Separately, the Chairperson or Secretary must run the monthly assessment for eligible members who have not met the welfare threshold. That assessment is manual, not automatic.</p></div></details>
+                        <details><summary data-i18n="faqMonthCloseQuestion">What does the month-end close review show?</summary><div class="faq-answer"><p data-i18n="faqMonthCloseAnswer">It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to review, such as pending loan requests or missing references. It is read-only and does not reconcile bank or M-PESA statements or move money.</p></div></details>
+                        <details><summary data-i18n="faqChatQuestion">Can our group chat inside the app?</summary><div class="faq-answer"><p data-i18n="faqChatAnswer">Yes. Active accounts can use the chama's in-app group chat. It refreshes through the event stream with polling and reconnection support. WhatsApp/SMS broadcasts and chat by email are not included.</p></div></details>
+                        <details><summary data-i18n="faqCorrectionQuestion">Can we correct a contribution date after recording it?</summary><div class="faq-answer"><p data-i18n="faqCorrectionAnswer">Only the Chairperson or Treasurer can correct the date of a confirmed cash contribution, and a non-empty reason is required. The new date must be valid, not future-dated, stay in the original month, and preserve whether the contribution was on time or late. Amount, member, and other transaction fields are unchanged. An audit event records the actor, time, old and new dates, and reason; the audit store is not tamper-evident.</p></div></details>
+                        <details><summary data-i18n="faqMoneyQuestion">Does Jirani Chama receive, verify, or move our money?</summary><div class="faq-answer"><p data-i18n="faqMoneyAnswer">No. It records cash already received or paid outside the app. It does not collect or disburse funds, and bank/M-PESA settlement matching is not enabled.</p></div></details>
                         <details><summary>Which plan fits our group?</summary><div class="faq-answer"><p>Basic supports up to 10 members. Growth Chama supports up to 30 members. Enterprise / Investment is for groups above 30 members and is arranged with sales. Member limits are enforced by the server when members are invited or activated.</p></div></details>
                         <details><summary>How does the annual discount work?</summary><div class="faq-answer"><p>Basic is KSh 2,880 per year instead of KSh 3,600, saving KSh 720. Growth Chama is KSh 5,760 per year instead of KSh 7,200, saving KSh 1,440. Both annual options are 20% off the equivalent monthly total.</p></div></details>
                         <details><summary>When does payment confirm our subscription?</summary><div class="faq-answer"><p>A subscription becomes active only after the server verifies a real provider transaction for the expected KES amount and the group’s reference. Clicking a plan or reporting that you paid never activates access. Online payment collection is not enabled yet.</p></div></details>
@@ -1203,9 +1220,22 @@
         </div>
     </form>
  </dialog>
- <script src="/i18n.js?v=20261107.1" defer></script>
+ <dialog id="contribution-date-dialog" aria-labelledby="contribution-date-title">
+    <form id="contribution-date-form" class="form-body contribution-correction-form">
+        <h2 id="contribution-date-title" data-i18n="correctContributionDate">Correct contribution date</h2>
+        <p data-i18n="dateCorrectionRules">Only Chairpersons and Treasurers can correct a recorded cash contribution. The change requires a reason, must stay in the same month and cannot change whether the contribution was on time or late.</p>
+        <p id="contribution-date-notice" class="notice" role="status" aria-live="polite" hidden></p>
+        <label class="field" for="contribution-correction-date"><span data-i18n="correctedDate">Corrected date</span><input id="contribution-correction-date" name="date" type="date" required></label>
+        <label class="field" for="contribution-correction-reason"><span data-i18n="correctionReason">Reason for correction</span><textarea id="contribution-correction-reason" name="reason" maxlength="500" required></textarea></label>
+        <div class="dialog-actions">
+            <button id="contribution-date-cancel" class="mini-btn" type="button" data-i18n="cancel">Cancel</button>
+            <button class="button-primary" type="submit" data-i18n="saveCorrection">Save correction</button>
+        </div>
+    </form>
+ </dialog>
+ <script src="/i18n.js?v=20261108.3" defer></script>
  <script src="/write-requests.js?v=20261016.1" defer></script>
- <script src="/chama.js?v=20261107.6" defer></script>
+ <script src="/chama.js?v=20261108.2" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
 </body>
 </html>

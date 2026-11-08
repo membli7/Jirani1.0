@@ -85,6 +85,13 @@ function contribute(memberId, amount, date, referenceNumber) {
   return post("/api/contributions", treasurerCookie, { memberId, amount, method: "Cash", note: "Cash received at meeting", referenceNumber, date });
 }
 
+function monthStamp(offset = 0) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 async function freePort() {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
@@ -161,13 +168,15 @@ test("legacy contributions are backfilled with the welfare fee on the first paym
 });
 
 test("a meeting date is set per month and only the Chairperson or Secretary can set it", async () => {
-  const forbidden = await post("/api/settings/meeting-date", treasurerCookie, { month: "2026-11", date: "2026-11-12" });
+  const month = monthStamp();
+  const meetingDate = `${month}-12`;
+  const forbidden = await post("/api/settings/meeting-date", treasurerCookie, { month, date: meetingDate });
   assert.equal(forbidden.status, 403);
-  const outside = await post("/api/settings/meeting-date", chairCookie, { month: "2026-11", date: "2026-12-01" });
+  const outside = await post("/api/settings/meeting-date", chairCookie, { month, date: `${monthStamp(1)}-01` });
   assert.equal(outside.status, 400);
-  const saved = await post("/api/settings/meeting-date", secretaryCookie, { month: "2026-11", date: "2026-11-12" });
+  const saved = await post("/api/settings/meeting-date", secretaryCookie, { month, date: meetingDate });
   assert.equal(saved.status, 200);
-  assert.equal(persistedState().settings.meetingDates["2026-11"], "2026-11-12");
+  assert.equal(persistedState().settings.meetingDates[month], meetingDate);
 });
 
 test("an outstanding penalty is paid first, then the welfare fee, then share capital", async () => {
@@ -208,10 +217,14 @@ test("a payment on the default 5th is on time", async () => {
 });
 
 test("a custom meeting date replaces the default deadline for that month only", async () => {
-  const onTime = await contribute("f", 500, "2026-11-10", "RCPT-F01");
+  const month = monthStamp(-1);
+  const meetingDate = `${month}-12`;
+  const configured = await post("/api/settings/meeting-date", secretaryCookie, { month, date: meetingDate });
+  assert.equal(configured.status, 200);
+  const onTime = await contribute("f", 500, `${month}-10`, "RCPT-F01");
   assert.equal(onTime.status, 201, "logged before the custom meeting date");
   assert.equal((await onTime.json()).data.penaltyAmount, 0);
-  const late = await contribute("f", 300, "2026-11-13", "RCPT-F02");
+  const late = await contribute("f", 300, `${month}-13`, "RCPT-F02");
   assert.equal(late.status, 201);
   const transaction = (await late.json()).data;
   assert.equal(transaction.penaltyAmount, 200);
