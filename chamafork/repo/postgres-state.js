@@ -28,7 +28,7 @@ function stateTemplate() {
   return {
     version: 2, chamas: [], users: [], transactions: [], loans: [], payouts: [],
     invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {},
-    registers: [], auditLog: [], welfareReserve: 0, penalties: [],
+    registers: [], auditLog: [], ledgerEntries: [], welfareReserve: 0, penalties: [],
     settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [],
   };
 }
@@ -541,6 +541,7 @@ async function loadState(pool) {
       chama: (await client.query("SELECT name, settings, payment_policy, state_data, record_data, record_order FROM chamas WHERE chama_id = $1", [chama.chama_id])).rows[0],
       users: await users.list(client, chama.chama_id),
       transactions: await transactions.list(client, chama.chama_id),
+      ledgerEntries: await ledgerEntries.list(client, chama.chama_id),
       loans: await loans.list(client, chama.chama_id),
       invitations: await invitations.list(client, chama.chama_id),
       auditLog: await auditLog.list(client, chama.chama_id),
@@ -576,6 +577,7 @@ async function loadState(pool) {
       }
     }
     result.transactions.push(...bundle.transactions.map(row => recordFromRow(row, externalId)));
+    result.ledgerEntries.push(...bundle.ledgerEntries.map(row => recordFromRow(row, externalId)));
     result.loans.push(...bundle.loans.map(row => recordFromRow(row, externalId)));
     result.invitations.push(...bundle.invitations.map(row => recordFromRow(row, externalId)));
     result.auditLog.push(...bundle.auditLog.filter(row => row.record_kind === "event").map(row => recordFromRow(row, externalId)));

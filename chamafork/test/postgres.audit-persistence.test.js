@@ -119,6 +119,36 @@ function fixtureState() {
   return state;
 }
 
+test("PostgreSQL save/reload preserves ledger entries across repeated state saves", async () => {
+  assert.deepEqual(postgresState.stateTemplate().ledgerEntries, []);
+  const pool = memoryPool();
+  const state = fixtureState();
+  const ledgerEntries = [
+    {
+      id: "ledger-entry-a", chamaId: "chama-a", transactionId: "contribution-tx",
+      account: "test-account-a", debit: 12.34, credit: 0,
+      description: "synthetic persistence marker A", createdAt: "2026-10-05T09:00:00.000Z",
+    },
+    {
+      id: "ledger-entry-b", chamaId: "chama-b", transactionId: "other-tx",
+      account: "test-account-b", debit: 0, credit: 56.78,
+      description: "synthetic persistence marker B", createdAt: "2026-10-07T09:00:00.000Z",
+    },
+  ];
+  state.ledgerEntries = ledgerEntries;
+
+  await postgresState.saveState(pool, state);
+  let loaded = await postgresState.loadState(pool);
+  assert.deepEqual(loaded.ledgerEntries, ledgerEntries);
+  assert.equal(pool.rows("ledger_entries").length, ledgerEntries.length);
+  assert.deepEqual(pool.rows("ledger_entries").map(row => row.chama_id).sort(), [TENANT_A, TENANT_B]);
+
+  await postgresState.saveState(pool, loaded);
+  loaded = await postgresState.loadState(pool);
+  assert.deepEqual(loaded.ledgerEntries, ledgerEntries);
+  assert.equal(pool.rows("ledger_entries").length, ledgerEntries.length);
+});
+
 test("PostgreSQL save/reload retains financial audit events and keeps their existing event JSON format", async () => {
   const pool = memoryPool();
   await postgresState.saveState(pool, fixtureState());
