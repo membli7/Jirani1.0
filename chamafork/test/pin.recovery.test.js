@@ -85,6 +85,27 @@ test("resets a PIN with an emailed, purpose-specific single-use code", async () 
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
+test("PIN recovery revokes every existing session for the account", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-sessions-"));
+  const logFile = path.join(directory, "mail.jsonl");
+  const server = await startServer({ logFile });
+  const sessionCookies = [];
+  for (let index = 0; index < 2; index += 1) {
+    const signedIn = await post(server, "/api/login", { phone: server.phone, pin: "123456" });
+    assert.equal(signedIn.status, 200);
+    sessionCookies.push(cookie(signedIn));
+  }
+  const reset = await requestReset(server, logFile);
+  const changed = await post(server, "/api/reset-pin", { email: server.email, code: reset.code, newPin: "654321" }, reset.cookie);
+  assert.equal(changed.status, 200);
+
+  for (const sessionCookie of sessionCookies) {
+    const dashboard = await fetch(`${server.baseUrl}/api/dashboard`, { headers: { Cookie: sessionCookie } });
+    assert.equal(dashboard.status, 401, "a pre-recovery session must no longer authenticate");
+  }
+  fs.rmSync(directory, { recursive: true, force: true });
+});
+
 test("PIN recovery gives unknown accounts the same privacy-preserving response", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-private-"));
   const knownLog = path.join(directory, "known.jsonl");
@@ -150,7 +171,7 @@ test("PIN recovery does not replace sign-in OTP or invitation activation", async
   assert.equal(otpRequest.status, 200);
   const otpCookie = cookie(otpRequest);
   const otpCode = latestCode(logFile, "Jirani Chama Sign-In Code");
-  const otpVerify = await post(server, "/api/otp/verify", { phone: server.phone, code: otpCode }, otpCookie);
+  const otpVerify = await post(server, "/api/otp/verify", { phone: server.phone, code: otpCode, pin: "123456" }, otpCookie);
   assert.equal(otpVerify.status, 200);
   const pinLogin = await post(server, "/api/login", { phone: server.phone, pin: "123456" });
   assert.equal(pinLogin.status, 200);

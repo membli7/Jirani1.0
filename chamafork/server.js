@@ -1275,12 +1275,7 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   if (userChamaAccounts.length > 1 && !requestedChamaId) {
     return res.status(200).json({ message: "Pick a chama to enter.", chooseChamaId: userChamaAccounts.map(account => ({ chamaId: account.chamaId, name: findChamaName(account.chamaId) })) });
   }
-  if (pin.length < 6 && !user.mustChangePin) {
-    const updated = structuredClone(state);
-    updated.users.find(item => item.id === user.id).mustChangePin = true;
-    await persist(updated);
-    user.mustChangePin = true;
-  }
+  await markLegacyPinForChange(user, pin);
   req.session.regenerate(error => { if (error) return next(error); req.session.userId = user.id; req.session.lastActivityAt = Date.now(); req.session.save(saveError => { if (saveError) return next(saveError); activeSessionsGauge.inc(); return res.json({ message: "Signed in successfully.", user: safeUser(user) }); }); });
 });
 const PIN_RESET_TTL_MS = process.env.NODE_ENV === "test" && Number.isSafeInteger(Number(process.env.PIN_RESET_TTL_MS)) && Number(process.env.PIN_RESET_TTL_MS) > 0
@@ -1311,6 +1306,35 @@ const pinResetVerifyLimiter = sharedRateLimit("pin-reset-verify", {
 });
 function saveSession(session) {
   return new Promise((resolve, reject) => session.save(error => error ? reject(error) : resolve()));
+}
+function callSessionStore(store, method, ...args) {
+  if (!store || typeof store[method] !== "function") return Promise.reject(new Error(`Session store does not support ${method}.`));
+  return new Promise((resolve, reject) => {
+    try {
+      store[method](...args, (error, value) => error ? reject(error) : resolve(value));
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+async function revokeSessionsForUser(store, userId) {
+  const storedSessions = await callSessionStore(store, "all");
+  const entries = Array.isArray(storedSessions)
+    ? storedSessions.map(item => [item?.id, item])
+    : Object.entries(storedSessions || {});
+  const sessionIds = entries
+    .filter(([id, item]) => typeof id === "string" && item?.userId === userId)
+    .map(([id]) => id);
+  await Promise.all(sessionIds.map(id => callSessionStore(store, "destroy", id)));
+}
+async function markLegacyPinForChange(user, pin) {
+  if (pin.length >= 6 || user.mustChangePin) return;
+  const updated = structuredClone(state);
+  const saved = updated.users.find(item => item.id === user.id && item.status === "active");
+  if (!saved) throw new Error("The account is no longer active.");
+  saved.mustChangePin = true;
+  await persist(updated);
+  user.mustChangePin = true;
 }
 app.post("/api/forgot-pin", pinRecoveryLimiter, pinResetSendCooldown, pinResetSendDailyLimit, async (req, res, next) => {
   const email = normalizeEmail(req.body?.email);
@@ -1358,6 +1382,7 @@ app.post("/api/reset-pin", pinRecoveryLimiter, pinResetVerifyLimiter, async (req
     saved.pinHash = pinHash(newPin);
     saved.mustChangePin = false;
     await persist(updated);
+    await revokeSessionsForUser(req.sessionStore, account.id);
     return res.json({ message: "PIN reset. Please sign in with your new PIN." });
   } catch (error) { return next(error); }
 });
@@ -2607,9 +2632,10 @@ app.post("/api/otp/request", OTP_RATE_LIMIT, OTP_SEND_COOLDOWN, OTP_SEND_DAILY_L
 app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
   const phone = normalizePhone(req.body?.phone);
   const code = clean(req.body?.code);
+  const pin = clean(req.body?.pin);
   const requestedChamaId = clean(req.body?.chamaId);
-  if (!phone || !/^\d{6}$/.test(code)) {
-    return res.status(400).json({ message: "Enter a valid phone number and 6-digit activation code." });
+  if (!phone || !/^\d{6}$/.test(code) || !validPin(pin)) {
+    return res.status(400).json({ message: "Enter a valid phone number, 6-digit sign-in code, and current PIN." });
   }
   const phoneKey = `phone:${phone}`;
   const ipKey = `ip:${req.ip}`;
@@ -2629,11 +2655,6 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
     await recordLoginFailure(phoneKey, ipKey);
     return res.status(401).json({ message: "Incorrect or expired activation code." });
   }
-  // OTP is single-use — clear it from the session immediately.
-  delete req.session.otpHash;
-  delete req.session.otpPhone;
-  delete req.session.otpExpiresAt;
-  await clearLoginFailures(phoneKey, ipKey);
   const accounts = state.users.filter(u => u.phone === phone && u.status === "active");
   if (!accounts.length) return res.status(401).json({ message: "No active account found for that phone number." });
   // Multi-chama: let the caller pick, same as PIN login.
@@ -2647,6 +2668,16 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
     ? accounts.find(a => a.chamaId === requestedChamaId)
     : accounts[0];
   if (!user) return res.status(401).json({ message: "Account not found in that chama." });
+  if (!verifyPin(pin, user.pinHash)) {
+    await recordLoginFailure(phoneKey, ipKey);
+    return res.status(401).json({ message: "Incorrect phone number or PIN." });
+  }
+  await markLegacyPinForChange(user, pin);
+  // The OTP is consumed only after both the code and current PIN are verified.
+  delete req.session.otpHash;
+  delete req.session.otpPhone;
+  delete req.session.otpExpiresAt;
+  await clearLoginFailures(phoneKey, ipKey);
   req.session.regenerate(err => {
     if (err) return next(err);
     req.session.userId = user.id;

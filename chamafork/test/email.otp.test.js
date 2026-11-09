@@ -14,7 +14,7 @@ function hashedPin(pin) {
   return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
 
-async function startTestServer({ emailEnabled = false, logFile = "" } = {}) {
+async function startTestServer({ emailEnabled = false, logFile = "", currentPin = "123456" } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-email-test-"));
   const dataFile = path.join(directory, "data.json");
   const phone = "+254711000001";
@@ -31,7 +31,7 @@ async function startTestServer({ emailEnabled = false, logFile = "" } = {}) {
           email,
           role: "chairperson",
           status: "active",
-          pinHash: hashedPin("123456"),
+          pinHash: hashedPin(currentPin),
           mustChangePin: false,
           chamaId: "chama-1",
         },
@@ -98,6 +98,7 @@ async function startTestServer({ emailEnabled = false, logFile = "" } = {}) {
     baseUrl: `http://127.0.0.1:${port}`,
     phone,
     email,
+    currentPin,
     stop: async () => {
       if (child.exitCode === null) {
         child.kill();
@@ -124,6 +125,45 @@ test("returns 503 when email delivery is not configured", async () => {
   assert.equal(response.status, 503);
   const data = await response.json();
   assert.match(data.message, /Phone-code sign-in is unavailable until secure email delivery is configured/);
+});
+
+test("OTP sign-in requires the current PIN and forces legacy PIN users to upgrade", async () => {
+  const logDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-legacy-otp-log-"));
+  const logFile = path.join(logDir, "sent-mail.jsonl");
+  const server = await startTestServer({ emailEnabled: true, logFile, currentPin: "1234" });
+  const request = await fetch(`${server.baseUrl}/api/otp/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama" },
+    body: JSON.stringify({ phone: server.phone }),
+  });
+  assert.equal(request.status, 200);
+  const challengeCookie = request.headers.get("set-cookie").split(";")[0];
+  const mail = JSON.parse(fs.readFileSync(logFile, "utf8").trim().split("\n")[0]);
+  const otpCode = mail.text.match(/(\d{6})/)[1];
+  const verify = pin => fetch(`${server.baseUrl}/api/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama", Cookie: challengeCookie },
+    body: JSON.stringify({ phone: server.phone, code: otpCode, ...(pin === undefined ? {} : { pin }) }),
+  });
+
+  assert.equal((await verify(undefined)).status, 400, "OTP alone must not authenticate");
+  assert.equal((await verify("0000")).status, 401, "the current PIN must also match");
+  const signedIn = await verify(server.currentPin);
+  assert.equal(signedIn.status, 200);
+  const signedInData = await signedIn.json();
+  assert.equal(signedInData.user.mustChangePin, true);
+  const authCookie = signedIn.headers.get("set-cookie").split(";")[0];
+  assert.equal((await fetch(`${server.baseUrl}/api/dashboard`, { headers: { Cookie: authCookie } })).status, 403);
+
+  const changed = await fetch(`${server.baseUrl}/api/pin/change`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama", Cookie: authCookie },
+    body: JSON.stringify({ currentPin: server.currentPin, newPin: "654321" }),
+  });
+  assert.equal(changed.status, 200);
+  assert.equal((await fetch(`${server.baseUrl}/api/dashboard`, { headers: { Cookie: authCookie } })).status, 200);
+  assert.equal((await verify(server.currentPin)).status, 401, "the OTP challenge must not be reusable after sign-in");
+  fs.rmSync(logDir, { recursive: true, force: true });
 });
 
 test("dispatches OTP email and verifies code successfully when email is configured", async () => {
@@ -168,7 +208,7 @@ test("dispatches OTP email and verifies code successfully when email is configur
       "X-Requested-With": "chama",
       Cookie: cookieValue,
     },
-    body: JSON.stringify({ phone: server.phone, code: "000000" }),
+    body: JSON.stringify({ phone: server.phone, code: "000000", pin: server.currentPin }),
   });
   assert.equal(wrongVerify.status, 401);
 
@@ -180,7 +220,7 @@ test("dispatches OTP email and verifies code successfully when email is configur
       "X-Requested-With": "chama",
       Cookie: cookieValue,
     },
-    body: JSON.stringify({ phone: server.phone, code: otpCode }),
+    body: JSON.stringify({ phone: server.phone, code: otpCode, pin: server.currentPin }),
   });
   assert.equal(correctVerify.status, 200);
   const verifyData = await correctVerify.json();
@@ -195,7 +235,7 @@ test("dispatches OTP email and verifies code successfully when email is configur
       "X-Requested-With": "chama",
       Cookie: cookieValue,
     },
-    body: JSON.stringify({ phone: server.phone, code: otpCode }),
+    body: JSON.stringify({ phone: server.phone, code: otpCode, pin: server.currentPin }),
   });
   assert.equal(reuseVerify.status, 401);
 
