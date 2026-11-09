@@ -4,6 +4,7 @@ const $ = selector => document.querySelector(selector);
 const money = value => value === null || value === undefined ? "Private" : `KES ${Number(value).toLocaleString("en-KE")}`;
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const t = key => window.jiraniI18n?.t(key) || key;
+const SUBSCRIPTION_PAYMENTS_ENABLED = false;
 function updateLoanRequestAccess(subscription = state?.subscription) {
   const blocked = subscription?.status !== "active";
   const note = $("#loan-request-access-note");
@@ -64,10 +65,11 @@ async function openPricingModal(button) {
   if (referenceOutput) referenceOutput.textContent = "";
   if (copyButton) copyButton.disabled = true;
   if (copyStatus) copyStatus.textContent = "";
-  if (copy) copy.textContent = "Choose a plan to review it. A signed-in chairperson can request a pending reference for the chama. No payment request is sent, and choosing a plan does not activate access.";
+  if (copy) copy.textContent = "Online subscription payments are temporarily paused. Prices remain available for review, but selecting a plan will not start checkout, request payment, change subscription status, or affect existing access. Contact us for updates.";
   dialog.showModal();
   dialog.scrollTop = 0;
   $("#pricing-modal-title")?.focus({ preventScroll: true });
+  if (!SUBSCRIPTION_PAYMENTS_ENABLED) return;
 
   const billing = String(button.dataset.pricingBilling || "").toLowerCase();
   if (billing === "custom") {

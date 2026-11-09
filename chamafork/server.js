@@ -121,6 +121,8 @@ const SUBSCRIPTION_PLANS = Object.freeze({
   basic: { label: "Basic", maxMembers: 10, monthlyAmount: 300, annualAmount: 2880, annualSavings: 720 },
   growth: { label: "Growth Chama", maxMembers: 30, monthlyAmount: 600, annualAmount: 5760, annualSavings: 1440 },
 });
+const SUBSCRIPTION_PAYMENTS_ENABLED = false;
+const SUBSCRIPTION_PAYMENTS_PAUSED_MESSAGE = "Online subscription payments are temporarily paused. No checkout, payment request, or subscription change will be processed; existing access remains unchanged.";
 const monthDateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Africa/Nairobi" });
 const eventClients = new Set();
 let leadershipElectionTimer = null;
@@ -1013,6 +1015,10 @@ app.use((req, res, next) => {
 });
 // Observability: record request latency + errors for every request.
 app.use(latencyMiddleware);
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  return next();
+});
 // Prometheus metrics endpoint (scrape with: prometheus.io/scrape: "true").
 // Restrict to localhost in production via nginx or a firewall rule.
 function metricsAuthorized(req) {
@@ -1460,6 +1466,7 @@ app.post("/api/subscription/selection", requireAuth, requirePinChanged, requireR
   const planView = { tier: plan.label, memberCap: plan.maxMembers, currency: "KES", amount, billing, annualSavings: billing === "annual" ? plan.annualSavings : 0, paymentEnabled: false, paymentRequestStarted: false };
   const activeOrInvited = scopeToChama(state.users, req.user.chamaId).filter(user => user.status === "active" || user.status === "invited").length;
   if (activeOrInvited > plan.maxMembers) return res.status(409).json({ message: `This group currently has ${activeOrInvited} active or invited members and cannot select the ${plan.maxMembers}-member plan.`, plan: planView });
+  if (!SUBSCRIPTION_PAYMENTS_ENABLED) return res.status(503).json({ message: SUBSCRIPTION_PAYMENTS_PAUSED_MESSAGE, plan: planView });
   const config = getC2bSubscriptionConfig(process.env);
   if (!config.enabled || ![...config.shortcodeToChama.values()].includes(req.user.chamaId)) return res.status(503).json({
     message: "Sandbox C2B verification is not configured for this group. Register the HTTPS validation and confirmation URLs and configure a valid shortcode-to-group mapping. No payment request was sent or access activated.",
@@ -2456,6 +2463,7 @@ app.post("/api/payments/simulate", requireAuth, requirePinChanged, requireRole("
 
 app.post("/api/mpesa/callback", (req, res) => res.status(503).json({ message: "STK payment requests are not implemented. No payment request was sent or subscription activated." }));
 app.post("/api/mpesa/c2b/validation", (req, res) => {
+  if (!SUBSCRIPTION_PAYMENTS_ENABLED) return res.status(503).json({ ResultCode: 1, ResultDesc: SUBSCRIPTION_PAYMENTS_PAUSED_MESSAGE });
   const config = getC2bSubscriptionConfig(process.env);
   if (!config.enabled) return res.status(503).json({ ResultCode: 1, ResultDesc: "Sandbox C2B subscription verification is not configured." });
   if (!isTrustedCallbackIp(req.ip, process.env)) return res.status(403).json({ ResultCode: 1, ResultDesc: "Untrusted callback source." });
@@ -2465,6 +2473,7 @@ app.post("/api/mpesa/c2b/validation", (req, res) => {
   return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted." });
 });
 app.post("/api/mpesa/c2b/confirmation", async (req, res, next) => {
+  if (!SUBSCRIPTION_PAYMENTS_ENABLED) return res.status(503).json({ ResultCode: 1, ResultDesc: SUBSCRIPTION_PAYMENTS_PAUSED_MESSAGE });
   const config = getC2bSubscriptionConfig(process.env);
   if (!config.enabled) return res.status(503).json({ ResultCode: 1, ResultDesc: "Sandbox C2B subscription verification is not configured." });
   if (!isTrustedCallbackIp(req.ip, process.env)) return res.status(403).json({ ResultCode: 1, ResultDesc: "Untrusted callback source." });

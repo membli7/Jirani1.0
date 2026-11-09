@@ -85,17 +85,18 @@ after(async () => {
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
-test("sandbox C2B confirmation activates only an exact pending plan and is idempotent", async () => {
+test("plan selection and C2B callbacks stay paused even when sandbox verification is configured", async () => {
   const login = await request("/api/login", { method: "POST", body: JSON.stringify({ phone: "0711000001", pin: "123456" }) });
   assert.equal(login.status, 200);
   const cookie = sessionCookie(login);
+  const stateBefore = JSON.parse(fs.readFileSync(dataFile, "utf8"));
 
   const selection = await request("/api/subscription/selection", {
     method: "POST",
     headers: { Cookie: cookie, "Idempotency-Key": "c2b-plan-selection-0001" },
     body: JSON.stringify({ tier: "basic", billing: "annual" }),
   });
-  assert.equal(selection.status, 201);
+  assert.equal(selection.status, 503);
   const selectionBody = await selection.json();
   assert.equal(selectionBody.plan.tier, "Basic");
   assert.equal(selectionBody.plan.memberCap, 10);
@@ -104,51 +105,27 @@ test("sandbox C2B confirmation activates only an exact pending plan and is idemp
   assert.equal(selectionBody.plan.annualSavings, 720);
   assert.equal(selectionBody.plan.paymentEnabled, false);
   assert.equal(selectionBody.plan.paymentRequestStarted, false);
-  assert.match(selectionBody.plan.reference, /^JC[A-F0-9]{12}$/);
-  assert.match(selectionBody.message, /No payment request was sent/i);
+  assert.match(selectionBody.message, /temporarily paused/i);
 
   const payment = {
     TransID: "TESTRECEIPT001",
     BusinessShortCode: "600001",
-    BillRefNumber: selectionBody.plan.reference,
+    BillRefNumber: "JCABCDEF123456",
     TransTime: "20261107123456",
     TransAmount: "2880.00",
     MSISDN: "254711000001",
   };
-  const amountMismatch = await sendCallback("/api/mpesa/c2b/validation", { ...payment, TransAmount: "2880.01" });
-  assert.equal(amountMismatch.status, 200);
-  assert.equal((await amountMismatch.json()).ResultCode, 1);
-
   const validation = await sendCallback("/api/mpesa/c2b/validation", payment);
-  assert.equal(validation.status, 200);
-  assert.equal((await validation.json()).ResultCode, 0);
-  const beforeConfirmation = await request("/api/dashboard", { headers: { Cookie: cookie } });
-  assert.notEqual((await beforeConfirmation.json()).subscription.status, "active");
-
-  const wrongReference = await sendCallback("/api/mpesa/c2b/confirmation", { ...payment, TransID: "TESTWRONG001", BillRefNumber: "JCWRONGREFERENCE" });
-  assert.equal(wrongReference.status, 200);
-  assert.equal((await wrongReference.json()).ResultCode, 1);
-  const stillUnpaid = await request("/api/dashboard", { headers: { Cookie: cookie } });
-  assert.notEqual((await stillUnpaid.json()).subscription.status, "active");
-
+  assert.equal(validation.status, 503);
+  assert.equal((await validation.json()).ResultCode, 1);
   const confirmation = await sendCallback("/api/mpesa/c2b/confirmation", payment);
-  assert.equal(confirmation.status, 200);
-  assert.equal((await confirmation.json()).ResultCode, 0);
-  const dashboard = await request("/api/dashboard", { headers: { Cookie: cookie } });
-  const subscription = (await dashboard.json()).subscription;
-  assert.equal(subscription.status, "active");
-  assert.equal(subscription.tier, "Basic");
-  assert.equal(subscription.maxMembers, 10);
-  assert.equal(subscription.expectedAmount, 2880);
-  const endsAt = subscription.endsAt;
+  assert.equal(confirmation.status, 503);
+  assert.equal((await confirmation.json()).ResultCode, 1);
+  const subscriptionResponse = await request("/api/subscription", { headers: { Cookie: cookie } });
+  assert.equal((await subscriptionResponse.json()).data.status, "unpaid");
 
-  const duplicate = await sendCallback("/api/mpesa/c2b/confirmation", payment);
-  assert.equal(duplicate.status, 200);
-  assert.equal((await duplicate.json()).ResultCode, 0);
-  const afterDuplicate = await request("/api/dashboard", { headers: { Cookie: cookie } });
-  assert.equal((await afterDuplicate.json()).subscription.endsAt, endsAt);
-
-  const stored = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-  assert.equal(stored.pendingMpesas.filter(item => item.mpesaReceiptNumber === payment.TransID).length, 1);
-  assert.equal(stored.pendingMpesas.find(item => item.mpesaReceiptNumber === payment.TransID).status, "Verified");
+  const stateAfter = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  assert.deepEqual(stateAfter.chamas, stateBefore.chamas);
+  assert.deepEqual(stateAfter.pendingMpesas, stateBefore.pendingMpesas);
+  assert.deepEqual(stateAfter.auditLog, stateBefore.auditLog);
 });

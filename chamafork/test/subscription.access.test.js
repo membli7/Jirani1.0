@@ -19,10 +19,12 @@ const hashCode = code => crypto.createHash("sha256").update(code).digest("hex");
 const expiredAt = new Date(Date.now() - 1000).toISOString();
 const futureAt = new Date(Date.now() + 30 * 86400000).toISOString();
 for (const key of ["MPESA_CONSUMER_KEY", "MPESA_CONSUMER_SECRET", "MPESA_PASSKEY", "MPESA_STK_CALLBACK_URL"]) process.env[key] = "";
-process.env.MPESA_C2B_CALLBACKS_ENABLED = "0";
-process.env.MPESA_C2B_VALIDATION_URL = "";
-process.env.MPESA_C2B_CONFIRMATION_URL = "";
-process.env.MPESA_SHORTCODE_CHAMA_MAP = "";
+process.env.MPESA_ENV = "sandbox";
+process.env.MPESA_C2B_CALLBACKS_ENABLED = "1";
+process.env.MPESA_C2B_VALIDATION_URL = "https://sandbox.example.test/api/mpesa/c2b/validation";
+process.env.MPESA_C2B_CONFIRMATION_URL = "https://sandbox.example.test/api/mpesa/c2b/confirmation";
+process.env.MPESA_SHORTCODE_CHAMA_MAP = "subscription-chama=600001";
+process.env.MPESA_TEST_CALLBACK_IPS = "127.0.0.1,::1";
 
 // Synthetic state only for exercising already-verified entitlements in tests.
 function subscription({ status = "active", tier = "basic", maxMembers = 10, endsAt = futureAt } = {}) {
@@ -40,7 +42,7 @@ const cappedCode = "654322";
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
   chamas: [
-    { id: "subscription-chama", name: "Subscription Test", createdAt: expiredAt, subscription: subscription({ endsAt: expiredAt }) },
+    { id: "subscription-chama", name: "Subscription Test", createdAt: expiredAt, subscription: { ...subscription({ endsAt: expiredAt }), pendingPayment: { reference: "JCABCDEF123456", planKey: "basic", tier: "Basic", billing: "annual", amount: 2880, currency: "KES", maxMembers: 10, annualSavings: 720, status: "pending", createdAt: expiredAt, expiresAt: futureAt } } },
     { id: "capped-chama", name: "Capped Test", createdAt: new Date().toISOString(), subscription: subscription({ maxMembers: 1 }) }
   ],
   users: [
@@ -72,6 +74,7 @@ function sessionCookie(response) {
 async function login(phone, pin) {
   const response = await request("/api/login", { method: "POST", body: JSON.stringify({ phone, pin }) });
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   return sessionCookie(response);
 }
 async function waitForServer() {
@@ -98,7 +101,7 @@ after(async () => {
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
-test("expired subscriptions retain view and chat access while paid actions stay blocked", async () => {
+test("subscription payments stay paused without changing existing access or records", async () => {
   const chairCookie = await login("0711000001", "123456");
   const treasurerCookie = await login("0711000005", "234567");
   const dashboard = await request("/api/dashboard", { headers: { Cookie: chairCookie } });
@@ -109,8 +112,8 @@ test("expired subscriptions retain view and chat access while paid actions stay 
   assert.equal(exportResponse.status, 200);
   assert.match(await exportResponse.text(), /old-entry/);
 
-  const payment = await request("/api/payments", { method: "POST", headers: { Cookie: treasurerCookie, "Idempotency-Key": "subscription-payment-0001" }, body: JSON.stringify({}) });
-  assert.equal(payment.status, 402);
+  const paymentResponse = await request("/api/payments", { method: "POST", headers: { Cookie: treasurerCookie, "Idempotency-Key": "subscription-payment-0001" }, body: JSON.stringify({}) });
+  assert.equal(paymentResponse.status, 402);
   const invite = await request("/api/invitations", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-invite-0001" }, body: JSON.stringify({ name: "New Member", phone: "0711000006", email: "new@example.test", role: "member" }) });
   assert.equal(invite.status, 402);
 
@@ -120,19 +123,36 @@ test("expired subscriptions retain view and chat access while paid actions stay 
   assert.equal(activation.status, 402);
   assert.equal(JSON.parse(fs.readFileSync(dataFile, "utf8")).invitations.find(item => item.id === "expired-invitation").usedAt, null);
 
+  const beforePausedActions = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  const expiredSubscription = beforePausedActions.chamas.find(chama => chama.id === "subscription-chama").subscription;
+  const activeSubscription = beforePausedActions.chamas.find(chama => chama.id === "capped-chama").subscription;
   const selectedPlan = await request("/api/subscription/selection", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-selection-0001" }, body: JSON.stringify({ tier: "basic", billing: "annual" }) });
   assert.equal(selectedPlan.status, 503);
   const selectionBody = await selectedPlan.json();
   assert.equal(selectionBody.plan.amount, 2880);
   assert.equal(selectionBody.plan.currency, "KES");
   assert.equal(selectionBody.plan.paymentEnabled, false);
-  assert.match(selectionBody.message, /Sandbox C2B verification is not configured/i);
-  assert.match(selectionBody.message, /No payment request was sent/i);
-  assert.doesNotMatch(selectionBody.message, /Daraja/i);
+  assert.equal(selectionBody.plan.paymentRequestStarted, false);
+  assert.match(selectionBody.message, /temporarily paused/i);
+
+  const payment = { TransID: "TESTRECEIPT001", BusinessShortCode: "600001", BillRefNumber: "JCABCDEF123456", TransTime: "20261107123456", TransAmount: "2880.00", MSISDN: "254711000001" };
+  const validation = await request("/api/mpesa/c2b/validation", { method: "POST", body: JSON.stringify(payment) });
+  assert.equal(validation.status, 503);
+  assert.match((await validation.json()).ResultDesc, /temporarily paused/i);
+  const confirmation = await request("/api/mpesa/c2b/confirmation", { method: "POST", body: JSON.stringify(payment) });
+  assert.equal(confirmation.status, 503);
+  assert.match((await confirmation.json()).ResultDesc, /temporarily paused/i);
 
   const callback = await request("/api/mpesa/callback", { method: "POST", body: JSON.stringify({ paid: true, amount: 2880 }) });
   assert.equal(callback.status, 503);
   assert.match((await callback.json()).message, /No payment request was sent/i);
+
+  const afterPausedActions = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  assert.deepEqual(afterPausedActions.chamas.find(chama => chama.id === "subscription-chama").subscription, expiredSubscription);
+  assert.deepEqual(afterPausedActions.chamas.find(chama => chama.id === "capped-chama").subscription, activeSubscription);
+  assert.deepEqual(afterPausedActions.pendingMpesas, beforePausedActions.pendingMpesas);
+  assert.deepEqual(afterPausedActions.auditLog, beforePausedActions.auditLog);
+  assert.deepEqual(afterPausedActions.transactions, beforePausedActions.transactions);
 
   const chat = await request("/api/messages", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-message-0001" }, body: JSON.stringify({ text: "History and chat remain available." }) });
   assert.equal(chat.status, 201);
