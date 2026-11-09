@@ -38,13 +38,13 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const migration of ["001_foundation.sql", "002_app_tables.sql", "003_indexes.sql", "004_mpesa_receipts.sql", "005_receipt_reference_reservations.sql"]) {
+    for (const migration of ["001_foundation.sql", "002_app_tables.sql", "003_indexes.sql", "004_mpesa_receipts.sql", "005_receipt_reference_reservations.sql", "006_fk_support_indexes.sql"]) {
       const sql = fs.readFileSync(path.join(__dirname, migration), "utf8");
       await client.query(sql);
     }
     await grantRuntimePrivileges(client, process.env.DATABASE_URL, connectionString);
     await client.query("COMMIT");
-    console.log("PostgreSQL migrations 001 through 005 applied.");
+    console.log("PostgreSQL migrations 001 through 006 applied.");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     throw error;
