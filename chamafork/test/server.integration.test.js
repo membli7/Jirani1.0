@@ -95,8 +95,17 @@ describe("Jirani Chama server", () => {
   });
 
   test("reports health and requires first-time setup", async () => {
+    const liveness = await request("/api/health/live");
+    assert.equal(liveness.status, 200);
+    assert.deepEqual(await json(liveness), { status: "ok" });
+
+    const readiness = await request("/api/health/ready");
+    assert.equal(readiness.status, 200);
+    assert.deepEqual(await json(readiness), { status: "ok" });
+
     const health = await request("/api/health");
     assert.equal(health.status, 200);
+    assert.match(health.headers.get("x-request-id"), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     assert.deepEqual(await json(health), { status: "ok" });
 
     const setupStatus = await request("/api/setup/status");
@@ -126,6 +135,62 @@ describe("Jirani Chama server", () => {
     const authPagesSource = await authPagesScript.text();
     assert.match(authPagesSource, /postJson\("\/api\/login"/);
     assert.match(authPagesSource, /postJson\("\/api\/invitations\/activate"/);
+  });
+
+  test("correlates request IDs and exposes HTTP status, error, and latency metrics", async () => {
+    const malformed = await request("/api/not-a-route", {
+      method: "POST",
+      headers: { "X-Request-ID": "untrusted-client-value" },
+      body: "{",
+    });
+    assert.equal(malformed.status, 400);
+    const requestId = malformed.headers.get("x-request-id");
+    assert.match(requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.notEqual(requestId, "untrusted-client-value");
+    assert.equal((await json(malformed)).requestId, requestId);
+
+    const metrics = await request("/metrics");
+    assert.equal(metrics.status, 200);
+    const exposition = await metrics.text();
+    assert.match(exposition, /^chama_http_responses_total\{status_code="400"\} \d+$/m);
+    assert.match(exposition, /^chama_http_server_errors_total \d+$/m);
+    assert.match(exposition, /^chama_http_server_error_rate (?:0|[0-9]*\.[0-9]+)$/m);
+    assert.match(exposition, /^# TYPE chama_http_request_duration_milliseconds histogram$/m);
+    assert.match(exposition, /^chama_http_request_duration_milliseconds_bucket\{le="\+Inf"\} \d+$/m);
+    assert.match(exposition, /^chama_http_request_duration_milliseconds_count \d+$/m);
+  });
+
+  test("counts 5xx responses in server error metrics", () => {
+    const { EventEmitter } = require("node:events");
+    const { latencyMiddleware, metricsHandler } = require("../observability");
+    const response = new EventEmitter();
+    response.statusCode = 503;
+    response.type = function () { return this; };
+    response.send = function (body) { this.body = body; return this; };
+    const originalInfo = console.info;
+    console.info = () => {};
+    try {
+      latencyMiddleware({ method: "GET" }, response, () => {});
+      response.emit("finish");
+      metricsHandler({}, response);
+    } finally {
+      console.info = originalInfo;
+    }
+    assert.match(response.body, /^chama_http_responses_total\{status_code="503"\} 1$/m);
+    assert.match(response.body, /^chama_http_server_errors_total 1$/m);
+    assert.match(response.body, /^chama_http_server_error_rate 1$/m);
+  });
+
+  test("writes production logs as structured JSON", async () => {
+    const { stdout } = await execFileAsync(process.execPath, ["-e", 'require("./observability").logger.info("structured-check", { check: "ok" });'], {
+      cwd: path.join(__dirname, ".."),
+      env: { ...process.env, NODE_ENV: "production" },
+    });
+    const record = JSON.parse(stdout.trim());
+    assert.equal(record.level, "info");
+    assert.equal(record.message, "structured-check");
+    assert.equal(record.check, "ok");
+    assert.ok(Number.isFinite(Date.parse(record.timestamp)));
   });
 
   test("creates a chairperson session and serves the dashboard", async () => {

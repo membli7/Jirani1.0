@@ -34,6 +34,7 @@ if (process.env.NODE_ENV === "test") {
 const {
   logger,
   latencyMiddleware,
+  requestIdMiddleware,
   activeSessionsGauge,
   openSseGauge,
   wrapPgPool,
@@ -1030,6 +1031,7 @@ async function sendEmail(to, subject, text, options = {}) {
   return getEmailTransporter().sendMail({ from, to, subject, text, ...(replyTo ? { replyTo } : {}) });
 }
 app.disable("x-powered-by");
+app.use(requestIdMiddleware);
 app.use(compression());
 // A HEAD request has no body to compress, but report the same selected encoding as GET.
 app.use((req, res, next) => {
@@ -1210,7 +1212,8 @@ app.get("/manifest.webmanifest", (req, res) => {
 });
 app.use(express.static(FRONTEND));
 app.get("/", (req, res) => res.sendFile(path.join(FRONTEND, "index.html")));
-app.get("/api/health", async (req, res) => {
+app.get("/api/health/live", (_req, res) => res.json({ status: "ok" }));
+app.get(["/api/health", "/api/health/ready"], async (req, res) => {
   const dependencies = { postgres: DATA_BACKEND === "postgres" ? "unavailable" : "not_required", redis: sessionBackend.usingRedis ? "unavailable" : "not_required" };
   try {
     if (DATA_BACKEND === "postgres") {
@@ -2715,9 +2718,9 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
   // Client errors from the body parser (for example malformed JSON) keep their 4xx status.
-  if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) return res.status(error.status).json({ message: "The request could not be read. Check the data and try again." });
+  if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) return res.status(error.status).json({ message: "The request could not be read. Check the data and try again.", requestId: req.requestId });
   logger.error("Request failed", { err: error.message, stack: error.stack });
-  return res.status(500).json({ message: "The server could not save this change. Check the dashboard before retrying." });
+  return res.status(500).json({ message: "The server could not save this change. Check the dashboard before retrying.", requestId: req.requestId });
 });
 async function start() {
   await initializeStorage();
