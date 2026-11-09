@@ -39,6 +39,17 @@
 - [x] A backup/restore regression uses synthetic JSON data and a disposable temporary directory only. Production backup scheduling, PostgreSQL backup, and production restore remain unverified.
 - [ ] Complete manual role-by-role and phone/tablet walkthroughs, then run a participating-chama pilot. No real-chama pilot has been performed.
 
+## Production release gate (2026-11-09)
+
+- [ ] Complete manual acceptance walkthroughs for Chairperson, Secretary, Treasurer, and Member accounts.
+- [ ] Complete a participating-chama pilot and record workflow, usability, and recovery results.
+- [ ] Verify the production boundary: live HTTPS/TLS, reverse-proxy forwarded headers and exact trusted proxy IPs, firewalling, and browser behavior on the canonical origin.
+- [ ] Verify the production services: PostgreSQL RLS runtime role, verified database TLS, Redis TLS/shared sessions, rate-limit persistence, and startup configuration checks.
+- [ ] Configure and test scheduled PostgreSQL backups and complete a real restore drill.
+- [ ] Remove or reset QA accounts and synthetic loans, contributions, votes, and attendance data; confirm QA PINs are not reused.
+- [ ] Push the latest local safeguards/month-end review commit and resolve unrelated worktree changes before release.
+- [x] Staging deployment is the current readiness target; real-member production launch remains blocked until the items above are complete.
+
 ## Step 0: setup
 - [x] Historical: initial readiness work used `review-fixes`. The current branch is `codex/subscription-access`; safeguards and month-end review commit `c7149c9` is local and has not been pushed.
 - [x] Save the security report as `docs/review.md`. The UX plan currently lives at `docs/docs/docs/ux-plan.md` (the earlier `docs/ux-plan.md` path is stale).
