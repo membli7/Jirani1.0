@@ -7,7 +7,7 @@ const { createOneTimeCodeVerifier } = require("../security/one-time-code");
 
 const secret = "one-time-code-hmac-test-key-not-for-production";
 
- test("new code verifiers are keyed HMAC-SHA-256 digests", () => {
+test("new code verifiers are keyed HMAC-SHA-256 digests", () => {
   const { hashCode, verifyCodeHash } = createOneTimeCodeVerifier(secret);
   const code = "314159";
   const digest = hashCode(code);

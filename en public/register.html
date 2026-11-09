@@ -37,6 +37,10 @@
                     <h2>Chama and chairperson details</h2>
                     <p>All fields are required. Your PIN must have 6 to 12 digits.</p>
                     <p id="register-notice" class="login-notice" role="alert" aria-live="assertive" hidden></p>
+                    <label class="field" for="register-bootstrap-secret" data-i18n="setupBootstrapLabel">Operator bootstrap code (if requested)
+                        <input id="register-bootstrap-secret" name="bootstrapSecret" type="password" autocomplete="off" maxlength="256" aria-describedby="register-bootstrap-note" spellcheck="false">
+                    </label>
+                    <p id="register-bootstrap-note" class="form-note" data-i18n="setupBootstrapNote">For production setup, enter the code supplied by the operator. It is used only for first-time setup and is not saved with your account.</p>
                     <label class="field" for="register-chama-name">Chama name
                         <input id="register-chama-name" name="chamaName" type="text" maxlength="100" autocomplete="organization" required>
                     </label>
@@ -79,7 +83,7 @@
             </section>
         </div>
     </main>
-    <script src="/i18n.js?v=20261106.1" defer></script>
-    <script src="/register.js?v=20261101.1" defer></script>
+    <script src="/i18n.js?v=20261109.1" defer></script>
+    <script src="/register.js?v=20261109.1" defer></script>
 </body>
 </html>

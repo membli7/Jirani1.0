@@ -12,6 +12,8 @@ const good = {
   APP_CANONICAL_ORIGIN: "https://chama.example.test",
   APP_ALLOWED_ORIGINS: "https://chama.example.test",
   SESSION_SECRET: "A9b8C7d6E5f4G3h2J1k0LmNqRsTuVwXy",
+  ONE_TIME_CODE_HMAC_SECRET: "D7k2P9m4X6c1V8n3R5t0Qw2E9a6Z1b4H",
+  SETUP_BOOTSTRAP_SECRET: "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8",
   METRICS_BEARER_TOKEN: "M9n8B7v6C5x4Z3a2Q1w0ErTyUiOpLsKd",
   DATA_BACKEND: "postgres",
   DATABASE_URL: "postgresql://runtime:private@db.example.test/chama",
@@ -26,7 +28,11 @@ test("production startup requires secure origins, strong secrets, PostgreSQL, Re
   assert.doesNotThrow(() => validateProductionConfig(good));
   for (const [key, value] of Object.entries({
     SESSION_SECRET: "short",
+    ONE_TIME_CODE_HMAC_SECRET: "short",
+    SETUP_BOOTSTRAP_SECRET: "short",
     METRICS_BEARER_TOKEN: "example-token-that-is-long-but-not-private-12345",
+    SMTP_TRANSPORT: "json",
+    SMTP_LOG_FILE: "mail.jsonl",
     APP_ALLOWED_ORIGINS: "http://chama.example.test",
     DATA_BACKEND: "json",
     REDIS_URL: "",
@@ -35,6 +41,11 @@ test("production startup requires secure origins, strong secrets, PostgreSQL, Re
   })) {
     assert.throws(() => validateProductionConfig({ ...good, [key]: value }), /Unsafe production configuration/);
   }
+  assert.throws(() => validateProductionConfig({ ...good, ONE_TIME_CODE_HMAC_SECRET: good.SESSION_SECRET }), /distinct from SESSION_SECRET/);
+  assert.throws(() => validateProductionConfig({ ...good, SETUP_BOOTSTRAP_SECRET: "" }), /SETUP_BOOTSTRAP_SECRET must be/);
+  assert.throws(() => validateProductionConfig({ ...good, SETUP_BOOTSTRAP_SECRET: good.SESSION_SECRET }), /SETUP_BOOTSTRAP_SECRET must be distinct from SESSION_SECRET/);
+  assert.throws(() => validateProductionConfig({ ...good, SMTP_TRANSPORT: "json" }), /SMTP_TRANSPORT=json is prohibited in production/);
+  assert.throws(() => validateProductionConfig({ ...good, SMTP_LOG_FILE: "mail.jsonl" }), /SMTP_LOG_FILE is prohibited in production/);
   assert.throws(() => validateProductionConfig({ ...good, REDIS_URL: "redis://redis.example.test" }), /Unsafe production configuration/);
 });
 

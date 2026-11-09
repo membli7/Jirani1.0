@@ -324,6 +324,20 @@ test("contribution date correction is authorized, same-month, classification-saf
   assert.equal(correctionEvents.length, 2, "the concurrent idempotent retry must not duplicate an audit event");
 });
 
+test("receipt display preserves entered text while trimmed case-insensitive duplicates are rejected", async () => {
+  const displayReference = "  MiXeD-Receipt-2026  ";
+  const first = await contribute(thirdMember.id, { amount: 500, referenceNumber: displayReference, date: "2026-10-12" });
+  assert.equal(first.status, 201);
+  const transaction = (await first.json()).data;
+  assert.equal(transaction.referenceNumber, displayReference);
+  assert.equal(persistedState().transactions.find(item => item.id === transaction.id).referenceNumber, displayReference);
+
+  const transactionCount = persistedState().transactions.length;
+  const duplicate = await contribute(otherMember.id, { amount: 500, referenceNumber: "mixed-receipt-2026", date: "2026-10-12" });
+  assert.equal(duplicate.status, 409);
+  assert.equal(persistedState().transactions.length, transactionCount);
+});
+
 test("a legacy file gains the penalties ledger and member share capital", async () => {
   const saved = persistedState();
   assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1950);

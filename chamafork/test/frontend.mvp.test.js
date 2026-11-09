@@ -88,8 +88,8 @@ test("profile and sign-in pages load the shared language switch", () => {
   assert.match(profileHtml, /id="language-switch"/);
   assert.match(profileHtml, /src="\/i18n\.js\?v=20261101\.1"/);
   assert.match(memberLoginHtml, /src="\/i18n\.js\?v=20261101\.1"/);
-  assert.match(registerHtml, /src="\/i18n\.js\?v=20261106\.1"/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261101\.1"/);
+  assert.match(registerHtml, /src="\/i18n\.js\?v=20261109\.1"/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261109\.1" defer/);
   assert.match(authPagesScript, /translateAuthText\(error instanceof TypeError/);
   assert.match(registerScript, /translateRegistrationText\(error instanceof TypeError/);
   assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
@@ -422,7 +422,7 @@ test("standalone member login posts credentials to the login API", () => {
 
 test("landing registration opens a complete first-chama setup page", () => {
   assert.match(html, /id="landing-register" href="\/register\.html"/);
-  for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin"]) {
+  for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin", "bootstrapSecret"]) {
     assert.match(registerHtml, new RegExp(`name="${field}"`));
   }
   assert.match(registerHtml, /id="register-chama-form"/);
@@ -430,7 +430,7 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
   assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
   assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261101\.1" defer/);
+  assert.match(registerHtml, /src="\/register\.js\?v=20261109\.1" defer/);
   assert.match(registerScript, /fetch\("\/api\/setup"/);
   assert.match(registerScript, /credentials: "same-origin"/);
   assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
@@ -483,6 +483,36 @@ test("registration signs in and opens the dashboard when setup was already compl
   assert.deepEqual(JSON.parse(requests[1].options.body), { phone: "0700000000", pin: "135790" });
   assert.equal(redirect, "/");
   assert.equal(registrationNotice.hidden, true);
+});
+
+test("registration sends the bootstrap code only in the setup header and clears the field", async () => {
+  let submitHandler;
+  let redirect = "";
+  const bootstrapField = { value: "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8" };
+  const requests = [];
+  const registrationForm = {
+    addEventListener: (event, handler) => { if (event === "submit") submitHandler = handler; },
+    querySelector: () => ({ disabled: false }),
+    elements: { namedItem: name => name === "bootstrapSecret" ? bootstrapField : null },
+  };
+  const registrationNotice = { hidden: true, textContent: "" };
+  const context = {
+    document: { querySelector: selector => selector === "#register-chama-form" ? registrationForm : registrationNotice },
+    FormData: class { constructor() { return [["phone", "0711000001"], ["pin", "123456"], ["bootstrapSecret", bootstrapField.value]]; } },
+    URLSearchParams,
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, status: 201, json: async () => ({ message: "Your chairperson account is ready." }) };
+    },
+    window: { location: { search: "", assign: url => { redirect = url; } } },
+  };
+  vm.runInNewContext(registerScript, context);
+  await submitHandler({ preventDefault() {} });
+
+  assert.equal(requests[0].options.headers["X-Setup-Bootstrap-Secret"], "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8");
+  assert.equal(JSON.parse(requests[0].options.body).bootstrapSecret, undefined);
+  assert.equal(bootstrapField.value, "");
+  assert.equal(redirect, "/");
 });
 
 test("root page restores the dashboard for an existing authenticated session", async () => {

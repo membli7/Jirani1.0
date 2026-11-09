@@ -12,6 +12,5 @@ ALTER TABLE mpesa_callbacks
 ALTER TABLE chamas
   ADD COLUMN IF NOT EXISTS payment_policy JSONB NOT NULL DEFAULT '{}'::jsonb;
 
-CREATE UNIQUE INDEX IF NOT EXISTS mpesa_callbacks_receipt_number_unique
-  ON mpesa_callbacks (mpesa_receipt_number)
-  WHERE mpesa_receipt_number IS NOT NULL AND trim(mpesa_receipt_number) <> '';
+-- Receipt uniqueness is normalized and chama-scoped in migration 005 so provider receipts
+-- share one reservation namespace with contribution and repayment references.

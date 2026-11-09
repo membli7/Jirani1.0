@@ -18,6 +18,9 @@ const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = require("./security/mpesa-c2b-subscriptions");
+const { createOneTimeCodeVerifier } = require("./security/one-time-code");
+const { appendJsonEmailCapture } = require("./security/email-log");
+const { hasReceiptReferenceConflict, parseReceiptReference } = require("./security/receipt-references");
 const { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor } = require("./leadership-elections");
 const { connectEventClients, createEventDelivery } = require("./event-delivery");
 if (process.env.NODE_ENV === "test") {
@@ -129,6 +132,10 @@ let leadershipElectionTimer = null;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const sessionBackend = createSessionBackend();
 validateProductionConfig(process.env);
+const oneTimeCodeSecret = process.env.ONE_TIME_CODE_HMAC_SECRET || (process.env.NODE_ENV === "test" ? "test-only-one-time-code-hmac-key-0123456789" : "");
+if (Buffer.byteLength(oneTimeCodeSecret, "utf8") < 32) throw new Error("ONE_TIME_CODE_HMAC_SECRET must be set to a dedicated value of at least 32 bytes.");
+if (oneTimeCodeSecret === SESSION_SECRET) throw new Error("ONE_TIME_CODE_HMAC_SECRET must be different from SESSION_SECRET.");
+const { hashCode, verifyCodeHash } = createOneTimeCodeVerifier(oneTimeCodeSecret);
 const codeLifetimeMs = 24 * 60 * 60 * 1000;
 const idempotencyLifetimeMs = 24 * 60 * 60 * 1000;
 const idleSessionMs = 15 * 60 * 1000;
@@ -279,9 +286,14 @@ async function clearLoginFailures(phoneKey, ipKey) {
   }
   loginFailures.delete(phoneKey); loginFailures.delete(ipKey);
 }
-function hashCode(code) { return crypto.createHash("sha256").update(code).digest("hex"); }
 function newId() { return crypto.randomUUID(); }
 function now() { return new Date().toISOString(); }
+function bootstrapSecretMatches(candidate, expected) {
+  if (typeof expected !== "string" || !expected) return false;
+  const expectedDigest = crypto.createHash("sha256").update(expected, "utf8").digest();
+  const candidateDigest = crypto.createHash("sha256").update(typeof candidate === "string" ? candidate : "", "utf8").digest();
+  return crypto.timingSafeEqual(expectedDigest, candidateDigest);
+}
 function auditEntry(type, entityId, actor, details = {}) {
   return { id: newId(), type, entityId, at: now(), by: { id: actor.id, name: actor.name, role: actor.role }, ...details };
 }
@@ -700,7 +712,17 @@ function idempotent(handler) {
 }
 async function commit(req, res, next, updated, status, body, storedBody = body, afterPersist) {
   updated.idempotency[req.idempotency.key] = { fingerprint: req.idempotency.fingerprint, status, body: storedBody };
-  try { await persist(updated); afterPersist?.(); return res.status(status).json(body); } catch (error) { return next(error); }
+  try { await persist(updated); afterPersist?.(); return res.status(status).json(body); }
+  catch (error) {
+    const isReceiptReferenceConflict = error?.code === "23505" && [
+      "financial_reference_reservations_pkey",
+      "tenant_mpesa_callbacks_receipt_number_unique",
+    ].includes(error?.constraint);
+    if (isReceiptReferenceConflict) {
+      return res.status(409).json({ message: "That receipt reference has already been used in this chama." });
+    }
+    return next(error);
+  }
 }
 async function processDueLeadershipElections() {
   return withSerializedWrite(async () => {
@@ -966,7 +988,7 @@ function sendSms(phone, message) {
 }
 const CONTACT_RECIPIENT = "09elim3@gmail.com";
 function emailConfigured() {
-  if (process.env.SMTP_TRANSPORT === "json") return true;
+  if (process.env.SMTP_TRANSPORT === "json") return process.env.NODE_ENV === "test" || process.env.NODE_ENV !== "production" && !!clean(process.env.SMTP_LOG_FILE);
   const host = clean(process.env.SMTP_HOST);
   const user = clean(process.env.SMTP_USER);
   const pass = clean(process.env.SMTP_PASS);
@@ -1080,7 +1102,7 @@ app.post("/api/contact", sharedRateLimit("contact", {
   try {
     const info = await sendEmail(CONTACT_RECIPIENT, `Website contact: ${subject}`, text, { replyTo: email });
     if (process.env.NODE_ENV === "test" && process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
-      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+      appendJsonEmailCapture(process.env.SMTP_LOG_FILE, info.message);
     }
     return res.json({ message: "Your message has been sent." });
   } catch (error) {
@@ -1225,6 +1247,8 @@ app.get("/api/bootstrap", async (req, res, next) => {
 app.get("/api/setup", (req, res) => { res.json({ open: state.users.length === 0 && state.chamas.length === 0 }); });
 app.post("/api/setup", setupLimiter, async (req, res, next) => {
   if (state.users.length > 0 || state.chamas.length > 0) return res.status(409).json({ message: "Initial setup has already been completed." });
+  const bootstrapSecret = process.env.SETUP_BOOTSTRAP_SECRET;
+  if (bootstrapSecret && !bootstrapSecretMatches(req.get("X-Setup-Bootstrap-Secret"), bootstrapSecret)) return res.status(403).json({ message: "An operator bootstrap code is required for initial setup." });
   const chamaName = clean(req.body?.chamaName);
   const name = clean(req.body?.name);
   const phone = normalizePhone(req.body?.phone);
@@ -1348,7 +1372,7 @@ app.post("/api/forgot-pin", pinRecoveryLimiter, pinResetSendCooldown, pinResetSe
     await saveSession(req.session);
     const info = await sendEmail(account.email, "Jirani Chama PIN Reset Code", `Your Jirani Chama PIN reset code is ${code}. It expires in 10 minutes. Do not share it.`);
     if (process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
-      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+      appendJsonEmailCapture(process.env.SMTP_LOG_FILE, info.message);
     }
   } catch (error) {
     delete req.session.pinResetHash;
@@ -1363,13 +1387,11 @@ app.post("/api/reset-pin", pinRecoveryLimiter, pinResetVerifyLimiter, async (req
   const code = clean(req.body?.code || req.body?.otp);
   const newPin = clean(req.body?.newPin);
   if (!validNewPin(newPin)) return res.status(400).json({ message: "Choose a 6-12 digit PIN." });
-  const codeDigest = hashCode(code);
   const valid = validEmail(email) && /^\d{6}$/.test(code) &&
     typeof req.session.pinResetHash === "string" &&
     typeof req.session.pinResetExpiresAt === "number" &&
     Date.now() < req.session.pinResetExpiresAt &&
-    req.session.pinResetHash.length === codeDigest.length &&
-    crypto.timingSafeEqual(Buffer.from(req.session.pinResetHash), Buffer.from(codeDigest));
+    verifyCodeHash(code, req.session.pinResetHash);
   const account = valid && state.users.find(item => item.id === req.session.pinResetAccountId && item.status === "active" && normalizeEmail(item.email) === email);
   if (!account) return res.status(400).json({ message: "Invalid or expired PIN reset code." });
   delete req.session.pinResetHash;
@@ -1829,7 +1851,7 @@ app.post("/api/invitations", requireAuth, requirePinChanged, requireRole("chairp
   try {
     const emailInfo = await sendEmail(email, "Jirani Chama Invitation", `Jirani Chama invitation: your activation code is ${code}. It expires in 24 hours. Do not share it.`);
     if (process.env.SMTP_TRANSPORT === "json" && emailInfo?.message && process.env.SMTP_LOG_FILE) {
-      try { fs.appendFileSync(process.env.SMTP_LOG_FILE, emailInfo.message + "\n"); } catch {}
+      appendJsonEmailCapture(process.env.SMTP_LOG_FILE, emailInfo.message);
     }
   }
   catch (error) { if (error.message !== "Email delivery is not configured.") return res.status(502).json({ message: `Invitation was not created: ${error.message}` }); deliveryChannel = "manual"; }
@@ -1869,7 +1891,7 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
   const phone = normalizePhone(req.body?.phone); const code = clean(req.body?.code); const codeDigest = hashCode(code); const pin = clean(req.body?.pin);
   try {
     const activate = async () => {
-      const matchingCode = state.invitations.find(item => item.codeHash === codeDigest || item.usedCodeHash === codeDigest);
+      const matchingCode = state.invitations.find(item => verifyCodeHash(code, item.codeHash) || verifyCodeHash(code, item.usedCodeHash));
       if (matchingCode?.usedAt || matchingCode?.usedCodeHash === codeDigest) return { status: 400, body: { message: "Code already used" } };
       if (matchingCode && invitationRevocation(matchingCode)) return { status: 400, body: { message: "Invitation revoked" } };
       if (matchingCode && Date.parse(matchingCode.expiresAt) <= Date.now()) return { status: 400, body: { message: "Code expired" } };
@@ -1936,8 +1958,9 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   const memberId = clean(req.body?.memberId);
   const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
   if (foreignMember) return res.status(404).json({ message: "Member not found." });
-  const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const note = clean(req.body?.note); const referenceNumber = clean(req.body?.referenceNumber); const date = clean(req.body?.date);
-  if (!member || !Number.isSafeInteger(amount) || amount < 1 || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !/^[A-Za-z0-9/._-]{3,40}$/.test(referenceNumber) || !isValidContributionDate(date)) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, a real non-future date, and a 3-500 character note." });
+  const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
+  if (!member || !Number.isSafeInteger(amount) || amount < 1 || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, a real non-future date, and a 3-500 character note." });
+  if (hasReceiptReferenceConflict(state, req.user.chamaId, parsedReference.normalized)) return res.status(409).json({ message: "That receipt reference has already been used in this chama." });
   const contributionMonth = date.slice(0, 7);
   const welfarePaid = scopeToChama(state.transactions, req.user.chamaId).some(item => item.memberId === member.id && item.contributionMonth === contributionMonth && item.welfareAmount > 0);
   const meetingDate = scheduledMeetingDate(contributionMonth);
@@ -2016,8 +2039,9 @@ function repayLoan() {
     const foreignLoan = state.loans.find(item => item.id === loanId && item.chamaId !== req.user.chamaId);
     if (foreignLoan) return res.status(404).json({ message: "Loan not found." });
     const loan = scopeToChama(state.loans, req.user.chamaId).find(item => item.id === loanId && item.status === "approved");
-    const amount = Number(req.body?.amount); const note = clean(req.body?.note); const referenceNumber = clean(req.body?.referenceNumber); const date = clean(req.body?.date);
-    if (!loan || !Number.isSafeInteger(amount) || amount < 1 || amount > loan.outstanding || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !/^[A-Za-z0-9/._-]{3,40}$/.test(referenceNumber) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) return res.status(400).json({ message: "Select an approved loan and enter a cash amount no larger than its outstanding balance, with a reference number, date, and note." });
+    const amount = Number(req.body?.amount); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
+    if (!loan || !Number.isSafeInteger(amount) || amount < 1 || amount > loan.outstanding || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Select an approved loan and enter a cash amount no larger than its outstanding balance, with a receipt reference, real non-future date, and note." });
+    if (hasReceiptReferenceConflict(state, req.user.chamaId, parsedReference.normalized)) return res.status(409).json({ message: "That receipt reference has already been used in this chama." });
     const updated = structuredClone(state); const saved = scopeToChama(updated.loans, req.user.chamaId).find(item => item.id === loan.id);
     let remaining = amount; let principalAmount = amount; let interestAmount = 0;
     if (saved.schedule) {
@@ -2616,7 +2640,7 @@ app.post("/api/otp/request", OTP_RATE_LIMIT, OTP_SEND_COOLDOWN, OTP_SEND_DAILY_L
     sendEmail(recipientEmail, "Jirani Chama Sign-In Code", `Your Jirani Chama sign-in code is ${otp}. It expires in 10 minutes. Do not share it.`)
       .then(info => {
         if (process.env.SMTP_TRANSPORT === "json" && info?.message && process.env.SMTP_LOG_FILE) {
-          try { fs.appendFileSync(process.env.SMTP_LOG_FILE, info.message + "\n"); } catch {}
+          appendJsonEmailCapture(process.env.SMTP_LOG_FILE, info.message);
         }
         res.json(genericOk);
       })
@@ -2643,14 +2667,12 @@ app.post("/api/otp/verify", OTP_RATE_LIMIT, async (req, res, next) => {
     return res.status(429).json({ message: "Too many login attempts. Try again in 15 minutes." });
   }
   const { otpHash, otpPhone, otpExpiresAt } = req.session;
-  const codeDigest = hashCode(code);
   const valid =
     otpHash &&
     otpPhone === phone &&
     typeof otpExpiresAt === "number" &&
     Date.now() < otpExpiresAt &&
-    otpHash.length === codeDigest.length &&
-    crypto.timingSafeEqual(Buffer.from(otpHash), Buffer.from(codeDigest));
+    verifyCodeHash(code, otpHash);
   if (!valid) {
     await recordLoginFailure(phoneKey, ipKey);
     return res.status(401).json({ message: "Incorrect or expired activation code." });

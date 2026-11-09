@@ -33,7 +33,7 @@ const people = [
 ];
 
 // A fixed cash balance, so approvals are never blocked by group funds.
-const seedTransaction = { id: "seed-cash", at: "2026-09-01T08:00:00.000Z", memberId: "chair", memberName: "Test Chair", amount: 100000, method: "Cash", paymentType: "Monthly Contribution", note: "Opening cash", status: "confirmed", source: "manual-cash", recordedBy: "treasurer", loanId: null, welfareAmount: 0, shareCapitalAmount: 0, penaltyAmount: 0, contributionMonth: "2026-09" };
+const seedTransaction = { id: "seed-cash", at: "2026-09-01T08:00:00.000Z", memberId: "chair", memberName: "Test Chair", amount: 100000, method: "Cash", paymentType: "Monthly Contribution", note: "Opening cash", status: "confirmed", source: "manual-cash", recordedBy: "treasurer", loanId: null, welfareAmount: 0, shareCapitalAmount: 0, penaltyAmount: 0, contributionMonth: "2026-09", referenceNumber: "CROSS-TYPE-3000" };
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
@@ -114,6 +114,16 @@ function unpledged(memberId) {
     .flatMap(loan => (loan.guarantors || []).filter(item => item.memberId === memberId).map(item => item.held))
     .reduce((sum, value) => sum + value, 0);
   return member.shareCapital - held;
+}
+
+function todayInNairobi() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
+}
+
+function tomorrowInNairobi() {
+  const date = new Date(`${todayInNairobi()}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 async function freePort() {
@@ -224,7 +234,7 @@ test("rejecting a request releases its pledges", async () => {
 
 test("repayments split interest first, then release pledges as principal falls", async () => {
   const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
-  const first = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 538, method: "Cash", note: "First installment", referenceNumber: "RCPT-3001", date: "2026-10-05" });
+  const first = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 538, method: "Cash", note: "First installment", referenceNumber: "RCPT-3001", date: todayInNairobi() });
   assert.equal(first.status, 201);
   const transaction = (await first.json()).data;
   assert.equal(transaction.interestAmount, 75);
@@ -238,6 +248,36 @@ test("repayments split interest first, then release pledges as principal falls",
   assert.equal(memberHeld(loan, "g1"), 537);
   assert.equal(unpledged("g1"), 463);
   assert.ok(persistedState().auditLog.some(item => item.type === "pledge.released" && item.loanId === loanId && item.amount === 463));
+});
+
+test("repayment dates reject impossible calendar values and future dates without changing the loan", async () => {
+  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const before = persistedState();
+  const beforeLoan = loanById(loanId);
+  for (const [index, date] of ["2026-02-30", "2025-02-29", "2026-2-09"].entries()) {
+    const response = await post("/api/loans/repay", cookies.treasurer, {
+      loanId, amount: 1, method: "Cash", note: "Invalid date attempt", referenceNumber: `INVALID-DATE-${index}`, date,
+    });
+    assert.equal(response.status, 400, `expected ${date} to be rejected`);
+  }
+  const future = await post("/api/loans/repay", cookies.treasurer, {
+    loanId, amount: 1, method: "Cash", note: "Future date attempt", referenceNumber: "FUTURE-DATE-3000", date: tomorrowInNairobi(),
+  });
+  assert.equal(future.status, 400);
+  assert.equal(loanById(loanId).outstanding, beforeLoan.outstanding);
+  assert.equal(persistedState().transactions.length, before.transactions.length);
+});
+
+test("a contribution receipt cannot be reused for a loan repayment after trimming and case-folding", async () => {
+  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const outstanding = loanById(loanId).outstanding;
+  const transactionCount = persistedState().transactions.length;
+  const response = await post("/api/loans/repay", cookies.treasurer, {
+    loanId, amount: 1, method: "Cash", note: "Duplicate receipt attempt", referenceNumber: "  cross-type-3000  ", date: "2026-10-05",
+  });
+  assert.equal(response.status, 409);
+  assert.equal(loanById(loanId).outstanding, outstanding);
+  assert.equal(persistedState().transactions.length, transactionCount);
 });
 
 test("overpaying a loan is rejected", async () => {

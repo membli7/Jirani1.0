@@ -130,6 +130,7 @@ test("invitation codes are random six-digit values, hashed at rest, and single-u
   assert.equal(record.attemptsRemaining, 5);
   assert.equal(record.usedCodeHash, null);
   assert.notEqual(record.codeHash, body.activationCode);
+  assert.notEqual(record.codeHash, crypto.createHash("sha256").update(body.activationCode).digest("hex"));
   assert.equal(JSON.stringify(persisted(server)).includes(body.activationCode), false);
   const lifetime = Date.parse(record.expiresAt) - Date.parse(record.invitedAt);
   assert.ok(lifetime >= 24 * 60 * 60 * 1000 - 2000 && lifetime <= 24 * 60 * 60 * 1000);
@@ -141,6 +142,25 @@ test("invitation codes are random six-digit values, hashed at rest, and single-u
   const reused = await activate(server, "0712000003", body.activationCode);
   assert.equal(reused.status, 400);
   assert.equal((await reused.json()).message, "Code already used");
+});
+
+test("existing SHA-256 invitation verifiers remain usable through their existing expiry", async () => {
+  const server = await startServer();
+  const cookie = await login(server, "+254711000001");
+  const { body } = await createInvitation(server, cookie, "0712000007");
+  const legacyDigest = crypto.createHash("sha256").update(body.activationCode).digest("hex");
+  const state = persisted(server);
+  state.invitations[0].codeHash = legacyDigest;
+  fs.writeFileSync(server.dataFile, JSON.stringify(state));
+
+  const activated = await activate(server, "0712000007", body.activationCode);
+  assert.equal(activated.status, 201);
+  const used = persisted(server).invitations[0];
+  assert.equal(used.codeHash, legacyDigest, "the existing record remains unchanged");
+  assert.notEqual(used.usedCodeHash, legacyDigest, "newly stored use-verifiers use HMAC");
+  assert.notEqual(used.usedCodeHash, body.activationCode);
+  const replay = await activate(server, "0712000007", body.activationCode);
+  assert.equal((await replay.json()).message, "Code already used");
 });
 
 test("wrong activation codes decrement the persistent invitation limit and lock after five failures", async () => {

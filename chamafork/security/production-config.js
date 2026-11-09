@@ -67,7 +67,15 @@ function validateProductionConfig(env = process.env) {
   if (!allowedOrigins.length) errors.push("APP_ALLOWED_ORIGINS must list at least one trusted HTTPS origin.");
   if (canonicalOrigin && allowedOrigins.length && !allowedOrigins.includes(canonicalOrigin)) errors.push("APP_ALLOWED_ORIGINS must include APP_CANONICAL_ORIGIN.");
   if (!strongSecret(env.SESSION_SECRET)) errors.push("SESSION_SECRET must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
+  if (!strongSecret(env.ONE_TIME_CODE_HMAC_SECRET)) errors.push("ONE_TIME_CODE_HMAC_SECRET must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
+  if (env.ONE_TIME_CODE_HMAC_SECRET === env.SESSION_SECRET) errors.push("ONE_TIME_CODE_HMAC_SECRET must be distinct from SESSION_SECRET.");
+  if (!strongSecret(env.SETUP_BOOTSTRAP_SECRET)) errors.push("SETUP_BOOTSTRAP_SECRET must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
+  for (const key of ["SESSION_SECRET", "ONE_TIME_CODE_HMAC_SECRET", "METRICS_BEARER_TOKEN"]) {
+    if (env.SETUP_BOOTSTRAP_SECRET && env.SETUP_BOOTSTRAP_SECRET === env[key]) errors.push(`SETUP_BOOTSTRAP_SECRET must be distinct from ${key}.`);
+  }
   if (env.DATA_BACKEND !== "postgres" || !env.DATABASE_URL) errors.push("Production requires DATA_BACKEND=postgres and DATABASE_URL.");
+  if (String(env.SMTP_TRANSPORT || "").trim().toLowerCase() === "json") errors.push("SMTP_TRANSPORT=json is prohibited in production; configure authenticated SMTP.");
+  if (typeof env.SMTP_LOG_FILE === "string" && env.SMTP_LOG_FILE.trim()) errors.push("SMTP_LOG_FILE is prohibited in production because it can contain one-time codes.");
   let redisProtocol = null;
   try { redisProtocol = new URL(env.REDIS_URL).protocol; } catch {}
   if (redisProtocol !== "rediss:" || env.SESSION_STORE !== "redis") errors.push("Production requires a TLS-protected rediss:// REDIS_URL and SESSION_STORE=redis for shared sessions and rate limits.");

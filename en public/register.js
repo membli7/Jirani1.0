@@ -13,6 +13,8 @@ registrationForm.addEventListener("submit", async event => {
 
   try {
     const formData = Object.fromEntries(new FormData(registrationForm));
+    const bootstrapSecret = typeof formData.bootstrapSecret === "string" ? formData.bootstrapSecret : "";
+    delete formData.bootstrapSecret;
     formData.deadlineDay = Number(formData.deadlineDay);
     formData.welfareMonthlyFee = Number(formData.welfareMonthlyFee);
     formData.lateContributionPenalty = Number(formData.lateContributionPenalty);
@@ -22,7 +24,8 @@ registrationForm.addEventListener("submit", async event => {
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
-        "X-Requested-With": "chama"
+        "X-Requested-With": "chama",
+        ...(bootstrapSecret ? { "X-Setup-Bootstrap-Secret": bootstrapSecret } : {})
       },
       body: JSON.stringify(formData)
     });
@@ -60,6 +63,8 @@ registrationForm.addEventListener("submit", async event => {
       : error.message);
     registrationNotice.hidden = false;
   } finally {
+    const bootstrapField = registrationForm.elements?.namedItem?.("bootstrapSecret");
+    if (bootstrapField) bootstrapField.value = "";
     submitButton.disabled = false;
   }
 });

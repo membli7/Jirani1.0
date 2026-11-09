@@ -13,7 +13,7 @@ function hashedPin(pin) {
   const salt = crypto.randomBytes(16).toString("hex");
   return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
-async function startAuthServer({ lockoutMs = 900000, production = false, empty = false } = {}) {
+async function startAuthServer({ lockoutMs = 900000, production = false, empty = false, setupBootstrapSecret = "" } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-auth-test-"));
   const dataFile = path.join(directory, "data.json");
   const phone = "+254711000001";
@@ -23,7 +23,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false },
   ], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const port = 30000 + (process.pid % 20000) + servers.length;
-  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", FORCE_HTTPS_REDIRECT: production ? "1" : "0", FORCE_SECURE_COOKIE: production ? "1" : "0", FORCE_METRICS_AUTH: production ? "1" : "0", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", METRICS_BEARER_TOKEN: "test-metrics-bearer-token-long-enough-123456", APP_ALLOWED_ORIGINS: production ? "https://chama.example.test" : "", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", FORCE_HTTPS_REDIRECT: production ? "1" : "0", FORCE_SECURE_COOKIE: production ? "1" : "0", FORCE_METRICS_AUTH: production ? "1" : "0", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", SETUP_BOOTSTRAP_SECRET: setupBootstrapSecret, METRICS_BEARER_TOKEN: "test-metrics-bearer-token-long-enough-123456", APP_ALLOWED_ORIGINS: production ? "https://chama.example.test" : "", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -48,6 +48,26 @@ test("signup rejects a four-digit PIN", async () => {
   const signup = pin => fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin }) });
   assert.equal((await signup("1234")).status, 400);
   assert.equal((await signup("123456")).status, 201);
+});
+
+test("first-account setup requires the configured operator bootstrap credential", async () => {
+  const bootstrapSecret = "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8";
+  const server = await startAuthServer({ empty: true, setupBootstrapSecret: bootstrapSecret });
+  const payload = { chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456" };
+  const setup = secret => fetch(`${server.baseUrl}/api/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama", ...(secret ? { "X-Setup-Bootstrap-Secret": secret } : {}) },
+    body: JSON.stringify(payload),
+  });
+  assert.equal((await setup()).status, 403);
+  assert.equal((await setup("incorrect-bootstrap-value")).status, 403);
+  const unchanged = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
+  assert.equal(unchanged.users.length, 0);
+  assert.equal(unchanged.chamas.length, 0);
+  assert.equal((await setup(bootstrapSecret)).status, 201);
+  assert.equal((await setup()).status, 409);
+  const stored = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
+  assert.equal(JSON.stringify(stored).includes(bootstrapSecret), false);
 });
 
 test("invitation activation rejects a four-digit PIN", async () => {
