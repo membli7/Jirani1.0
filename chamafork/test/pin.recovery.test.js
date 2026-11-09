@@ -2,18 +2,21 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
-const { execFile } = require("node:child_process");
+const { execFile, spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { after, test } = require("node:test");
+const { resetPinAfterRevokingSessions } = require("../security/pin-recovery");
 
 const servers = [];
+const redisServers = [];
 function pinHash(pin) {
   const salt = crypto.randomBytes(16).toString("hex");
   return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
-async function startServer({ emailEnabled = true, mailFails = false, resetTtlMs = "", logFile = "" } = {}) {
+async function startServer({ emailEnabled = true, mailFails = false, resetTtlMs = "", logFile = "", testSessionRedisUrl = "" } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-test-"));
   const dataFile = path.join(directory, "data.json");
   const email = "member@example.test";
@@ -28,6 +31,7 @@ async function startServer({ emailEnabled = true, mailFails = false, resetTtlMs 
   const env = {
     ...process.env, NODE_ENV: "test", DATA_BACKEND: "json", PORT: String(port), SESSION_SECRET: "pin-recovery-test-session-secret",
     CHAMA_DATA_FILE: dataFile, AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "", PIN_RESET_TTL_MS: resetTtlMs,
+    PIN_RECOVERY_TEST_REDIS_URL: testSessionRedisUrl, SESSION_REDIS_PREFIX: `jirani:pin-test:${process.pid}:${servers.length}:`,
   };
   if (mailFails) { env.SMTP_TRANSPORT = ""; env.SMTP_HOST = "127.0.0.1"; env.SMTP_PORT = "1"; env.SMTP_USER = "test-user"; env.SMTP_PASS = "test-password"; }
   else if (emailEnabled) { env.SMTP_TRANSPORT = "json"; env.SMTP_LOG_FILE = logFile; }
@@ -48,6 +52,67 @@ async function startServer({ emailEnabled = true, mailFails = false, resetTtlMs 
   servers.push(server);
   return server;
 }
+function redisServerExecutable() {
+  if (process.env.PIN_RECOVERY_REDIS_SERVER) return process.env.PIN_RECOVERY_REDIS_SERVER;
+  const lookup = process.platform === "win32" ? "where.exe" : "which";
+  const result = spawnSync(lookup, ["redis-server"], { encoding: "utf8", windowsHide: true });
+  return result.status === 0 ? result.stdout.split(/\r?\n/).find(Boolean)?.trim() || "" : "";
+}
+async function allocatePort() {
+  const listener = net.createServer();
+  await new Promise((resolve, reject) => listener.once("error", reject).listen(0, "127.0.0.1", resolve));
+  const port = listener.address().port;
+  await new Promise(resolve => listener.close(resolve));
+  return port;
+}
+function isRedisReady(port) {
+  return new Promise(resolve => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const finish = ready => { socket.destroy(); resolve(ready); };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(300, () => finish(false));
+  });
+}
+async function startDisposableRedis(t) {
+  const executable = redisServerExecutable();
+  if (!executable) {
+    t.skip("redis-server is unavailable; the Redis-backed integration test requires a local disposable Redis binary.");
+    return null;
+  }
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-redis-"));
+  const port = await allocatePort();
+  const child = spawn(executable, ["--bind", "127.0.0.1", "--port", String(port), "--protected-mode", "yes", "--save", "", "--appendonly", "no", "--dir", directory, "--loglevel", "warning"], {
+    stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+  });
+  let output = "";
+  let spawnError = null;
+  child.stdout.on("data", chunk => { output += chunk; });
+  child.stderr.on("data", chunk => { output += chunk; });
+  child.once("error", error => { spawnError = error; });
+  const redis = {
+    url: `redis://127.0.0.1:${port}`,
+    async stop() {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill();
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, 3000);
+          child.once("exit", () => { clearTimeout(timer); resolve(); });
+        });
+      }
+      fs.rmSync(directory, { recursive: true, force: true });
+    },
+  };
+  redisServers.push(redis);
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (spawnError) throw new Error(`Could not start disposable Redis: ${spawnError.message}`);
+    if (child.exitCode !== null) throw new Error(`Disposable Redis exited (${child.exitCode}): ${output}`);
+    if (await isRedisReady(port)) return redis;
+    await new Promise(resolve => setTimeout(resolve, 40));
+  }
+  throw new Error(`Disposable Redis did not become ready: ${output}`);
+}
 async function post(server, route, body, cookie = "") {
   return fetch(`${server.baseUrl}${route}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID(), ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) });
 }
@@ -57,11 +122,65 @@ function latestCode(logFile, subject) {
   const message = messages.reverse().find(item => item.subject === subject);
   return message.text.match(/(\d{6})/)[1];
 }
-async function requestReset(server, logFile, email = server.email) {
-  const response = await post(server, "/api/forgot-pin", { email });
+async function requestReset(server, logFile, email = server.email, sessionCookie = "") {
+  const response = await post(server, "/api/forgot-pin", { email }, sessionCookie);
   return { response, body: await response.json(), cookie: cookie(response), code: fs.existsSync(logFile) ? latestCode(logFile, "Jirani Chama PIN Reset Code") : null };
 }
-after(async () => { for (const server of servers) await server.stop(); });
+after(async () => {
+  for (const server of servers) await server.stop();
+  for (const redis of redisServers) await redis.stop();
+});
+
+test("PIN reset preserves the old PIN and retryable challenge when session enumeration fails", async () => {
+  let pin = "old-pin-hash";
+  let challengeAvailable = true;
+  const store = { all(callback) { callback(new Error("session enumeration failed")); } };
+  await assert.rejects(resetPinAfterRevokingSessions({
+    sessionStore: store,
+    userId: "member-1",
+    consumeChallenge: async () => { challengeAvailable = false; },
+    persistPin: async () => { pin = "new-pin-hash"; },
+  }), /session enumeration failed/);
+  assert.equal(pin, "old-pin-hash");
+  assert.equal(challengeAvailable, true);
+});
+
+test("PIN reset preserves the old PIN and retryable challenge after partial session destruction, then retries safely", async () => {
+  let pin = "old-pin-hash";
+  let challengeAvailable = true;
+  let failDestroy = true;
+  const attempted = [];
+  const store = {
+    all(callback) {
+      callback(null, [
+        { id: "session-1", userId: "member-1" },
+        { id: "session-2", userId: "member-1" },
+        { id: "unrelated-session", userId: "member-2" },
+      ]);
+    },
+    destroy(id, callback) {
+      attempted.push(id);
+      setImmediate(() => callback(failDestroy && id === "session-2" ? new Error("session destroy failed") : null));
+    },
+  };
+  const reset = () => resetPinAfterRevokingSessions({
+    sessionStore: store,
+    userId: "member-1",
+    consumeChallenge: async () => { challengeAvailable = false; },
+    persistPin: async () => { pin = "new-pin-hash"; },
+  });
+  await assert.rejects(reset(), /session destroy failed/);
+  assert.deepEqual(attempted.slice().sort(), ["session-1", "session-2"]);
+  assert.equal(pin, "old-pin-hash");
+  assert.equal(challengeAvailable, true);
+
+  failDestroy = false;
+  attempted.length = 0;
+  await reset();
+  assert.deepEqual(attempted.slice().sort(), ["session-1", "session-2"]);
+  assert.equal(pin, "new-pin-hash");
+  assert.equal(challengeAvailable, false);
+});
 
 test("resets a PIN with an emailed, purpose-specific single-use code", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-mail-"));
@@ -95,7 +214,7 @@ test("PIN recovery revokes every existing session for the account", async () => 
     assert.equal(signedIn.status, 200);
     sessionCookies.push(cookie(signedIn));
   }
-  const reset = await requestReset(server, logFile);
+  const reset = await requestReset(server, logFile, server.email, sessionCookies[0]);
   const changed = await post(server, "/api/reset-pin", { email: server.email, code: reset.code, newPin: "654321" }, reset.cookie);
   assert.equal(changed.status, 200);
 
@@ -104,6 +223,31 @@ test("PIN recovery revokes every existing session for the account", async () => 
     assert.equal(dashboard.status, 401, "a pre-recovery session must no longer authenticate");
   }
   fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test("PIN recovery revokes sessions using a disposable Redis session store", async t => {
+  const redis = await startDisposableRedis(t);
+  if (!redis) return;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-pin-reset-redis-test-"));
+  const logFile = path.join(directory, "mail.jsonl");
+  try {
+    const server = await startServer({ logFile, testSessionRedisUrl: redis.url });
+    const sessionCookies = [];
+    for (let index = 0; index < 2; index += 1) {
+      const signedIn = await post(server, "/api/login", { phone: server.phone, pin: "123456" });
+      assert.equal(signedIn.status, 200);
+      sessionCookies.push(cookie(signedIn));
+    }
+    const reset = await requestReset(server, logFile);
+    const changed = await post(server, "/api/reset-pin", { email: server.email, code: reset.code, newPin: "654321" }, reset.cookie);
+    assert.equal(changed.status, 200);
+    for (const sessionCookie of sessionCookies) {
+      const dashboard = await fetch(`${server.baseUrl}/api/dashboard`, { headers: { Cookie: sessionCookie } });
+      assert.equal(dashboard.status, 401, "a pre-recovery Redis-backed session must no longer authenticate");
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("PIN recovery gives unknown accounts the same privacy-preserving response", async () => {

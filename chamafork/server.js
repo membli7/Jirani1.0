@@ -12,6 +12,7 @@ const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 const { parseCanonicalHttpsOrigin, httpsRedirectLocation } = require("./security/https-origin");
 const { createSessionBackend } = require("./session-store");
+const { resetPinAfterRevokingSessions } = require("./security/pin-recovery");
 const { makeRedisClient } = require("./redis-client");
 const nodemailer = require("nodemailer");
 const { createWriteQueue } = require("./storage/write-queue");
@@ -51,6 +52,13 @@ const postgresState = require("./repo/postgres-state");
 // A third client is used for summary cache reads/writes.
 // All three are no-ops when REDIS_URL is not set (development).
 // ---------------------------------------------------------------------------
+const TEST_SESSION_REDIS_URL = process.env.NODE_ENV === "test" ? process.env.PIN_RECOVERY_TEST_REDIS_URL || "" : "";
+if (TEST_SESSION_REDIS_URL) {
+  const testRedisUrl = new URL(TEST_SESSION_REDIS_URL);
+  if (testRedisUrl.protocol !== "redis:" || !["127.0.0.1", "localhost", "[::1]"].includes(testRedisUrl.hostname)) {
+    throw new Error("PIN_RECOVERY_TEST_REDIS_URL must use a loopback Redis server.");
+  }
+}
 const REDIS_URL = process.env.REDIS_URL || "";
 let redisPub = null;   // publishes chama event messages
 let redisSub = null;   // subscribed to chama event messages, feeds local SSE clients
@@ -130,7 +138,9 @@ const monthDateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", m
 const eventClients = new Set();
 let leadershipElectionTimer = null;
 const SESSION_SECRET = process.env.SESSION_SECRET;
-const sessionBackend = createSessionBackend();
+const sessionBackend = createSessionBackend(TEST_SESSION_REDIS_URL
+  ? { redisUrl: TEST_SESSION_REDIS_URL, sessionStore: "redis" }
+  : undefined);
 validateProductionConfig(process.env);
 const oneTimeCodeSecret = process.env.ONE_TIME_CODE_HMAC_SECRET || (process.env.NODE_ENV === "test" ? "test-only-one-time-code-hmac-key-0123456789" : "");
 if (Buffer.byteLength(oneTimeCodeSecret, "utf8") < 32) throw new Error("ONE_TIME_CODE_HMAC_SECRET must be set to a dedicated value of at least 32 bytes.");
@@ -1331,26 +1341,6 @@ const pinResetVerifyLimiter = sharedRateLimit("pin-reset-verify", {
 function saveSession(session) {
   return new Promise((resolve, reject) => session.save(error => error ? reject(error) : resolve()));
 }
-function callSessionStore(store, method, ...args) {
-  if (!store || typeof store[method] !== "function") return Promise.reject(new Error(`Session store does not support ${method}.`));
-  return new Promise((resolve, reject) => {
-    try {
-      store[method](...args, (error, value) => error ? reject(error) : resolve(value));
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-async function revokeSessionsForUser(store, userId) {
-  const storedSessions = await callSessionStore(store, "all");
-  const entries = Array.isArray(storedSessions)
-    ? storedSessions.map(item => [item?.id, item])
-    : Object.entries(storedSessions || {});
-  const sessionIds = entries
-    .filter(([id, item]) => typeof id === "string" && item?.userId === userId)
-    .map(([id]) => id);
-  await Promise.all(sessionIds.map(id => callSessionStore(store, "destroy", id)));
-}
 async function markLegacyPinForChange(user, pin) {
   if (pin.length >= 6 || user.mustChangePin) return;
   const updated = structuredClone(state);
@@ -1394,17 +1384,29 @@ app.post("/api/reset-pin", pinRecoveryLimiter, pinResetVerifyLimiter, async (req
     verifyCodeHash(code, req.session.pinResetHash);
   const account = valid && state.users.find(item => item.id === req.session.pinResetAccountId && item.status === "active" && normalizeEmail(item.email) === email);
   if (!account) return res.status(400).json({ message: "Invalid or expired PIN reset code." });
-  delete req.session.pinResetHash;
-  delete req.session.pinResetAccountId;
-  delete req.session.pinResetExpiresAt;
   try {
-    await saveSession(req.session);
-    const updated = structuredClone(state);
-    const saved = updated.users.find(item => item.id === account.id);
-    saved.pinHash = pinHash(newPin);
-    saved.mustChangePin = false;
-    await persist(updated);
-    await revokeSessionsForUser(req.sessionStore, account.id);
+    if (req.session.userId === account.id) {
+      delete req.session.userId;
+      delete req.session.lastActivityAt;
+      await saveSession(req.session);
+    }
+    await resetPinAfterRevokingSessions({
+      sessionStore: req.sessionStore,
+      userId: account.id,
+      consumeChallenge: async () => {
+        delete req.session.pinResetHash;
+        delete req.session.pinResetAccountId;
+        delete req.session.pinResetExpiresAt;
+        await saveSession(req.session);
+      },
+      persistPin: async () => {
+        const updated = structuredClone(state);
+        const saved = updated.users.find(item => item.id === account.id);
+        saved.pinHash = pinHash(newPin);
+        saved.mustChangePin = false;
+        await persist(updated);
+      },
+    });
     return res.json({ message: "PIN reset. Please sign in with your new PIN." });
   } catch (error) { return next(error); }
 });
