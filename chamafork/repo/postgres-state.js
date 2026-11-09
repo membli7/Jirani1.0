@@ -46,6 +46,8 @@ function invitationRow(invitation, order, tenantId, chamaId, userRef = source =>
 function auditLogRow(record, kind, order, chamaId, tenantId, userRef = source => source ? userDbId(chamaId, source) : null) {
   const data = { ...record };
   delete data._recordKind;
+  // recordFromRow adds this tenant hint in memory; tenant ownership lives in the row's chama_id.
+  if (kind === "event") delete data.chamaId;
   return {
     ...tenantBase("audit-log", chamaId, tenantId, data, order, `${kind}:${sourceId(record, `audit-${order}`)}`),
     record_kind: kind, event_type: String(record.type || "event"),
@@ -116,6 +118,29 @@ function knownUsersFor(state, chamaId) {
   return result;
 }
 
+function auditChamaIdsByActor(state) {
+  const result = new Map();
+  for (const user of state.users || []) {
+    if (!user?.id || !user.chamaId) continue;
+    const actorId = String(user.id);
+    const chamaId = String(user.chamaId);
+    if (!result.has(actorId)) result.set(actorId, chamaId);
+    else if (result.get(actorId) !== chamaId) result.set(actorId, null);
+  }
+  return result;
+}
+
+function auditEventChamaId(record, actorChamaIds) {
+  if (record?.chamaId !== undefined && record.chamaId !== null && String(record.chamaId)) {
+    return String(record.chamaId);
+  }
+  const actorId = record?.by?.id || record?.by;
+  const actorChamaId = actorId ? actorChamaIds.get(String(actorId)) || null : null;
+  const memberChamaId = record?.memberId ? actorChamaIds.get(String(record.memberId)) || null : null;
+  if (actorChamaId && memberChamaId && actorChamaId !== memberChamaId) return null;
+  return actorChamaId || memberChamaId || null;
+}
+
 function userRowsForState(state, tenantIds) {
   const result = [];
   const existingKeys = new Set();
@@ -178,7 +203,7 @@ function membershipRow(user, order, tenantId) {
   };
 }
 
-function tenantRows(state, chamaId, tenantId) {
+function tenantRows(state, chamaId, tenantId, actorChamaIds = auditChamaIdsByActor(state)) {
   const usersForChama = state.users.filter(user => user.chamaId === chamaId);
   const userIds = knownUsersFor(state, chamaId);
   const userRef = source => source && userIds.has(String(source)) ? userDbId(chamaId, source) : null;
@@ -270,7 +295,7 @@ function tenantRows(state, chamaId, tenantId) {
   }));
 
   const auditRecords = [
-    ...state.auditLog.filter(item => item.chamaId === chamaId).map(item => ({ ...item, _recordKind: "event" })),
+    ...state.auditLog.filter(item => auditEventChamaId(item, actorChamaIds) === chamaId).map(item => ({ ...item, _recordKind: "event" })),
     ...state.leadershipChanges.filter(item => item.chamaId === chamaId).map(item => ({ ...item, _recordKind: "leadership" })),
   ];
   const auditRows = orders(auditRecords).map(({ record, order }) => auditLogRow(record, record._recordKind, order, chamaId, tenantId, userRef));
@@ -451,6 +476,14 @@ async function saveState(pool, state) {
       if (!tenantIds.has(String(chama.id))) tenantIds.set(String(chama.id), stableId("chama", chama.id));
     }
 
+    const actorChamaIds = auditChamaIdsByActor(state);
+    for (const record of state.auditLog || []) {
+      const chamaId = auditEventChamaId(record, actorChamaIds);
+      if (!chamaId || !chamasById.has(chamaId)) {
+        throw new Error(`Cannot safely assign audit event ${String(record?.id || "(unknown)")} to a chama.`);
+      }
+    }
+
     for (const [source, tenantId] of tenantIds) {
       await client.query("SELECT set_config('app.chama_id', $1, true)", [tenantId]);
       for (const repository of clearOrder) await repository.clear(client, tenantId);
@@ -473,7 +506,7 @@ async function saveState(pool, state) {
     for (const chama of state.chamas) {
       const tenantId = tenantIds.get(String(chama.id));
       await client.query("SELECT set_config('app.chama_id', $1, true)", [tenantId]);
-      const rows = tenantRows(state, chama.id, tenantId);
+      const rows = tenantRows(state, chama.id, tenantId, actorChamaIds);
       await memberships.replace(client, tenantId, rows.memberships);
       await loans.replace(client, tenantId, rows.loans);
       await contributions.replace(client, tenantId, rows.contributions);
