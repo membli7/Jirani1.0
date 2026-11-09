@@ -29,12 +29,24 @@ const references = [
   ["penalties", "member_id", "users", "penalties_member_id_fkey"],
 ];
 
-test("tenant foreign keys accept same-chama links, reject cross-chama links, and fail safely on existing mismatches", { skip: !databaseUrl }, async () => {
+test("tenant FK installation stays NOT VALID until explicit validation", { skip: !databaseUrl }, async () => {
   assert.equal(references.length, 18);
   const pool = createPostgresPool({ connectionString: databaseUrl });
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const identity = await client.query(`
+      SELECT current_database() AS database_name,
+             current_user AS role_name,
+             inet_server_addr()::text AS server_address,
+             inet_server_port() AS server_port
+    `);
+    assert.deepEqual(identity.rows[0], {
+      database_name: "chama_receipt_test",
+      role_name: "postgres",
+      server_address: "127.0.0.1",
+      server_port: 64704,
+    }, "the integration test must stop unless connected to the verified disposable staging target");
     await client.query("CREATE TEMP TABLE users (id UUID PRIMARY KEY, chama_id UUID NOT NULL) ON COMMIT DROP");
     await client.query("CREATE TEMP TABLE loans (id UUID PRIMARY KEY, chama_id UUID NOT NULL, borrower_id UUID, CONSTRAINT loans_borrower_id_fkey FOREIGN KEY (borrower_id) REFERENCES users(id)) ON COMMIT DROP");
     await client.query("CREATE TEMP TABLE transactions (id UUID PRIMARY KEY, chama_id UUID NOT NULL, member_id UUID, loan_id UUID, recorded_by UUID, CONSTRAINT transactions_member_id_fkey FOREIGN KEY (member_id) REFERENCES users(id), CONSTRAINT transactions_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES loans(id), CONSTRAINT transactions_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES users(id)) ON COMMIT DROP");
@@ -72,8 +84,34 @@ test("tenant foreign keys accept same-chama links, reject cross-chama links, and
       await client.query(`INSERT INTO ${table} (id, chama_id, ${column}) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET ${column} = EXCLUDED.${column}`, [rowIds.get(table), chamaA, parentId]);
     }
 
+    const preExistingMismatchId = cryptoRandomUUID();
+    await client.query(
+      "INSERT INTO attendance (id, chama_id, member_id) VALUES ($1, $2, $3)",
+      [preExistingMismatchId, chamaA, userB],
+    );
+
     await client.query(fs.readFileSync(migrationFile, "utf8"));
-    await client.query(fs.readFileSync(migrationFile, "utf8"));
+
+    const tenantConstraintNames = references.map(([, , , oldConstraint]) =>
+      oldConstraint.replace(/_fkey$/, "_tenant_fkey"));
+    const installedConstraints = await client.query(
+      `SELECT conname, convalidated
+       FROM pg_constraint
+       WHERE connamespace = pg_my_temp_schema()
+         AND conname = ANY($1::text[])
+       ORDER BY conname`,
+      [tenantConstraintNames],
+    );
+    assert.equal(installedConstraints.rows.length, 18, "installation must create all 18 tenant constraints");
+    assert.ok(installedConstraints.rows.every(row => row.convalidated === false),
+      "ADD CONSTRAINT NOT VALID must leave every existing row unvalidated");
+
+    const originalMismatch = await client.query(
+      "SELECT chama_id::text AS chama_id, member_id::text AS member_id FROM attendance WHERE id = $1",
+      [preExistingMismatchId],
+    );
+    assert.deepEqual(originalMismatch.rows[0], { chama_id: chamaA, member_id: userB },
+      "NOT VALID installation must preserve the pre-existing cross-chama row");
 
     const userColumns = new Set(["user_id", "member_id", "recorded_by", "borrower_id", "author_id", "invited_by"]);
     for (let index = 0; index < references.length; index += 1) {
@@ -98,23 +136,42 @@ test("tenant foreign keys accept same-chama links, reject cross-chama links, and
     const membershipDelete = await client.query("SELECT confdeltype FROM pg_constraint WHERE conname = 'memberships_user_id_tenant_fkey'");
     assert.equal(membershipDelete.rows[0]?.confdeltype, "c", "membership cascade delete behavior must be preserved");
 
-    const attendanceRowId = rowIds.get("attendance");
-    await client.query("ALTER TABLE attendance DROP CONSTRAINT attendance_member_id_tenant_fkey");
-    await client.query("UPDATE attendance SET member_id = $1 WHERE id = $2", [userB, attendanceRowId]);
-    await client.query("SAVEPOINT existing_mismatch_probe");
+    await client.query("SAVEPOINT existing_mismatch_validation");
     let validationRejected = false;
     try {
-      await client.query(fs.readFileSync(migrationFile, "utf8"));
+      await client.query("ALTER TABLE attendance VALIDATE CONSTRAINT attendance_member_id_tenant_fkey");
     } catch (error) {
       if (error.code !== "23503") throw error;
       validationRejected = true;
     }
-    await client.query("ROLLBACK TO SAVEPOINT existing_mismatch_probe");
-    await client.query("RELEASE SAVEPOINT existing_mismatch_probe");
-    assert.equal(validationRejected, true, "migration validation must stop when existing cross-chama rows are found");
-    const preservedMismatch = await client.query("SELECT chama_id, member_id FROM attendance WHERE id = $1", [attendanceRowId]);
-    assert.equal(preservedMismatch.rows[0]?.chama_id, chamaA);
-    assert.equal(preservedMismatch.rows[0]?.member_id, userB, "failed validation must not silently rewrite existing values");
+    await client.query("ROLLBACK TO SAVEPOINT existing_mismatch_validation");
+    await client.query("RELEASE SAVEPOINT existing_mismatch_validation");
+    assert.equal(validationRejected, true, "explicit VALIDATE must find the pre-existing cross-chama mismatch");
+
+    const failedValidationState = await client.query(
+      `SELECT convalidated FROM pg_constraint
+       WHERE conname = 'attendance_member_id_tenant_fkey'
+         AND conrelid = 'attendance'::regclass`,
+    );
+    assert.equal(failedValidationState.rows[0]?.convalidated, false,
+      "failed validation must leave the constraint NOT VALID");
+    const preservedMismatch = await client.query(
+      "SELECT chama_id::text AS chama_id, member_id::text AS member_id FROM attendance WHERE id = $1",
+      [preExistingMismatchId],
+    );
+    assert.deepEqual(preservedMismatch.rows[0], { chama_id: chamaA, member_id: userB },
+      "failed validation must not rewrite the existing row");
+
+    // Repair only the synthetic TEMP-table fixture, then prove the separate validation step can succeed.
+    await client.query("UPDATE attendance SET member_id = $1 WHERE id = $2", [userA, preExistingMismatchId]);
+    await client.query("ALTER TABLE attendance VALIDATE CONSTRAINT attendance_member_id_tenant_fkey");
+    const successfulValidationState = await client.query(
+      `SELECT convalidated FROM pg_constraint
+       WHERE conname = 'attendance_member_id_tenant_fkey'
+         AND conrelid = 'attendance'::regclass`,
+    );
+    assert.equal(successfulValidationState.rows[0]?.convalidated, true,
+      "explicit validation must succeed after the synthetic fixture is made consistent");
   } finally {
     await client.query("ROLLBACK").catch(() => {});
     client.release();

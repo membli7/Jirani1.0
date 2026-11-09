@@ -17,12 +17,13 @@ const design = read("db/proposals/tenant_integrity_design.md");
 const typedProposal = read("db/proposals/tenant_foreign_keys.sql");
 const migrationRunner = read("db/migrate.js");
 const envExample = read(".env.example");
+const typedFkIntegrationTest = read("test/tenant.foreign-keys.test.js");
 
 test("tenant JSON design names fields that exist in the current schema and writer", () => {
   for (const [label, source, patterns] of [
     ["foundation schema", foundation, [/approvals JSONB NOT NULL/]],
     ["application schema", appTables, [/record_data JSONB NOT NULL/g, /CREATE TABLE IF NOT EXISTS attendance_registers/, /CREATE TABLE IF NOT EXISTS audit_log/, /entity_id TEXT/, /CREATE TABLE IF NOT EXISTS messages/, /CREATE TABLE IF NOT EXISTS invitations/, /CREATE TABLE IF NOT EXISTS dividends/, /CREATE TABLE IF NOT EXISTS penalties/]],
-    ["state mapper", mapper, [/approvals: JSON\.stringify/, /record_data: storedRecord\(\{ registerId: register\.id, \.\.\.attendee \}\)/, /record\.transactionId/, /invitation\.invitedBy/]],
+    ["state mapper", mapper, [/approvals: JSON\.stringify/, /record_data: storedRecord\(\{ registerId: register\.id, \.\.\.attendee \}\)/, /record\.transactionId/, /transaction_id: record\.transactionId/, /tenantBase\("loan-repayments", chamaId, tenantId, record, order\)/, /invitation\.invitedBy/]],
     ["application writers", server, [/register\.history\.push\(\{ at: recordedAt, by: actor, changes \}\)/, /paidTransactionId/, /payouts: expected/, /recipientId/, /approverId/, /guarantors/, /incomingUserId/, /confirmedBy/]],
     ["election writer", elections, [/candidateIds/, /eligibleVoterIds/, /ballot\.candidateId/, /tiedCandidateIds/, /parentElectionId/, /incomingUserId/]],
   ]) {
@@ -35,7 +36,19 @@ test("tenant JSON design names fields that exist in the current schema and write
     "paidTransactionId", "incomingUserId", "outgoingUserId", "proposedBy",
     "confirmedBy", "candidateIds", "eligibleVoterIds", "ballots[].candidateId",
     "parentElectionId", "recipientId", "payouts[].memberId", "entityId",
+    "loan_repayments", "recordedBy` is JSON-only", "mpesa_callbacks.record_data.transactionId",
   ]) assert.ok(design.includes(field), `design catalog should cover ${field}`);
+  assert.ok(design.includes("'system'") && design.includes("'mpesa-c2b'"),
+    "the design should enumerate both source-confirmed non-user audit actors");
+});
+
+test("typed FK integration separates NOT VALID installation from explicit validation", () => {
+  assert.match(typedFkIntegrationTest, /database_name: "chama_receipt_test"/);
+  assert.match(typedFkIntegrationTest, /convalidated/);
+  assert.match(typedFkIntegrationTest, /pre-existing cross-chama row/);
+  assert.match(typedFkIntegrationTest, /ALTER TABLE attendance VALIDATE CONSTRAINT attendance_member_id_tenant_fkey/);
+  assert.match(typedFkIntegrationTest, /failed validation must leave the constraint NOT VALID/);
+  assert.match(typedFkIntegrationTest, /must stop unless connected to the verified disposable staging target/);
 });
 
 test("typed FK installation cannot validate before the preflight gate", () => {

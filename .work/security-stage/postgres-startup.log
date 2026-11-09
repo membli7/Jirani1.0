@@ -19,3 +19,6 @@
 2026-11-10 00:31:58.947 EAT [29324] LOG:  checkpoint starting: time
 2026-11-10 00:31:58.963 EAT [29324] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.003 s, total=0.017 s; sync files=2, longest=0.002 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/1E1A6F0, redo lsn=0/1E1A698
 2026-11-10 00:36:17.334 EAT [39020] FATAL:  role "ADMIN" does not exist
+2026-11-10 01:11:41.606 EAT [18212] FATAL:  role "ADMIN" does not exist
+2026-11-10 01:31:59.013 EAT [29324] LOG:  checkpoint starting: time
+2026-11-10 01:31:59.927 EAT [29324] LOG:  checkpoint complete: wrote 8 buffers (0.0%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.892 s, sync=0.010 s, total=0.915 s; sync files=8, longest=0.003 s, average=0.002 s; distance=16 kB, estimate=16 kB; lsn=0/1E1E948, redo lsn=0/1E1E8F0
