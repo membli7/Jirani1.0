@@ -1553,6 +1553,8 @@ body > .site-footer {
 
 /* Keep the signed-in header compact and put dashboard sections behind the hamburger. */
 .topbar.is-authenticated .topbar-nav,
+.topbar.is-authenticated .landing-menu-toggle,
+.topbar.is-authenticated .landing-mobile-nav,
 .topbar.is-authenticated #identity,
 .topbar.is-authenticated #logout,
 .topbar:not(.is-authenticated) .dashboard-tabs,
@@ -1977,6 +1979,19 @@ body { background: var(--bg); }
   .setup-checklist-item-actions { justify-content: flex-start; }
   .finance-table-wrap { overflow: visible; }
   .topbar { backdrop-filter: blur(14px); }
+  .topbar.is-authenticated { backdrop-filter: none; }
+  .topbar.is-authenticated .dashboard-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .topbar.is-authenticated .dashboard-tab {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    justify-items: center;
+    align-content: center;
+  }
+  .topbar.is-authenticated .dashboard-tab svg { width: 28px; height: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .summary-card, .feature-card, .step-card { transition: none; }

@@ -621,7 +621,11 @@ test("authenticated dashboard navigation uses an accessible hamburger drawer", (
   assert.match(script, /showAppPage\(panelLink\.dataset\.panel\)/);
   assert.match(script, /aria-expanded/);
   assert.match(css, /\.topbar\.is-authenticated \.topbar-nav/);
+  assert.match(css, /\.topbar\.is-authenticated \.landing-menu-toggle,\s*\.topbar\.is-authenticated \.landing-mobile-nav/);
   assert.match(css, /\.menu-bar\.menu-open\s*\{\s*display:\s*flex !important/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.topbar\.is-authenticated\s*\{\s*backdrop-filter:\s*none;/);
+  assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.topbar\.is-authenticated \.dashboard-tab svg\s*\{\s*width:\s*28px;\s*height:\s*28px;/);
 });
 
 test("You and Group have separate financial views with accessible monthly line charts", () => {
@@ -653,7 +657,7 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
-  assert.match(html, /href="\/chama\.css\?v=20261108\.2"/);
+  assert.match(html, /href="\/chama\.css\?v=20261110\.2"/);
   assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
   assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
   assert.match(html, /src="\/chama\.js\?v=20261110\.2"/);
