@@ -78,9 +78,15 @@ body.landing-mode .topbar-nav-link:focus-visible { color: var(--paper); }
 body.landing-mode .topbar-nav-link:hover::after,
 body.landing-mode .topbar-nav-link:focus-visible::after { transform: scaleX(1); }
 body.landing-mode .landing-menu-toggle {
-  min-width: 76px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   min-height: 44px;
+  flex: 0 0 44px;
   margin-left: auto;
+  padding: 0;
+  flex-direction: column;
+  gap: 5px;
   border: 1px solid rgba(255, 255, 255, .38);
   border-radius: 999px;
   color: var(--paper);
@@ -89,6 +95,10 @@ body.landing-mode .landing-menu-toggle {
   font-weight: 700;
 }
 body.landing-mode .landing-menu-toggle:hover { background: rgba(255, 255, 255, .16); }
+body.landing-mode .landing-menu-toggle .ham-bar { background: var(--paper); }
+body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
+body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 body.landing-mode .landing-mobile-nav { display: none; }
 
 /* Editorial hero: open typography on one side, a clear action panel on the other. */
@@ -662,7 +672,7 @@ body.landing-mode #pricing-modal .dialog-actions > * { min-height: 46px; }
   body.landing-mode .topbar { padding-inline: 12px; }
   body.landing-mode .topbar .brand { gap: 8px; font-size: 13px; }
   body.landing-mode .brand-mark { width: 36px; height: 36px; flex-basis: 36px; }
-  body.landing-mode .landing-menu-toggle { min-width: 70px; }
+  body.landing-mode .landing-menu-toggle { min-width: 44px; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {

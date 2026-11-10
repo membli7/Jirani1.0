@@ -171,7 +171,7 @@ test("landing page uses muted color backgrounds without photos", () => {
 
 test("public landing design system is scoped to signed-out mode and has a distinct responsive hierarchy", () => {
   assert.match(html, /<body class="landing-mode">/);
-  assert.match(html, /href="\/landing-theme\.css\?v=20261108\.1"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
   assert.match(landingTheme, /body\.landing-mode\s*\{[\s\S]*?--forest:\s*#153d33/);
   assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*var\(--forest\)/);
   assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*transparent/);
@@ -291,6 +291,19 @@ test("subscription UI remains informational while server access is not subscript
   assert.match(html, /href="\/terms\.html"/);
   assert.match(html, /id="landing-menu-toggle"/);
   assert.match(script, /landingMenuToggle\?\.addEventListener/);
+});
+
+test("landing navigation uses an icon-only hamburger with accessible open and close labels", () => {
+  const button = html.match(/<button id="landing-menu-toggle"[\s\S]*?<\/button>/)?.[0];
+  assert.ok(button, "landing navigation toggle should exist");
+  assert.equal((button.match(/<span class="ham-bar" aria-hidden="true"><\/span>/g) || []).length, 3);
+  assert.match(button, /aria-label="Open landing navigation"/);
+  assert.match(button, /data-i18n-aria-label="landingNavOpen"/);
+  assert.doesNotMatch(button, /data-i18n="landingNavMenu"|>\s*Menu\s*<\/button>/);
+  assert.match(script, /landingMenuToggle\.setAttribute\("aria-expanded", String\(open\)\)/);
+  assert.match(script, /landingMenuToggle\.setAttribute\("aria-label", t\(open \? "landingNavClose" : "landingNavOpen"\)\)/);
+  assert.doesNotMatch(script, /landingMenuToggle(?:\?)*\.textContent\s*=/);
+  assert.match(landingTheme, /body\.landing-mode \.landing-menu-toggle \.ham-bar\s*\{[^}]*background:\s*var\(--paper\)/);
 });
 
 test("loan UI remains available while officer-role revocation stays protected", () => {
@@ -519,7 +532,7 @@ test("registration sends the bootstrap code only in the setup header and clears 
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261110\.1" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261110\.2" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -641,9 +654,9 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
   assert.match(html, /href="\/chama\.css\?v=20261108\.2"/);
-  assert.match(html, /href="\/landing-theme\.css\?v=20261108\.1"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
   assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
-  assert.match(html, /src="\/chama\.js\?v=20261110\.1"/);
+  assert.match(html, /src="\/chama\.js\?v=20261110\.2"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);

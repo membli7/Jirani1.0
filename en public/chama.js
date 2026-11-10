@@ -143,13 +143,11 @@ landingMenuToggle?.addEventListener("click", () => {
   const open = landingMenuToggle.getAttribute("aria-expanded") !== "true";
   landingMenuToggle.setAttribute("aria-expanded", String(open));
   landingMenuToggle.setAttribute("aria-label", t(open ? "landingNavClose" : "landingNavOpen"));
-  landingMenuToggle.textContent = t(open ? "landingNavClose" : "landingNavMenu");
   landingMobileNav.hidden = !open;
 });
 landingMobileNav?.addEventListener("click", () => {
   landingMenuToggle?.setAttribute("aria-expanded", "false");
   landingMenuToggle?.setAttribute("aria-label", t("landingNavOpen"));
-  if (landingMenuToggle) landingMenuToggle.textContent = t("landingNavMenu");
   landingMobileNav.hidden = true;
 });
 
