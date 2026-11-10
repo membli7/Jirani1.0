@@ -49,6 +49,7 @@ test("signed-out landing, registration, member login and profile are React-owned
   const memberLogin = readSource("src/pages/MemberLoginPage.jsx");
   const profile = readSource("src/pages/ProfilePage.jsx");
   const landing = readSource("src/pages/LandingPage.jsx");
+  const chat = readSource("src/components/ChatPanel.jsx");
   const profileMode = readSource("src/profileMode.mjs");
   const actions = readSource("src/registrationActions.mjs");
   assert.match(main, /createRoot\(mountNode\)/);
@@ -63,6 +64,11 @@ test("signed-out landing, registration, member login and profile are React-owned
   assert.match(app, /pageKey === "dashboard"\) return <DashboardEntry \/>/);
   assert.match(app, /fetch\("\/api\/session"/);
   assert.match(app, /authenticated \? <LegacyPage pageKey="dashboard" \/> : <LandingPage \/>/);
+  assert.match(app, /createRoot\(chatHost\)/);
+  assert.match(app, /chatRoot\?\.render\(<ChatPanel \/>\)/);
+  assert.match(chat, /useState\(\[\]\)/);
+  assert.match(chat, /onSubmit=\{handleSubmit\}/);
+  assert.match(chat, /postChatMessage\(/);
   assert.doesNotMatch(app, /"register\.js"|"auth-pages\.js"|"profile\.js"/);
   assert.match(registration, /<form id="register-chama-form"/);
   assert.match(registration, /onSubmit=\{handleSubmit\}/);
@@ -115,4 +121,38 @@ test("React landing contact helper preserves the same-origin endpoint, headers a
   assert.equal(captured.options.headers["Content-Type"], "application/json");
   assert.equal(captured.options.headers["X-Requested-With"], "chama");
   assert.deepEqual(JSON.parse(captured.options.body), payload);
+});
+
+test("React chat helpers preserve the same-origin read and shared idempotent write contracts", async () => {
+  const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "chatActions.mjs")).href;
+  const { loadChatMessages, postChatMessage } = await import(helperUrl);
+  const messages = Array.from({ length: 105 }, (_, index) => ({ id: `m${index}` }));
+  let request;
+  const loaded = await loadChatMessages(async (url, options) => {
+    request = { url, options };
+    return { ok: true, status: 200, json: async () => ({ data: messages }) };
+  });
+  assert.equal(request.url, "/api/messages");
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.credentials, "same-origin");
+  assert.equal(request.options.cache, "no-store");
+  assert.equal(request.options.headers["X-Requested-With"], "chama");
+  assert.equal(loaded.length, 100);
+  assert.equal(loaded[0].id, "m5");
+
+  const owner = {};
+  let write;
+  const result = await postChatMessage({
+    text: "  Hello group  ",
+    owner,
+    writeRequester: { submit: async payload => { write = payload; return { data: { id: "message-1" } }; } },
+  });
+  assert.equal(result.data.id, "message-1");
+  assert.equal(write.owner, owner);
+  assert.equal(write.path, "/api/messages");
+  assert.equal(write.method, "POST");
+  assert.deepEqual(write.body, { text: "Hello group" });
+  assert.equal(write.validate({ data: { id: "message-2" } }), true);
+  assert.equal(write.validate({ data: {} }), false);
+  await assert.rejects(postChatMessage({ text: "  ", owner, writeRequester: { submit() {} } }), /1 to 500 characters/);
 });

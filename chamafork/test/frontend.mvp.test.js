@@ -22,6 +22,8 @@ const registerActions = fs.readFileSync(path.join(reactSource, "registrationActi
 const memberLoginReactShell = fs.readFileSync(path.join(frontend, "react", "member-login.html"), "utf8");
 const memberLoginPage = fs.readFileSync(path.join(reactSource, "pages", "MemberLoginPage.jsx"), "utf8");
 const authActions = fs.readFileSync(path.join(reactSource, "authActions.mjs"), "utf8");
+const chatPage = fs.readFileSync(path.join(reactSource, "components", "ChatPanel.jsx"), "utf8");
+const chatActions = fs.readFileSync(path.join(reactSource, "chatActions.mjs"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
 const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
 
@@ -713,13 +715,23 @@ test("landing sections fit narrow phones without clipping cards", () => {
   assert.match(css, /#features \.feature-card,\s*#how-it-works \.step-card \{ min-width: 0; \}/);
 });
 
-test("chat renders server messages and reloads when a live message event arrives", () => {
-  assert.match(script, /state\.messages = \(await api\("\/api\/messages"\)\)\.data \|\| \[\]/);
-  assert.match(script, /addEventListener\("messages-updated"/);
-  assert.match(script, /renderMessages\(state\.messages\)/);
-  assert.match(script, /function setChatPolling\(intervalMs\)/);
-  assert.match(script, /setChatPolling\(5000\)/);
-  assert.match(script, /setChatPolling\(authenticated && state \? 30000 : 0\)/);
+test("React chat owns messages, form state and fallback polling while using the authenticated SSE bridge", () => {
+  assert.match(html, /<section class="panel" id="chat-panel"[^>]*>[\s\S]*?<div id="react-chat-root"><\/div>/);
+  assert.doesNotMatch(html, /id="chat-messages"|id="chat-form"/);
+  assert.match(chatPage, /useState\(\[\]\)/);
+  assert.match(chatPage, /onChange=\{event => setDraft\(event\.target\.value\)\}/);
+  assert.match(chatPage, /onSubmit=\{handleSubmit\}/);
+  assert.match(chatPage, /chama:messages-updated/);
+  assert.match(chatPage, /chama:stream-state/);
+  assert.match(chatPage, /streamLive \? 30000 : 5000/);
+  assert.match(chatPage, /aria-live="polite"/);
+  assert.match(chatActions, /fetcher\("\/api\/messages"/);
+  assert.match(chatActions, /credentials: "same-origin"/);
+  assert.match(chatActions, /path: "\/api\/messages"/);
+  assert.match(chatActions, /method: "POST"/);
+  assert.match(script, /addEventListener\("messages-updated", \(\) => \{\s*window\.dispatchEvent\(new Event\("chama:messages-updated"\)\)/);
+  assert.match(script, /chama:stream-state/);
+  assert.doesNotMatch(script, /renderMessages|setChatPolling|#chat-form|\/api\/messages/);
   assert.match(script, /window\.addEventListener\("online", \(\) => \{[\s\S]*?clearTimeout\(streamRetryTimer\)/);
 });
 

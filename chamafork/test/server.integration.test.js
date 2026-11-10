@@ -127,6 +127,9 @@ describe("Jirani Chama server", () => {
     assert.match(rootBundleSource, /\/api\/session/);
     assert.match(rootBundleSource, /\/api\/contact/);
     assert.match(rootBundleSource, /Enter Invite Code/);
+    assert.match(rootBundleSource, /react-chat-root/);
+    assert.match(rootBundleSource, /\/api\/messages/);
+    assert.match(rootBundleSource, /chama:messages-updated/);
 
     const manifest = await request("/manifest.webmanifest");
     assert.equal(manifest.status, 200);

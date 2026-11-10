@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import { pageForPath, pageTemplates } from "./pageTemplates.js";
 import RegisterPage from "./pages/RegisterPage.jsx";
 import MemberLoginPage from "./pages/MemberLoginPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
+import ChatPanel from "./components/ChatPanel.jsx";
 
 const legacyControllerNames = new Set([
   "chama.js",
@@ -55,6 +57,10 @@ function LegacyPage({ pageKey }) {
     document.body.className = page.bodyClass;
     if (page.title) document.title = page.title;
 
+    const chatHost = host.querySelector("#react-chat-root");
+    const chatRoot = chatHost ? createRoot(chatHost) : null;
+    chatRoot?.render(<ChatPanel />);
+
     let mounted = true;
     const loadedScripts = [];
     const loadControllers = async () => {
@@ -77,6 +83,7 @@ function LegacyPage({ pageKey }) {
 
     return () => {
       mounted = false;
+      chatRoot?.unmount();
       loadedScripts.forEach(script => script.remove());
       document.body.querySelectorAll('script[data-chama-react-controller="true"]').forEach(script => script.remove());
     };
@@ -91,6 +98,10 @@ function DashboardEntry() {
 
   useEffect(() => {
     let active = true;
+    const endSession = () => {
+      if (active) setAuthenticated(false);
+    };
+    window.addEventListener("chama:session-ended", endSession);
     fetch("/api/session", {
       credentials: "same-origin",
       cache: "no-store",
@@ -103,7 +114,10 @@ function DashboardEntry() {
       .catch(() => {
         if (active) setAuthenticated(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.removeEventListener("chama:session-ended", endSession);
+    };
   }, []);
 
   if (authenticated === null) return <main className="react-root" role="status">Loading Jirani Chama…</main>;

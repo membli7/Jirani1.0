@@ -28,7 +28,6 @@ let selectedAttendanceDate;
 let eventStream;
 let streamRetryTimer;
 let pollingTimer;
-let chatPollingTimer;
 let activityTimer;
 let authenticated = false;
 let selectedDashboardView = "you";
@@ -311,7 +310,6 @@ function render() {
     .map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
   $("#pin-change").hidden = !user.mustChangePin;
   if (user.mustChangePin) notice("Change your temporary PIN before making any records.", true);
-  renderMessages(state.messages || []);
 
   const canCorrectContributionDates = ["chairperson", "treasurer"].includes(user.role);
   $("#transactions").innerHTML = transactions.map(item => {
@@ -375,15 +373,7 @@ function render() {
   updateNavigationVisibility();
   showAppPage(activeAppPage);
   window.jiraniI18n?.apply();
-}
-
-function renderMessages(messages) {
-  const container = $("#chat-messages");
-  if (!container) return;
-  container.innerHTML = messages.length
-    ? messages.filter(message => !message.recipientId || message.recipientId === state.user.id).slice(-100).map(message => `<article class="chat-message"><strong>${esc(message.authorName)}</strong><p>${esc(message.text)}</p><time>${esc(fmtTime(message.at))}</time></article>`).join("")
-    : `<p class="empty-state">${esc(t("No messages yet."))}</p>`;
-  container.scrollTop = container.scrollHeight;
+  window.dispatchEvent(new Event("chama:dashboard-ready"));
 }
 function updateNavigationVisibility() {
   for (const link of menuBar.querySelectorAll("a[data-panel]")) {
@@ -802,7 +792,6 @@ async function loadFinancialViews() {
 async function refresh() {
   try {
     state = await api("/api/dashboard");
-    state.messages = (await api("/api/messages")).data || [];
     state.simulatedPayments = state.permissions.simulatePayments ? (await api("/api/payments/inbox")).data || [] : [];
     attendanceData = await api("/api/attendance");
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
@@ -827,24 +816,15 @@ function setConnectionStatus(status) {
   node.setAttribute("aria-label", labels[status] || status);
   node.dataset.status = status;
 }
-function setChatPolling(intervalMs) {
-  if (chatPollingTimer) { clearInterval(chatPollingTimer); chatPollingTimer = null; }
-  if (!intervalMs || intervalMs < 1) return;
-  chatPollingTimer = setInterval(async () => {
-    if (!navigator.onLine || !authenticated || !state) return;
-    try { state.messages = (await api("/api/messages")).data || []; renderMessages(state.messages); } catch {}
-  }, intervalMs);
-}
 function startPollingFallback() {
+  window.dispatchEvent(new CustomEvent("chama:stream-state", { detail: { live: false } }));
   if (!pollingTimer) {
     setConnectionStatus(navigator.onLine ? "polling" : "offline");
     pollingTimer = setInterval(() => { if (navigator.onLine) refresh(); else setConnectionStatus("offline"); }, 30000);
   }
-  setChatPolling(5000);
 }
 function stopPollingFallback() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
-  setChatPolling(authenticated && state ? 30000 : 0);
 }
 function startActivityMonitor() {
   if (activityTimer) return;
@@ -875,15 +855,15 @@ function connectEventStream() {
   if (!window.EventSource) { startPollingFallback(); return; }
   setConnectionStatus("reconnecting");
   eventStream = new EventSource("/api/events/stream");
-  eventStream.onopen = () => { setConnectionStatus("live"); stopPollingFallback(); };
+  eventStream.onopen = () => {
+    setConnectionStatus("live");
+    window.dispatchEvent(new CustomEvent("chama:stream-state", { detail: { live: true } }));
+    stopPollingFallback();
+  };
   eventStream.addEventListener("members-updated", () => { refresh(); });
   eventStream.addEventListener("loans-updated", () => { refresh(); });
-  eventStream.addEventListener("messages-updated", async () => {
-    if (!authenticated || !state) return;
-    try {
-      state.messages = (await api("/api/messages")).data || [];
-      renderMessages(state.messages);
-    } catch { /* polling and reconnect paths will reload the chat */ }
+  eventStream.addEventListener("messages-updated", () => {
+    window.dispatchEvent(new Event("chama:messages-updated"));
   });
   eventStream.onerror = () => {
     eventStream.close(); eventStream = null; startPollingFallback(); setConnectionStatus(navigator.onLine ? "reconnecting" : "offline");
@@ -911,7 +891,7 @@ function clearAppData() {
   for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#month-close-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
-function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; document.body.classList.add("landing-mode"); setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); }
+function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; document.body.classList.add("landing-mode"); setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); if (typeof window !== "undefined") window.dispatchEvent(new Event("chama:session-ended")); }
 
 $("#setup-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
@@ -928,23 +908,6 @@ $("#login-form")?.addEventListener("submit", async event => {
   try { await api("/api/login", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#login-notice"), ""); await refresh(); }
   catch (error) { if (error instanceof TypeError) { setConnectionStatus("offline"); setLoginNotice($("#login-notice"), "Cannot reach the server. Check that it is running, then try again."); } else setLoginNotice($("#login-notice"), error.message); } finally { setButton(form, false); }
 });
-$("#chat-form")?.addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const text = new FormData(form).get("text").trim();
-  if (!text) return;
-  setButton(form, true);
-  try {
-    const result = await api("/api/messages", { method: "POST", body: { text }, write: form });
-    state.messages = [...(state.messages || []), result.data].slice(-100);
-    renderMessages(state.messages);
-    form.reset();
-    notice(result.message || "Message sent.");
-  } catch (error) {
-    notice(error.message || t("retryError"), true);
-  } finally { setButton(form, false); }
-});
-
 const contributionDateDialog = $("#contribution-date-dialog");
 $("#transactions").addEventListener("click", event => {
   const button = event.target.closest("[data-correct-contribution]");
