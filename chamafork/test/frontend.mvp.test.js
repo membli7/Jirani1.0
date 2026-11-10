@@ -12,14 +12,16 @@ const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
 const css = fs.readFileSync(path.join(frontend, "chama.css"), "utf8");
 const landingTheme = fs.readFileSync(path.join(frontend, "landing-theme.css"), "utf8");
-const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
-const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
+const profileReactShell = fs.readFileSync(path.join(frontend, "react", "profile.html"), "utf8");
+const profilePage = fs.readFileSync(path.join(reactSource, "pages", "ProfilePage.jsx"), "utf8");
+const profileModeSource = fs.readFileSync(path.join(reactSource, "profileMode.mjs"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
 const registerReactShell = fs.readFileSync(path.join(frontend, "react", "register.html"), "utf8");
 const registerPage = fs.readFileSync(path.join(reactSource, "pages", "RegisterPage.jsx"), "utf8");
 const registerActions = fs.readFileSync(path.join(reactSource, "registrationActions.mjs"), "utf8");
-const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
-const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
+const memberLoginReactShell = fs.readFileSync(path.join(frontend, "react", "member-login.html"), "utf8");
+const memberLoginPage = fs.readFileSync(path.join(reactSource, "pages", "MemberLoginPage.jsx"), "utf8");
+const authActions = fs.readFileSync(path.join(reactSource, "authActions.mjs"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
 const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
 
@@ -78,8 +80,8 @@ test("Kiswahili switch translates keyed text and attributes, then restores Engli
   assert.equal(accessible.element.getAttribute("aria-label"), "Mionekano ya fedha");
   assert.equal(window.jiraniI18n.translateText("View profile"), "Tazama wasifu");
   assert.equal(window.jiraniI18n.roleName("treasurer"), "Mweka Hazina");
-  const pageFiles = ["index.html", "profile.html", "register.html", "member-login.html"];
-  const hookKeys = [...new Set(pageFiles.flatMap(file => [...fs.readFileSync(path.join(frontend, file), "utf8").matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"/g)].map(match => match[1])))];
+  const pageSources = [html, profilePage, registerPage, memberLoginPage];
+  const hookKeys = [...new Set(pageSources.flatMap(source => [...source.matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"/g)].map(match => match[1])))];
   for (const key of hookKeys) assert.notEqual(window.jiraniI18n.t(key), key, `missing translation for keyed hook: ${key}`);
   window.jiraniI18n.setLanguage("en");
   assert.equal(keyed.textNode.nodeValue, "Date");
@@ -88,14 +90,15 @@ test("Kiswahili switch translates keyed text and attributes, then restores Engli
 });
 
 test("profile and sign-in pages load the shared language switch", () => {
-  assert.match(profileHtml, /id="language-switch"/);
-  assert.match(profileHtml, /src="\/i18n\.js\?v=20261101\.1"/);
-  assert.match(memberLoginHtml, /src="\/i18n\.js\?v=20261101\.1"/);
+  assert.match(profileReactShell, /<div id="root"><\/div>/);
+  assert.match(profilePage, /id="language-switch"/);
+  assert.match(memberLoginReactShell, /<div id="root"><\/div>/);
+  assert.match(memberLoginPage, /id="language-switch"/);
   assert.match(registerReactShell, /<div id="root"><\/div>/);
   assert.match(registerPage, /id="language-switch"/);
-  assert.match(authPagesScript, /translateAuthText\(error instanceof TypeError/);
+  assert.match(memberLoginPage, /error instanceof TypeError/);
   assert.match(registerPage, /translate\(message\)/);
-  assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
+  assert.match(profilePage, /translate\("Uploading profile icons…"\)/);
 });
 
 test("Kiswahili switch translates new-chama registration copy and restores English", () => {
@@ -415,26 +418,53 @@ test("Chairperson setup checklist reflects active members and valid invitations"
 });
 
 test("standalone member login posts credentials to the login API", () => {
-  assert.match(memberLoginHtml, /<form id="login-form"[^>]*method="post"[^>]*action="\/api\/login"/);
-  assert.match(memberLoginHtml, /<span class="brand-mark" aria-hidden="true"><img src="\/brand-mark\.svg" alt=""><\/span>/);
-  assert.doesNotMatch(memberLoginHtml, /[A-Za-z]:\\Users\\/);
-  assert.match(memberLoginHtml, /<\/select><\/label>\s*<\/header>/);
-  assert.match(memberLoginHtml, /src="\/auth-pages\.js\?v=/);
-  assert.match(authPagesScript, /postJson\("\/api\/login"/);
-  assert.match(authPagesScript, /method:\s*"POST"/);
-  assert.match(authPagesScript, /credentials:\s*"same-origin"/);
-  assert.match(memberLoginHtml, /id="show-forgot-pin"/);
-  assert.match(memberLoginHtml, /id="forgot-pin-form"/);
-  assert.match(memberLoginHtml, /id="reset-pin-form"/);
-  assert.match(authPagesScript, /postJson\("\/api\/forgot-pin"/);
-  assert.match(authPagesScript, /postJson\("\/api\/reset-pin"/);
-  assert.match(authPagesScript, /name = "chamaId"/);
-  assert.match(authPagesScript, /window\.location\.assign\("\/"\)/);
-  assert.match(authPagesScript, /postJson\("\/api\/invitations\/activate"/);
-  assert.match(memberLoginHtml, /PIN reset code/);
-  assert.match(memberLoginHtml, /id="activate-code"[^>]*autocomplete="one-time-code"/);
-  assert.match(memberLoginHtml, /id="activate-pin"[^>]*autocomplete="new-password"/);
-  assert.doesNotMatch(memberLoginHtml, /We.ll send a one-time code|Send OTP/);
+  assert.match(memberLoginReactShell, /<div id="root"><\/div>/);
+  assert.doesNotMatch(memberLoginReactShell, /auth-pages\.js/);
+  assert.match(memberLoginReactShell, /src="\/src\/main\.jsx"/);
+  assert.match(memberLoginPage, /<form id="login-form"/);
+  assert.match(memberLoginPage, /name="phone" type="tel" autoComplete="tel"/);
+  assert.match(memberLoginPage, /name="pin" type=\{pinVisible \? "text" : "password"\}/);
+  assert.match(memberLoginPage, /id="show-forgot-pin"/);
+  assert.match(memberLoginPage, /id="forgot-pin-form"/);
+  assert.match(memberLoginPage, /id="reset-pin-form"/);
+  assert.match(memberLoginPage, /setChamaChoices\(result\.chooseChamaId\)/);
+  assert.match(memberLoginPage, /window\.location\.assign\("\/"\)/);
+  assert.match(memberLoginPage, /id="activate-code"[^>]*autoComplete="one-time-code"/);
+  assert.match(memberLoginPage, /id="activate-pin"[^>]*autoComplete="new-password"/);
+  assert.match(authActions, /postJson\("\/api\/login"/);
+  assert.match(authActions, /postJson\("\/api\/forgot-pin"/);
+  assert.match(authActions, /postJson\("\/api\/reset-pin"/);
+  assert.match(authActions, /postJson\("\/api\/invitations\/activate"/);
+  assert.match(authActions, /method:\s*"POST"/);
+  assert.match(authActions, /credentials:\s*"same-origin"/);
+  assert.match(authActions, /"X-Requested-With":\s*"chama"/);
+  assert.match(memberLoginPage, /PIN reset code/);
+  assert.doesNotMatch(memberLoginPage, /We.ll send a one-time code|Send OTP/);
+});
+
+test("React auth services preserve same-origin request contracts", async () => {
+  const { signIn, activateInvitation, requestPinReset, resetPin } = await import("../../en public/react/src/authActions.mjs");
+  const requests = [];
+  const fetcher = async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => ({ message: "Synthetic test response." }) };
+  };
+  await signIn({ phone: "synthetic-phone", pin: "synthetic-pin" }, fetcher);
+  await activateInvitation({ phone: "synthetic-phone", code: "synthetic-activation-code", pin: "synthetic-pin" }, fetcher);
+  await requestPinReset({ email: "member@example.test" }, fetcher);
+  await resetPin({ code: "synthetic-reset-code", newPin: "synthetic-new-pin" }, "member@example.test", fetcher);
+
+  assert.deepEqual(requests.map(request => request.url), [
+    "/api/login", "/api/invitations/activate", "/api/forgot-pin", "/api/reset-pin",
+  ]);
+  for (const { options } of requests) {
+    assert.equal(options.method, "POST");
+    assert.equal(options.credentials, "same-origin");
+    assert.equal(options.headers["X-Requested-With"], "chama");
+    assert.equal(options.headers["Content-Type"], "application/json");
+  }
+  assert.deepEqual(JSON.parse(requests[0].options.body), { phone: "synthetic-phone", pin: "synthetic-pin" });
+  assert.deepEqual(JSON.parse(requests[3].options.body), { code: "synthetic-reset-code", newPin: "synthetic-new-pin", email: "member@example.test" });
 });
 
 test("landing registration opens a complete first-chama setup page", () => {
@@ -734,12 +764,13 @@ test("header icons, profile actions, live dot, muted background, and short menu 
   assert.match(css, /\.connection-status:not\(\[data-status="live"\]\) \.connection-status-dot\s*\{\s*background:\s*#9aa39d/);
   assert.match(css, /body:has\(#app:not\(\[hidden\]\)\)\s*\{[\s\S]*?radial-gradient/);
   assert.match(css, /\.menu-bar\s*\{\s*height:\s*auto; bottom:\s*auto; max-height:\s*min\(72vh, 640px\)/);
-  assert.match(profileScript, /profileMode === "view"/);
-  assert.match(profileScript, /profileMode === "edit"/);
+  assert.match(profilePage, /profileModeFromSearch\(window\.location\.search\)/);
+  assert.match(profileModeSource, /mode === "view"/);
+  assert.match(profileModeSource, /mode === "edit"/);
   assert.match(registerPage, /id="new-chama-existing-instance"/);
   assert.match(registerPage, /get\("new-chama"\) === "1"/);
-  assert.match(memberLoginHtml, /id="login-page-title"/);
-  assert.match(authPagesScript, /get\("switch-chama"\) === "1"/);
+  assert.match(memberLoginPage, /id="login-page-title"/);
+  assert.match(memberLoginPage, /get\("switch-chama"\) === "1"/);
 });
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
@@ -819,84 +850,26 @@ test("loan form sends two guarantors and repayments send reference and date", ()
 });
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
-  assert.match(profileHtml, /src="\/write-requests\.js" defer/);
-  assert.match(profileHtml, /src="\/profile\.js\?v=20261104\.2" defer/);
-  assert.match(profileScript, /fetch\("\/api\/session"/);
-  assert.match(profileScript, /if \(!session\.authenticated\)[\s\S]*?fetch\("\/api\/profile"/);
-  assert.match(profileScript, /fetch\("\/api\/profile"/);
-  assert.match(profileScript, /path: "\/api\/profile"/);
-  assert.match(profileScript, /\/api\/profile\/photo\/\$\{size\}/);
-  assert.match(profileScript, /"X-Requested-With": "chama"/);
-  assert.match(profileScript, /credentials: "same-origin"/);
-  assert.doesNotMatch(profileScript, /\.innerHTML\s*=/);
+  assert.match(profileReactShell, /<div id="root"><\/div>/);
+  assert.match(profilePage, /fetch\("\/api\/session"/);
+  assert.match(profilePage, /if \(!session\.authenticated\)[\s\S]*?fetch\("\/api\/profile"/);
+  assert.match(profilePage, /fetch\("\/api\/profile"/);
+  assert.match(profilePage, /path: "\/api\/profile"/);
+  assert.match(profilePage, /`\/api\/profile\/photo\/\$\{size\}`/);
+  assert.match(profilePage, /"X-Requested-With": "chama"/);
+  assert.match(profilePage, /credentials: "same-origin"/);
+  assert.match(profilePage, /writeRequester\.submit\(/);
+  assert.doesNotMatch(profilePage, /dangerouslySetInnerHTML|\.innerHTML\s*=/);
   assert.match(html, /id="profile-menu"[\s\S]*?href="\/profile\.html\?mode=view"[^>]*>View profile<\/a>/);
 });
 
 test("profile menu view and edit links select the correct profile-page mode", async () => {
-  async function loadMode(mode, isAuthenticated = true) {
-    const detailFields = Object.fromEntries(["firstName", "lastName", "nickname", "phone", "email"].map(name => [name, { value: "" }]));
-    const fields = { disabled: true };
-    const changeButton = { hidden: false, addEventListener() {} };
-    const saveButton = { hidden: true };
-    const detailsForm = { elements: { namedItem: name => detailFields[name] }, addEventListener() {} };
-    const photoInput = { disabled: false, addEventListener() {} };
-    const photoPreview = { replaceChildren() {} };
-    const uploadLabel = { hidden: false };
-    const pageHeading = { textContent: "Edit profile" };
-    const nodes = new Map([
-      ["#profile-details-form", detailsForm],
-      ["#profile-details-fields", fields],
-      ["#change-details", changeButton],
-      ["#save-details", saveButton],
-      ["#profile-details-status", { classList: { toggle() {} }, textContent: "" }],
-      ["#profile-photo", photoInput],
-      ["#profile-photo-preview", photoPreview],
-      ["#profile-status", { classList: { toggle() {} }, textContent: "" }],
-      [".profile-upload", uploadLabel],
-      [".profile-card > p", { textContent: "" }],
-      ["#profile-title", pageHeading],
-    ]);
-    const document = {
-      title: "",
-      querySelector: selector => nodes.get(selector),
-      createElement: () => ({ addEventListener() {}, alt: "", src: "" }),
-    };
-    const requests = [];
-    let redirect = "";
-    const context = {
-      document,
-      URLSearchParams,
-      window: { location: { search: mode ? "?mode=" + mode : "", assign: value => { redirect = value; } } },
-      fetch: async url => {
-        requests.push(url);
-        return { ok: true, status: 200, json: async () => url === "/api/session"
-          ? { authenticated: isAuthenticated }
-          : { data: { firstName: "Asha", lastName: "Test", nickname: "", phone: "+254700000000", email: "asha@example.test" } } };
-      },
-    };
-    vm.runInNewContext(profileScript, context);
-    await new Promise(resolve => setImmediate(resolve));
-    return { detailFields, fields, changeButton, saveButton, photoInput, uploadLabel, document, pageHeading, requests, redirect };
-  }
-
-  const view = await loadMode("view");
-  assert.equal(view.pageHeading.textContent, "View profile");
-  assert.equal(view.fields.disabled, true);
-  assert.equal(view.changeButton.hidden, true);
-  assert.equal(view.saveButton.hidden, true);
-  assert.equal(view.photoInput.disabled, true);
-  assert.equal(view.uploadLabel.hidden, true);
-  assert.equal(view.document.title, "View profile | Jirani Chama");
-  assert.equal(view.detailFields.firstName.value, "Asha");
-  assert.deepEqual(view.requests, ["/api/session", "/api/profile"]);
-
-  const edit = await loadMode("edit");
-  assert.equal(edit.fields.disabled, false);
-  assert.equal(edit.changeButton.hidden, true);
-  assert.equal(edit.saveButton.hidden, false);
-  assert.equal(edit.photoInput.disabled, false);
-
-  const signedOut = await loadMode("view", false);
-  assert.equal(signedOut.redirect, "/");
-  assert.deepEqual(signedOut.requests, ["/api/session"]);
+  const { profileModeFromSearch } = await import("../../en public/react/src/profileMode.mjs");
+  assert.match(html, /href="\/profile\.html\?mode=view"/);
+  assert.match(html, /href="\/profile\.html\?mode=edit"/);
+  assert.deepEqual(profileModeFromSearch("?mode=view"), { viewOnly: true, editMode: false });
+  assert.deepEqual(profileModeFromSearch("?mode=edit"), { viewOnly: false, editMode: true });
+  assert.deepEqual(profileModeFromSearch(""), { viewOnly: false, editMode: false });
+  assert.match(profilePage, /disabled=\{!editing \|\| viewOnly\}/);
+  assert.match(profilePage, /!viewOnly &&/);
 });

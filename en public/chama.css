@@ -363,6 +363,11 @@ textarea { width: 100%; font: inherit; color: var(--ink); background: #fff; }
 .login-card .forgot-pin-link { text-align: right; }
 .recovery-card form { margin: 0; }
 .login-footer { padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .login-overlay .login-content { width: min(420px, 100%); grid-template-columns: minmax(0, 1fr); gap: 24px; margin-inline: auto; }
+  .login-overlay .login-brand { max-width: none; text-align: center; }
+  .login-overlay .login-intro { margin-right: auto; margin-left: auto; }
+}
 .login-notice { padding: 10px 12px; border-radius: 8px; color: #7d2929 !important; background: #fff0ef; }
 .invite-result { margin: 0 17px 17px; padding: 14px; border: 1px solid #a8c9b0; border-radius: 10px; color: #1f5134; background: #edf7ef; }
 .invite-result.error { border-color: #d8a5a5; color: #742d2d; background: #fff1f0; }
@@ -559,16 +564,16 @@ section[id] { scroll-margin-top: 16px; }
 }
 .pin-field-wrap input {
   flex: 1;
-  padding-right: 44px !important;
+  padding-right: 48px !important;
 }
 .toggle-pin-btn {
   position: absolute;
-  right: 6px;
+  right: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: none;
   background: transparent;
@@ -576,8 +581,8 @@ section[id] { scroll-margin-top: 16px; }
   font-size: 16px;
   cursor: pointer;
   border-radius: 6px;
-  min-height: unset !important;
-  min-width: unset !important;
+  min-height: 44px;
+  min-width: 44px;
 }
 .toggle-pin-btn:hover { color: var(--ink); }
 

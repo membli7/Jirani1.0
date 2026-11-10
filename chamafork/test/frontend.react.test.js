@@ -3,11 +3,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { test } = require("node:test");
 
 const appRoot = path.join(__dirname, "..");
 const buildRoot = path.join(appRoot, "frontend-dist");
 const sourceRoot = path.join(appRoot, "..", "en public", "react");
+const frontendCss = fs.readFileSync(path.join(sourceRoot, "..", "chama.css"), "utf8");
 const interactivePages = ["index.html", "member-login.html", "register.html", "profile.html"];
 
 function readSource(relativePath) {
@@ -31,22 +33,37 @@ test("all existing interactive URLs have a built React mount and local JavaScrip
   }
 });
 
-test("registration is React-owned while remaining legacy pages use allowlisted same-origin controllers", () => {
+test("auth forms stack on mobile widths and retain scrollability and 44px touch targets", () => {
+  assert.match(frontendCss, /@media \(max-width: 760px\) \{\s*\.login-overlay \.login-content \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(frontendCss, /\.login-overlay\s*\{\s*overflow-y: auto;/);
+  assert.match(frontendCss, /\.field input, \.field select, textarea \{ min-height: 44px;/);
+  assert.match(frontendCss, /\.button-primary \{ min-height: 46px;/);
+  assert.match(frontendCss, /\.toggle-pin-btn\s*\{[^}]*width: 44px;[^}]*height: 44px;[^}]*min-height: 44px;[^}]*min-width: 44px;/);
+});
+
+test("signed-out landing, registration, member login and profile are React-owned while authenticated dashboard stays bridged", () => {
   const main = readSource("src/main.jsx");
   const app = readSource("src/App.jsx");
   const templates = readSource("src/pageTemplates.js");
   const registration = readSource("src/pages/RegisterPage.jsx");
+  const memberLogin = readSource("src/pages/MemberLoginPage.jsx");
+  const profile = readSource("src/pages/ProfilePage.jsx");
+  const landing = readSource("src/pages/LandingPage.jsx");
+  const profileMode = readSource("src/profileMode.mjs");
   const actions = readSource("src/registrationActions.mjs");
   assert.match(main, /createRoot\(mountNode\)/);
   assert.match(main, /flushSync\(/);
   assert.match(main, /\.\.\/\.\.\/i18n\.js/);
   assert.match(main, /\.\.\/\.\.\/write-requests\.js/);
   assert.match(templates, /\.\.\/\.\.\/index\.html\?raw/);
-  assert.match(templates, /\.\.\/\.\.\/member-login\.html\?raw/);
-  assert.match(templates, /\.\.\/\.\.\/profile\.html\?raw/);
-  assert.doesNotMatch(templates, /register\.html\?raw/);
+  assert.doesNotMatch(templates, /member-login\.html\?raw|profile\.html\?raw|register\.html\?raw/);
+  assert.match(app, /pageKey === "profile"\) return <ProfilePage \/>/);
+  assert.match(app, /pageKey === "memberLogin"\) return <MemberLoginPage \/>/);
   assert.match(app, /pageKey === "register"\) return <RegisterPage \/>/);
-  assert.doesNotMatch(app, /"register\.js"/);
+  assert.match(app, /pageKey === "dashboard"\) return <DashboardEntry \/>/);
+  assert.match(app, /fetch\("\/api\/session"/);
+  assert.match(app, /authenticated \? <LegacyPage pageKey="dashboard" \/> : <LandingPage \/>/);
+  assert.doesNotMatch(app, /"register\.js"|"auth-pages\.js"|"profile\.js"/);
   assert.match(registration, /<form id="register-chama-form"/);
   assert.match(registration, /onSubmit=\{handleSubmit\}/);
   assert.match(registration, /name="bootstrapSecret"/);
@@ -57,11 +74,45 @@ test("registration is React-owned while remaining legacy pages use allowlisted s
   assert.match(actions, /fetcher\("\/api\/login"/);
   assert.match(actions, /X-Setup-Bootstrap-Secret/);
   assert.match(actions, /delete payload\.bootstrapSecret/);
-  for (const controller of ["chama.js", "contact.js", "auth-pages.js", "profile.js"]) {
+  assert.match(memberLogin, /<form id="login-form"/);
+  assert.match(memberLogin, /id="activation-form"/);
+  assert.match(memberLogin, /searchParams\.get\("activation"\) === "1" \? "activate" : "login"/);
+  assert.match(memberLogin, /id="forgot-pin-form"/);
+  assert.match(memberLogin, /id="reset-pin-form"/);
+  assert.match(profile, /fetch\("\/api\/session"/);
+  assert.match(profile, /path: "\/api\/profile"/);
+  assert.match(profile, /`\/api\/profile\/photo\/\$\{size\}`/);
+  assert.match(profileMode, /mode === "view"/);
+  assert.match(profileMode, /mode === "edit"/);
+  assert.match(landing, /id="features"/);
+  assert.match(landing, /id="pricing"/);
+  assert.match(landing, /id="contact"/);
+  assert.match(landing, /href="\/member-login\.html\?activation=1"/);
+  assert.match(landing, /selecting a plan will not start checkout, request payment, change subscription status, or affect existing access/i);
+  for (const controller of ["chama.js", "contact.js"]) {
     assert.ok(app.includes(`"${controller}"`), `missing compatibility controller ${controller}`);
   }
   assert.match(app, /url\.origin === window\.location\.origin/);
   assert.match(app, /parsed\.body\.querySelectorAll\("script"\)/);
   assert.match(app, /dangerouslySetInnerHTML=\{\{ __html: page\.markup \}\}/);
   assert.match(app, /pageTemplates\[pageKey\]/);
+});
+
+test("React landing contact helper preserves the same-origin endpoint, headers and JSON fields", async () => {
+  const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "contactActions.mjs")).href;
+  const { submitContact } = await import(helperUrl);
+  const payload = { name: "Test Member", email: "member@example.test", subject: "Question", message: "A test message body." };
+  let captured;
+  const response = { ok: true, status: 200 };
+  const result = await submitContact(payload, async (url, options) => {
+    captured = { url, options };
+    return response;
+  });
+  assert.equal(result, response);
+  assert.equal(captured.url, "/api/contact");
+  assert.equal(captured.options.method, "POST");
+  assert.equal(captured.options.credentials, "same-origin");
+  assert.equal(captured.options.headers["Content-Type"], "application/json");
+  assert.equal(captured.options.headers["X-Requested-With"], "chama");
+  assert.deepEqual(JSON.parse(captured.options.body), payload);
 });

@@ -1,12 +1,13 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pageForPath, pageTemplates } from "./pageTemplates.js";
 import RegisterPage from "./pages/RegisterPage.jsx";
+import MemberLoginPage from "./pages/MemberLoginPage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 
 const legacyControllerNames = new Set([
   "chama.js",
   "contact.js",
-  "auth-pages.js",
-  "profile.js",
 ]);
 
 function createPageModel(pageKey) {
@@ -85,8 +86,35 @@ function LegacyPage({ pageKey }) {
   return <div className="react-root" ref={hostRef} dangerouslySetInnerHTML={{ __html: page.markup }} />;
 }
 
+function DashboardEntry() {
+  const [authenticated, setAuthenticated] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/session", {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(response => response.ok ? response.json() : { authenticated: false })
+      .then(session => {
+        if (active) setAuthenticated(session?.authenticated === true);
+      })
+      .catch(() => {
+        if (active) setAuthenticated(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  if (authenticated === null) return <main className="react-root" role="status">Loading Jirani Chama…</main>;
+  return authenticated ? <LegacyPage pageKey="dashboard" /> : <LandingPage />;
+}
+
 export default function App() {
   const pageKey = pageForPath(window.location.pathname);
+  if (pageKey === "profile") return <ProfilePage />;
+  if (pageKey === "memberLogin") return <MemberLoginPage />;
   if (pageKey === "register") return <RegisterPage />;
+  if (pageKey === "dashboard") return <DashboardEntry />;
   return <LegacyPage pageKey={pageKey} />;
 }

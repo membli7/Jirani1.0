@@ -112,6 +112,22 @@ describe("Jirani Chama server", () => {
     assert.equal(setupStatus.status, 200);
     assert.deepEqual(await json(setupStatus), { requiresSetup: true });
 
+    const rootPage = await request("/");
+    assert.equal(rootPage.status, 200);
+    const rootHtml = await rootPage.text();
+    assert.match(rootHtml, /<div id="root"><\/div>/);
+    const rootBundlePaths = [...rootHtml.matchAll(/src="([^\"]+\.js)"/g)].map(match => match[1]);
+    assert.ok(rootBundlePaths.length > 0, "root page must reference a built React bundle");
+    const rootBundleSources = await Promise.all(rootBundlePaths.map(async bundlePath => {
+      const bundle = await request(bundlePath);
+      assert.equal(bundle.status, 200);
+      return bundle.text();
+    }));
+    const rootBundleSource = rootBundleSources.join("\n");
+    assert.match(rootBundleSource, /\/api\/session/);
+    assert.match(rootBundleSource, /\/api\/contact/);
+    assert.match(rootBundleSource, /Enter Invite Code/);
+
     const manifest = await request("/manifest.webmanifest");
     assert.equal(manifest.status, 200);
     assert.match(manifest.headers.get("content-type"), /application\/manifest\+json/);
@@ -135,12 +151,22 @@ describe("Jirani Chama server", () => {
 
     const loginPage = await request("/member-login.html");
     assert.equal(loginPage.status, 200);
-    assert.match(await loginPage.text(), /<div id="root"><\/div>/);
-    const authPagesScript = await request("/auth-pages.js");
-    assert.equal(authPagesScript.status, 200);
-    const authPagesSource = await authPagesScript.text();
-    assert.match(authPagesSource, /postJson\("\/api\/login"/);
-    assert.match(authPagesSource, /postJson\("\/api\/invitations\/activate"/);
+    const loginHtml = await loginPage.text();
+    assert.match(loginHtml, /<div id="root"><\/div>/);
+    assert.doesNotMatch(loginHtml, /auth-pages\.js/);
+    const loginBundlePaths = [...loginHtml.matchAll(/src="([^"]+\.js)"/g)].map(match => match[1]);
+    assert.ok(loginBundlePaths.length > 0, "member-login page must reference a built React bundle");
+    const loginBundleSources = await Promise.all(loginBundlePaths.map(async bundlePath => {
+      const bundle = await request(bundlePath);
+      assert.equal(bundle.status, 200);
+      assert.match(bundle.headers.get("content-type"), /javascript/);
+      return bundle.text();
+    }));
+    const loginBundleSource = loginBundleSources.join("\n");
+    assert.match(loginBundleSource, /\/api\/login/);
+    assert.match(loginBundleSource, /\/api\/invitations\/activate/);
+    assert.match(loginBundleSource, /\/api\/forgot-pin/);
+    assert.match(loginBundleSource, /\/api\/reset-pin/);
   });
 
   test("correlates request IDs and exposes HTTP status, error, and latency metrics", async () => {
@@ -282,9 +308,18 @@ describe("Jirani Chama server", () => {
     const pageHtml = await page.text();
     assert.match(pageHtml, /<div id="root"><\/div>/);
     assert.match(pageHtml, /src="\/assets\/main-[^\"]+\.js"/);
-    const script = await request("/profile.js?v=20261104.2");
-    assert.equal(script.status, 200);
-    assert.match(await script.text(), /\/api\/profile\/photo\/\$\{size\}/);
+    assert.doesNotMatch(pageHtml, /profile\.js/);
+    const profileBundles = [...pageHtml.matchAll(/src="([^\"]+\.js)"/g)].map(match => match[1]);
+    const profileBundleSources = await Promise.all(profileBundles.map(async bundlePath => {
+      const bundle = await request(bundlePath);
+      assert.equal(bundle.status, 200);
+      assert.match(bundle.headers.get("content-type"), /javascript/);
+      return bundle.text();
+    }));
+    const profileBundleSource = profileBundleSources.join("\n");
+    assert.match(profileBundleSource, /\/api\/session/);
+    assert.match(profileBundleSource, /\/api\/profile/);
+    assert.match(profileBundleSource, /\/api\/profile\/photo\//);
 
     const profile = await request("/api/profile");
     assert.equal(profile.status, 200);
