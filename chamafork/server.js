@@ -24,12 +24,13 @@ const { appendJsonEmailCapture } = require("./security/email-log");
 const { hasReceiptReferenceConflict, parseReceiptReference } = require("./security/receipt-references");
 const { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor } = require("./leadership-elections");
 const { connectEventClients, createEventDelivery } = require("./event-delivery");
+const { loadAppEnv } = require("./config/env");
 if (process.env.NODE_ENV === "test") {
   // Tests use explicit disposable storage and must not connect to services in the local .env.
   process.env.REDIS_URL = "";
   process.env.SESSION_STORE = "memory";
 } else {
-  require("dotenv").config({ path: path.join(__dirname, ".env") });
+  loadAppEnv();
 }
 const {
   logger,

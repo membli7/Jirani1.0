@@ -2,7 +2,8 @@
 
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env"), quiet: true });
+const { loadAppEnv } = require("../config/env");
+loadAppEnv();
 const { createPostgresPool } = require("./postgres");
 
 function quoteIdentifier(value) {
