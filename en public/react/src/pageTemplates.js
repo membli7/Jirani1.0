@@ -1,12 +1,10 @@
 import dashboard from "../../index.html?raw";
 import memberLogin from "../../member-login.html?raw";
-import register from "../../register.html?raw";
 import profile from "../../profile.html?raw";
 
 export const pageTemplates = Object.freeze({
   dashboard,
   memberLogin,
-  register,
   profile,
 });
 

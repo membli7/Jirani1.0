@@ -31,19 +31,33 @@ test("all existing interactive URLs have a built React mount and local JavaScrip
   }
 });
 
-test("React mounts the existing pages and loads only the allowlisted same-origin controllers", () => {
+test("registration is React-owned while remaining legacy pages use allowlisted same-origin controllers", () => {
   const main = readSource("src/main.jsx");
   const app = readSource("src/App.jsx");
   const templates = readSource("src/pageTemplates.js");
+  const registration = readSource("src/pages/RegisterPage.jsx");
+  const actions = readSource("src/registrationActions.mjs");
   assert.match(main, /createRoot\(mountNode\)/);
   assert.match(main, /flushSync\(/);
   assert.match(main, /\.\.\/\.\.\/i18n\.js/);
   assert.match(main, /\.\.\/\.\.\/write-requests\.js/);
   assert.match(templates, /\.\.\/\.\.\/index\.html\?raw/);
   assert.match(templates, /\.\.\/\.\.\/member-login\.html\?raw/);
-  assert.match(templates, /\.\.\/\.\.\/register\.html\?raw/);
   assert.match(templates, /\.\.\/\.\.\/profile\.html\?raw/);
-  for (const controller of ["chama.js", "contact.js", "auth-pages.js", "register.js", "profile.js"]) {
+  assert.doesNotMatch(templates, /register\.html\?raw/);
+  assert.match(app, /pageKey === "register"\) return <RegisterPage \/>/);
+  assert.doesNotMatch(app, /"register\.js"/);
+  assert.match(registration, /<form id="register-chama-form"/);
+  assert.match(registration, /onSubmit=\{handleSubmit\}/);
+  assert.match(registration, /name="bootstrapSecret"/);
+  assert.match(registration, /defaultValue=\{500\}/);
+  assert.match(registration, /setupIsOpen\(\)/);
+  assert.match(registration, /bootstrapField\.value = ""/);
+  assert.match(actions, /fetcher\("\/api\/setup"/);
+  assert.match(actions, /fetcher\("\/api\/login"/);
+  assert.match(actions, /X-Setup-Bootstrap-Secret/);
+  assert.match(actions, /delete payload\.bootstrapSecret/);
+  for (const controller of ["chama.js", "contact.js", "auth-pages.js", "profile.js"]) {
     assert.ok(app.includes(`"${controller}"`), `missing compatibility controller ${controller}`);
   }
   assert.match(app, /url\.origin === window\.location\.origin/);

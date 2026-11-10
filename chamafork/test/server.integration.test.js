@@ -131,9 +131,7 @@ describe("Jirani Chama server", () => {
     assert.equal(registerBundle.status, 200);
     assert.match(registerBundle.headers.get("content-type"), /javascript/);
     assert.match(registerBundle.headers.get("cache-control"), /immutable/);
-    const registerScript = await request("/register.js");
-    assert.equal(registerScript.status, 200);
-    assert.match(await registerScript.text(), /fetch\("\/api\/setup"/);
+    assert.match(await registerBundle.text(), /register-chama-form/);
 
     const loginPage = await request("/member-login.html");
     assert.equal(loginPage.status, 200);

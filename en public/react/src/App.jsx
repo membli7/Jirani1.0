@@ -1,11 +1,11 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { pageForPath, pageTemplates } from "./pageTemplates.js";
+import RegisterPage from "./pages/RegisterPage.jsx";
 
 const legacyControllerNames = new Set([
   "chama.js",
   "contact.js",
   "auth-pages.js",
-  "register.js",
   "profile.js",
 ]);
 
@@ -42,9 +42,8 @@ function loadClassicScript(source) {
   });
 }
 
-export default function App() {
+function LegacyPage({ pageKey }) {
   const hostRef = useRef(null);
-  const pageKey = pageForPath(window.location.pathname);
   const page = useMemo(() => createPageModel(pageKey), [pageKey]);
 
   useLayoutEffect(() => {
@@ -84,4 +83,10 @@ export default function App() {
 
   // The imported templates are trusted, repository-owned source markup; user data is never interpolated here.
   return <div className="react-root" ref={hostRef} dangerouslySetInnerHTML={{ __html: page.markup }} />;
+}
+
+export default function App() {
+  const pageKey = pageForPath(window.location.pathname);
+  if (pageKey === "register") return <RegisterPage />;
+  return <LegacyPage pageKey={pageKey} />;
 }

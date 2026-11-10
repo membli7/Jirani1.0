@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const { test } = require("node:test");
 
 const frontend = path.join(__dirname, "..", "..", "en public");
+const reactSource = path.join(frontend, "react", "src");
 const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(frontend, "chama.js"), "utf8");
 const css = fs.readFileSync(path.join(frontend, "chama.css"), "utf8");
@@ -14,7 +15,9 @@ const landingTheme = fs.readFileSync(path.join(frontend, "landing-theme.css"), "
 const profileHtml = fs.readFileSync(path.join(frontend, "profile.html"), "utf8");
 const profileScript = fs.readFileSync(path.join(frontend, "profile.js"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
-const registerScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8");
+const registerReactShell = fs.readFileSync(path.join(frontend, "react", "register.html"), "utf8");
+const registerPage = fs.readFileSync(path.join(reactSource, "pages", "RegisterPage.jsx"), "utf8");
+const registerActions = fs.readFileSync(path.join(reactSource, "registrationActions.mjs"), "utf8");
 const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
 const authPagesScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
@@ -88,10 +91,10 @@ test("profile and sign-in pages load the shared language switch", () => {
   assert.match(profileHtml, /id="language-switch"/);
   assert.match(profileHtml, /src="\/i18n\.js\?v=20261101\.1"/);
   assert.match(memberLoginHtml, /src="\/i18n\.js\?v=20261101\.1"/);
-  assert.match(registerHtml, /src="\/i18n\.js\?v=20261109\.1"/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261109\.1" defer/);
+  assert.match(registerReactShell, /<div id="root"><\/div>/);
+  assert.match(registerPage, /id="language-switch"/);
   assert.match(authPagesScript, /translateAuthText\(error instanceof TypeError/);
-  assert.match(registerScript, /translateRegistrationText\(error instanceof TypeError/);
+  assert.match(registerPage, /translate\(message\)/);
   assert.match(profileScript, /translateText\("Uploading profile icons…"\)/);
 });
 
@@ -142,10 +145,10 @@ test("Kiswahili switch translates new-chama registration copy and restores Engli
   for (let index = 0; index < strings.length; index++) {
     assert.notEqual(nodes[index].nodeValue, strings[index], `registration copy was not translated: ${strings[index]}`);
   }
-  assert.match(registerHtml, /<option value="en" data-i18n="englishOption">English<\/option>/);
-  assert.match(registerHtml, /<option value="sw" data-i18n="swahili">Kiswahili<\/option>/);
-  assert.match(registerHtml, /href="\/member-login\.html" data-i18n="memberLogin">Member Login<\/a>/);
-  assert.match(registerHtml, /data-i18n-aria-label="newChamaRegistration"/);
+  assert.match(registerPage, /<option value="en" data-i18n="englishOption">English<\/option>/);
+  assert.match(registerPage, /<option value="sw" data-i18n="swahili">Kiswahili<\/option>/);
+  assert.match(registerPage, /href="\/member-login\.html" data-i18n="memberLogin">Member Login<\/a>/);
+  assert.match(registerPage, /data-i18n-aria-label="newChamaRegistration"/);
 
   sandbox.window.jiraniI18n.setLanguage("en");
   assert.deepEqual(nodes.map(node => node.nodeValue), strings);
@@ -437,25 +440,23 @@ test("standalone member login posts credentials to the login API", () => {
 test("landing registration opens a complete first-chama setup page", () => {
   assert.match(html, /id="landing-register" href="\/register\.html"/);
   for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin", "bootstrapSecret"]) {
-    assert.match(registerHtml, new RegExp(`name="${field}"`));
+    assert.match(registerPage, new RegExp(`name="${field}"`));
   }
-  assert.match(registerHtml, /id="register-chama-form"/);
-  assert.match(registerHtml, /id="register-deadline-day" name="deadlineDay" type="number" min="1" max="28" value="5" required/);
-  assert.match(registerHtml, /id="register-welfare-fee" name="welfareMonthlyFee" type="number" min="0" step="1" value="500" required/);
-  assert.match(registerHtml, /id="register-late-penalty" name="lateContributionPenalty" type="number" min="0" step="1" value="200" required/);
-  assert.match(registerHtml, /id="register-loan-rate" name="loanMonthlyRatePercent" type="number" min="0" max="100" step="0\.1" value="5" required/);
-  assert.match(registerHtml, /src="\/register\.js\?v=20261109\.1" defer/);
-  assert.match(registerScript, /fetch\("\/api\/setup"/);
-  assert.match(registerScript, /credentials: "same-origin"/);
-  assert.match(registerScript, /formData\.deadlineDay = Number\(formData\.deadlineDay\)/);
-  assert.match(registerScript, /formData\.welfareMonthlyFee = Number\(formData\.welfareMonthlyFee\)/);
-  assert.match(registerScript, /formData\.lateContributionPenalty = Number\(formData\.lateContributionPenalty\)/);
-  assert.match(registerScript, /formData\.loanMonthlyRatePercent = Number\(formData\.loanMonthlyRatePercent\)/);
-  assert.match(registerScript, /X-Requested-With": "chama"/);
-  assert.match(registerScript, /response\.status === 409/);
-  assert.match(registerScript, /fetch\("\/api\/login"/);
-  assert.match(registerScript, /window\.location\.assign\("\/"\)/);
-  assert.match(registerScript, /registrationNotice\.textContent = translateRegistrationText\(error instanceof TypeError/);
+  assert.match(registerPage, /id="register-chama-form"/);
+  assert.match(registerPage, /name="deadlineDay" type="number" min=\{1\} max=\{28\} defaultValue=\{5\}/);
+  assert.match(registerPage, /name="welfareMonthlyFee" type="number" min=\{0\} step=\{1\} defaultValue=\{500\}/);
+  assert.match(registerPage, /name="lateContributionPenalty" type="number" min=\{0\} step=\{1\} defaultValue=\{200\}/);
+  assert.match(registerPage, /name="loanMonthlyRatePercent" type="number" min=\{0\} max=\{100\} step=\{0\.1\} defaultValue=\{5\}/);
+  assert.match(registerReactShell, /<div id="root"><\/div>/);
+  assert.doesNotMatch(registerReactShell, /id="register-chama-form"|register\.js/);
+  assert.match(registerActions, /fetcher\("\/api\/setup"/);
+  assert.match(registerActions, /credentials: "same-origin"/);
+  assert.match(registerActions, /payload\[field\] = Number\(payload\[field\]\)/);
+  assert.match(registerActions, /X-Requested-With": "chama"/);
+  assert.match(registerActions, /response\.status === 409/);
+  assert.match(registerActions, /fetcher\("\/api\/login"/);
+  assert.match(registerActions, /navigate\("\/"\)/);
+  assert.match(registerPage, /error instanceof TypeError/);
 });
 
 test("member invitations send the required email address", () => {
@@ -469,64 +470,73 @@ test("member invitations send the required email address", () => {
 });
 
 test("registration signs in and opens the dashboard when setup was already completed", async () => {
-  let submitHandler;
   let redirect = "";
   const requests = [];
-  const submitButton = { disabled: false };
-  const registrationForm = {
-    addEventListener: (event, handler) => { if (event === "submit") submitHandler = handler; },
-    querySelector: () => submitButton,
-  };
-  const registrationNotice = { hidden: true, textContent: "" };
-  const context = {
-    document: { querySelector: selector => selector === "#register-chama-form" ? registrationForm : registrationNotice },
-    FormData: class { constructor() { return [["phone", "0700000000"], ["pin", "135790"]]; } },
-    URLSearchParams,
-    fetch: async (url, options) => {
+  const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
+  await registerChama({
+    chamaName: "Test Chama", name: "Test Chair", phone: "0700000000", email: "chair@example.test", pin: "135790",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5",
+  }, {
+    fetcher: async (url, options) => {
       requests.push({ url, options });
       return requests.length === 1
         ? { ok: false, status: 409, json: async () => ({ message: "Initial setup has already been completed." }) }
         : { ok: true, status: 200, json: async () => ({ message: "Signed in successfully." }) };
     },
-    window: { location: { search: "", assign: url => { redirect = url; } } },
-  };
-  vm.runInNewContext(registerScript, context);
-  await submitHandler({ preventDefault() {} });
+    navigate: url => { redirect = url; },
+  });
 
   assert.deepEqual(requests.map(request => request.url), ["/api/setup", "/api/login"]);
   assert.deepEqual(JSON.parse(requests[1].options.body), { phone: "0700000000", pin: "135790" });
   assert.equal(redirect, "/");
-  assert.equal(registrationNotice.hidden, true);
 });
 
 test("registration sends the bootstrap code only in the setup header and clears the field", async () => {
-  let submitHandler;
   let redirect = "";
-  const bootstrapField = { value: "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8" };
+  const bootstrapSecret = "operator-test-code";
   const requests = [];
-  const registrationForm = {
-    addEventListener: (event, handler) => { if (event === "submit") submitHandler = handler; },
-    querySelector: () => ({ disabled: false }),
-    elements: { namedItem: name => name === "bootstrapSecret" ? bootstrapField : null },
-  };
-  const registrationNotice = { hidden: true, textContent: "" };
-  const context = {
-    document: { querySelector: selector => selector === "#register-chama-form" ? registrationForm : registrationNotice },
-    FormData: class { constructor() { return [["phone", "0711000001"], ["pin", "123456"], ["bootstrapSecret", bootstrapField.value]]; } },
-    URLSearchParams,
-    fetch: async (url, options) => {
+  const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
+  await registerChama({
+    chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5",
+    bootstrapSecret,
+  }, {
+    fetcher: async (url, options) => {
       requests.push({ url, options });
       return { ok: true, status: 201, json: async () => ({ message: "Your chairperson account is ready." }) };
     },
-    window: { location: { search: "", assign: url => { redirect = url; } } },
-  };
-  vm.runInNewContext(registerScript, context);
-  await submitHandler({ preventDefault() {} });
+    navigate: url => { redirect = url; },
+  });
 
-  assert.equal(requests[0].options.headers["X-Setup-Bootstrap-Secret"], "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8");
-  assert.equal(JSON.parse(requests[0].options.body).bootstrapSecret, undefined);
-  assert.equal(bootstrapField.value, "");
+  assert.equal(requests[0].options.headers["X-Setup-Bootstrap-Secret"], bootstrapSecret);
+  const requestBody = JSON.parse(requests[0].options.body);
+  assert.equal(requestBody.bootstrapSecret, undefined);
+  assert.equal(JSON.stringify(requestBody).includes(bootstrapSecret), false);
+  assert.equal(JSON.stringify(requests[0].options.headers).includes(bootstrapSecret), true);
+  assert.deepEqual([
+    requestBody.deadlineDay,
+    requestBody.welfareMonthlyFee,
+    requestBody.lateContributionPenalty,
+    requestBody.loanMonthlyRatePercent,
+  ], [5, 500, 200, 5]);
   assert.equal(redirect, "/");
+  assert.match(registerPage, /bootstrapField\.value = ""/);
+});
+
+test("registration redirects to member sign-in when setup login requires a chama choice", async () => {
+  let redirect = "";
+  let requestNumber = 0;
+  const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
+  await registerChama({ phone: "0700000000", pin: "123456" }, {
+    fetcher: async () => {
+      requestNumber += 1;
+      return requestNumber === 1
+        ? { ok: false, status: 409, json: async () => ({ message: "Initial setup has already been completed." }) }
+        : { ok: true, status: 200, json: async () => ({ chooseChamaId: [{ chamaId: "chama-1", name: "Test Chama" }] }) };
+    },
+    navigate: url => { redirect = url; },
+  });
+  assert.equal(redirect, "/member-login.html");
 });
 
 test("root page restores the dashboard for an existing authenticated session", async () => {
@@ -726,8 +736,8 @@ test("header icons, profile actions, live dot, muted background, and short menu 
   assert.match(css, /\.menu-bar\s*\{\s*height:\s*auto; bottom:\s*auto; max-height:\s*min\(72vh, 640px\)/);
   assert.match(profileScript, /profileMode === "view"/);
   assert.match(profileScript, /profileMode === "edit"/);
-  assert.match(registerHtml, /id="new-chama-existing-instance"/);
-  assert.match(registerScript, /get\("new-chama"\) === "1"/);
+  assert.match(registerPage, /id="new-chama-existing-instance"/);
+  assert.match(registerPage, /get\("new-chama"\) === "1"/);
   assert.match(memberLoginHtml, /id="login-page-title"/);
   assert.match(authPagesScript, /get\("switch-chama"\) === "1"/);
 });
