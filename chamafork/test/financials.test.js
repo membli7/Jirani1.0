@@ -27,11 +27,15 @@ const secretary = { id: "secretary", name: "Test Secretary", phone: "+2547110000
 const member = { id: "member", name: "Test Member", phone: "+254711000003", role: "member", status: "active", pinHash: pinHash("345678"), mustChangePin: false };
 const otherMember = { id: "other", name: "Other Member", phone: "+254711000004", role: "member", status: "active", pinHash: pinHash("456789"), mustChangePin: false };
 const thirdMember = { id: "third", name: "Third Member", phone: "+254711000005", role: "member", status: "active", pinHash: pinHash("567890"), mustChangePin: false };
+const foreignMember = { id: "foreign-member", name: "Foreign Member", phone: "+254711000007", role: "member", status: "active", pinHash: pinHash("789012"), mustChangePin: false, chamaId: "foreign-chama" };
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
-  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
-  users: [chair, treasurer, secretary, member, otherMember, thirdMember],
+  chamas: [
+    { id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() },
+    { id: "foreign-chama", name: "Foreign Chama", subscription: require("./active-subscription-fixture").activeSubscription() },
+  ],
+  users: [chair, treasurer, secretary, member, otherMember, thirdMember, foreignMember],
   transactions: [],
   loans: [],
   payouts: [],
@@ -58,17 +62,29 @@ async function login(user, pin) {
   return response.headers.getSetCookie()[0].split(";")[0];
 }
 
-function contribute(memberId, body) {
-  return fetch(`${baseUrl}/api/contributions`, {
+function postCash(route, body, idempotencyKey = crypto.randomUUID()) {
+  return fetch(`${baseUrl}${route}`, {
     method: "POST",
     headers: {
       Cookie: treasurerCookie,
       "Content-Type": "application/json",
       "X-Requested-With": "chama",
-      "Idempotency-Key": crypto.randomUUID(),
+      "Idempotency-Key": idempotencyKey,
     },
-    body: JSON.stringify({ memberId, method: "Cash", note: "Cash received at meeting", referenceNumber: "RCPT-1000", date: "2026-10-05", ...body }),
+    body: JSON.stringify(body),
   });
+}
+
+function contribute(memberId, body, idempotencyKey = crypto.randomUUID()) {
+  return postCash("/api/contributions", {
+    memberId,
+    paymentType: "Monthly Contribution",
+    method: "Cash",
+    note: "Cash received at meeting",
+    referenceNumber: "RCPT-1000",
+    date: "2026-10-05",
+    ...body,
+  }, idempotencyKey);
 }
 
 before(async () => {
@@ -127,6 +143,7 @@ test("the first payment of the month uses the configured welfare amount", async 
   const response = await contribute(member.id, { amount: 1500 });
   assert.equal(response.status, 201);
   const transaction = (await response.json()).data;
+  assert.equal(transaction.note, "Cash received at meeting");
   assert.equal(transaction.welfareAmount, 350);
   assert.equal(transaction.shareCapitalAmount, 1150);
   assert.equal(transaction.penaltyAmount, 0);
@@ -136,6 +153,7 @@ test("the first payment of the month uses the configured welfare amount", async 
 
   const saved = persistedState();
   assert.equal(saved.welfareReserve, 350);
+  assert.equal(saved.transactions.find(item => item.id === transaction.id).note, "Cash received at meeting");
   assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1150);
   const entry = saved.auditLog.find(item => item.type === "contribution.recorded" && item.entityId === transaction.id);
   assert.ok(entry, "contribution should be audited");
@@ -336,6 +354,131 @@ test("receipt display preserves entered text while trimmed case-insensitive dupl
   const duplicate = await contribute(otherMember.id, { amount: 500, referenceNumber: "mixed-receipt-2026", date: "2026-10-12" });
   assert.equal(duplicate.status, 409);
   assert.equal(persistedState().transactions.length, transactionCount);
+});
+
+test("cash entry note validation rejects missing, short, and long notes and persists valid boundary notes", async () => {
+  const beforeInvalid = persistedState();
+  const invalidNotes = [
+    ["missing", undefined],
+    ["short", "ab"],
+    ["long", "x".repeat(501)],
+  ];
+  for (const [label, note] of invalidNotes) {
+    const response = await contribute(thirdMember.id, {
+      amount: 500,
+      note,
+      referenceNumber: `RCPT-NOTE-${label.toUpperCase()}`,
+      date: "2026-10-04",
+    });
+    assert.equal(response.status, 400, `${label} notes must be rejected`);
+  }
+  const afterInvalid = persistedState();
+  assert.deepEqual(afterInvalid.transactions, beforeInvalid.transactions);
+  assert.deepEqual(afterInvalid.auditLog, beforeInvalid.auditLog);
+
+  for (const [referenceNumber, note] of [
+    ["RCPT-MIN-NOTE", "abc"],
+    ["RCPT-MAX-NOTE", "x".repeat(500)],
+  ]) {
+    const response = await contribute(thirdMember.id, { amount: 500, note, referenceNumber, date: "2026-10-04" });
+    assert.equal(response.status, 201);
+    const transaction = (await response.json()).data;
+    assert.equal(transaction.note, note);
+    const saved = persistedState();
+    assert.equal(saved.transactions.find(item => item.id === transaction.id).note, note);
+    const audit = saved.auditLog.find(item => item.type === "contribution.recorded" && item.entityId === transaction.id);
+    assert.ok(audit, "successful cash entries are audited");
+    assert.equal(audit.by.role, "treasurer");
+  }
+});
+
+test("unsupported cash types and directions are rejected instead of recorded as inflows", async () => {
+  const before = persistedState();
+  for (const [index, paymentType] of ["Other Income", "Cash-out", "Unexpected", ""].entries()) {
+    const response = await contribute(member.id, {
+      amount: 500,
+      paymentType,
+      referenceNumber: `RCPT-UNSUPPORTED-${index}`,
+      date: "2026-10-04",
+    });
+    assert.equal(response.status, 400, `unsupported type ${JSON.stringify(paymentType)} must be rejected`);
+  }
+  assert.equal((await postCash("/api/payments", {
+    memberId: member.id, amount: 50, paymentType: "Other Income", method: "Cash", note: "Cash already received",
+  })).status, 400);
+
+  assert.equal((await contribute(member.id, {
+    amount: 500, flowDirection: "out", referenceNumber: "RCPT-OUT-CONTRIBUTION", date: "2026-10-04",
+  })).status, 400);
+  assert.equal((await contribute(member.id, {
+    amount: 500, flowDirection: "sideways", referenceNumber: "RCPT-UNKNOWN-DIRECTION", date: "2026-10-04",
+  })).status, 400);
+  assert.equal((await contribute(member.id, {
+    amount: 500, cashOutType: "Expenses", referenceNumber: "RCPT-CASH-OUT", date: "2026-10-04",
+  })).status, 400);
+  assert.equal((await postCash("/api/payments", {
+    memberId: member.id, amount: 50, paymentType: "Fine", method: "Cash", note: "Cash already received", flowDirection: "out",
+  })).status, 400);
+  assert.equal((await postCash("/api/loans/repay", {
+    loanId: "missing-loan", amount: 50, paymentType: "Loan Repayment", method: "Cash", note: "Cash already received",
+    referenceNumber: "RCPT-OUT-REPAYMENT", date: "2026-10-04", flowDirection: "out",
+  })).status, 400);
+
+  const after = persistedState();
+  assert.deepEqual(after.transactions, before.transactions, "rejected cash types/directions must not create ledger rows");
+  assert.deepEqual(after.auditLog, before.auditLog, "rejected cash types/directions must not create audit events");
+});
+
+test("cash-entry endpoints reject member IDs from a different chama", async () => {
+  const before = persistedState();
+  const contribution = await contribute(foreignMember.id, {
+    amount: 500, referenceNumber: "RCPT-FOREIGN-CONTRIBUTION", date: "2026-10-04",
+  });
+  assert.equal(contribution.status, 404);
+  const fine = await postCash("/api/payments", {
+    memberId: foreignMember.id, amount: 50, paymentType: "Fine", method: "Cash", note: "Cash already received",
+  });
+  assert.equal(fine.status, 404);
+  const after = persistedState();
+  assert.deepEqual(after.transactions, before.transactions);
+  assert.deepEqual(after.auditLog, before.auditLog);
+});
+
+test("a manual Fine cash entry persists its canonical note and audit event", async () => {
+  const before = persistedState();
+  const response = await postCash("/api/payments", {
+    memberId: member.id, amount: 50, paymentType: "Fine", method: "Cash", note: "Fine cash received",
+  });
+  assert.equal(response.status, 201);
+  const transaction = (await response.json()).data;
+  assert.equal(transaction.paymentType, "Fine");
+  assert.equal(transaction.note, "Fine cash received");
+  const saved = persistedState();
+  assert.equal(saved.transactions.length, before.transactions.length + 1);
+  assert.deepEqual(saved.transactions.find(item => item.id === transaction.id), transaction);
+  const audit = saved.auditLog.find(item => item.type === "payment.recorded" && item.entityId === transaction.id);
+  assert.ok(audit, "manual cash entry must be audited");
+  assert.equal(audit.by.id, treasurer.id);
+  assert.equal(audit.amount, 50);
+});
+
+test("repeated contribution idempotency keys create only one transaction and audit event", async () => {
+  const before = persistedState();
+  const body = { amount: 500, note: "Cash received for the monthly contribution", referenceNumber: "RCPT-IDEMPOTENT-CASH", date: "2026-10-04" };
+  const key = crypto.randomUUID();
+  const [firstResponse, replayResponse] = await Promise.all([
+    contribute(otherMember.id, body, key),
+    contribute(otherMember.id, body, key),
+  ]);
+  assert.equal(firstResponse.status, 201);
+  assert.equal(replayResponse.status, 201);
+  const first = (await firstResponse.json()).data;
+  const replay = (await replayResponse.json()).data;
+  assert.equal(replay.id, first.id);
+  const saved = persistedState();
+  assert.equal(saved.transactions.length, before.transactions.length + 1);
+  assert.equal(saved.transactions.filter(item => item.id === first.id).length, 1);
+  assert.equal(saved.auditLog.filter(item => item.type === "contribution.recorded" && item.entityId === first.id).length, 1);
 });
 
 test("a legacy file gains the penalties ledger and member share capital", async () => {

@@ -602,6 +602,7 @@
     penaltiesToDate: ["Penalties recorded (all time)", "Faini zilizorekodiwa (jumla)"], fineHistory: ["Penalties by month", "Faini kwa mwezi"],
     expensesToDate: ["Expenses (all time)", "Matumizi (jumla)"], expenseHistory: ["Expenses by month", "Matumizi kwa mwezi"], groupArrears: ["Group arrears", "Madeni ya kikundi"],
     previousPage: ["Previous", "Iliyotangulia"], nextPage: ["Next", "Inayofuata"], cashFlow: ["Cash flow", "Mtiririko wa fedha"], cashIn: ["Cash in", "Fedha zinazoingia"], cashOut: ["Cash out", "Fedha zinazotoka"],
+    cashReceivedOnly: ["Record cash received only. This app records the entry; it does not transfer money.", "Rekodi pesa taslimu zilizopokelewa pekee. Programu huweka rekodi tu; haihamishi pesa."],
     receiptReference: ["Receipt reference", "Nambari ya kumbukumbu ya risiti"], cashDateLimit: ["Dates must be real calendar dates and cannot be in the future.", "Tarehe lazima ziwe tarehe halisi za kalenda na haziwezi kuwa za siku zijazo."],
     otherIncome: ["Other Income", "Mapato mengine"], cashOutType: ["Cash-out type", "Aina ya fedha zilizotoka"], finance: ["Finance", "Fedha"], expenses: ["Expenses", "Matumizi"],
     loan: ["Loan", "Mkopo"], other: ["Other", "Nyingine"], otherType: ["Other type", "Aina nyingine"], approvedLoan: ["Approved loan", "Mkopo ulioidhinishwa"],

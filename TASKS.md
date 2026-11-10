@@ -122,3 +122,7 @@ Attendance tracking scope decision (resolved): restore and test attendance end t
 - [ ] SMS invitation delivery (provider not configured)
 - [ ] Overdue/default loan actions (recovery, penalty, note)
 - [x] CSRF/origin protections, write serialization, and route authorization received source review and regression coverage; deployment proxy boundaries remain unverified.
+
+
+## Security remediation decision (2026-11-10)
+- Cash-out and “Other Income” are unsupported for now. Remove/disable those UI controls and reject unsupported values at the server boundary until their behavior is explicitly specified and approved.

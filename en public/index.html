@@ -501,14 +501,10 @@
         <div class="panel-heading">
             <div>
                 <h2>Record cash</h2>
-                <p>Record cash received or paid out. This app records the entry; it does not transfer money.</p>
+                <p data-i18n="cashReceivedOnly">Record cash received only. This app records the entry; it does not transfer money.</p>
             </div>
         </div>
         <form id="payment-form" class="form-body">
-            <label class="field" for="cash-direction" data-i18n="cashFlow">Cash flow<select name="flowDirection" id="cash-direction">
-                <option value="in" data-i18n="cashIn">Cash in</option>
-                <option value="out" data-i18n="cashOut">Cash out</option></select>
-            </label>
             <label class="field" id="payment-member-field" for="payment-member" data-i18n="memberLabel">Member<select name="memberId" id="payment-member"></select>
             </label>
             <label class="field" for="cash-amount" data-i18n="amountKes">Amount (KES)<input id="cash-amount" name="amount" type="number" min="1" step="1" required></label>
@@ -520,24 +516,12 @@
                 <option value="Monthly Contribution" data-i18n="monthlyContribution">Monthly Contribution</option>
                 <option value="Loan Repayment" data-i18n="repayment">Loan Repayment</option>
                 <option value="Fine" data-i18n="fine">Fine</option>
-                <option value="Other Income" data-i18n="otherIncome">Other Income</option>
             </select>
         </label>
-        <div id="cash-out-fields" hidden>
-            <label class="field" for="cash-out-type" data-i18n="cashOutType">Cash-out type<select name="cashOutType" id="cash-out-type">
-                <option value="Finance" data-i18n="finance">Finance</option>
-                <option value="Expenses" data-i18n="expenses">Expenses</option>
-                <option value="Loan" data-i18n="loan">Loan</option>
-                <option value="Fine" data-i18n="fine">Fine</option>
-                <option value="Other" data-i18n="other">Other</option>
-            </select></label>
-            <label class="field" id="custom-cash-out-field" for="custom-cash-out-type" data-i18n="otherType" hidden>Other type<input id="custom-cash-out-type" name="customType" maxlength="80"></label>
-            <label class="field" id="cash-out-loan-field" for="cash-out-loan" data-i18n="approvedLoan" hidden>Approved loan<select name="cashOutLoanId" id="cash-out-loan"></select></label>
-        </div>
         <label class="field" id="repayment-field" for="payment-loan" hidden>Loan<select name="loanId" id="payment-loan"></select>
         </label>
         <input type="hidden" name="method" value="Cash">
-        <label class="field" for="cash-note" data-i18n="reason">Reason<textarea name="reason" id="cash-note" minlength="3" maxlength="500" required placeholder="e.g. Cash received at the weekly meeting" data-i18n-placeholder="cashNotePlaceholder"></textarea>
+        <label class="field" for="cash-note" data-i18n="note">Note<textarea name="note" id="cash-note" minlength="3" maxlength="500" required placeholder="e.g. Cash received at the weekly meeting" data-i18n-placeholder="cashNotePlaceholder"></textarea>
         </label>
         <button class="button-primary" type="submit">Record cash</button>
         </form>
@@ -1234,8 +1218,8 @@
     </form>
  </dialog>
  <script src="/i18n.js?v=20261108.3" defer></script>
- <script src="/write-requests.js?v=20261016.1" defer></script>
- <script src="/chama.js?v=20261108.2" defer></script>
+ <script src="/write-requests.js?v=20261110.1" defer></script>
+ <script src="/chama.js?v=20261110.1" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
 </body>
 </html>

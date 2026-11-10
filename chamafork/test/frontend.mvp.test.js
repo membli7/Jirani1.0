@@ -518,7 +518,7 @@ test("registration sends the bootstrap code only in the setup header and clears 
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261108\.2" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261110\.1" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -642,7 +642,7 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(html, /href="\/chama\.css\?v=20261108\.2"/);
   assert.match(html, /href="\/landing-theme\.css\?v=20261108\.1"/);
   assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
-  assert.match(html, /src="\/chama\.js\?v=20261108\.2"/);
+  assert.match(html, /src="\/chama\.js\?v=20261110\.1"/);
   assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(script, /<i style=/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);
@@ -786,7 +786,8 @@ test("loan form sends two guarantors and repayments send reference and date", ()
   assert.match(script, /api\("\/api\/loans\/guarantors"\)/);
   assert.match(html, /name="referenceNumber"/);
   assert.match(html, /name="date" type="date"/);
-  assert.match(script, /values\.paymentType === "Loan Repayment" \? "\/api\/loans\/repay"/);
+  assert.match(script, /writeRequester\.cashEntryRequest\(new FormData\(form\)\)/);
+  assert.match(script, /await api\(request\.path,\s*\{\s*method:\s*"POST",\s*body:\s*values,/);
 });
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {

@@ -1944,12 +1944,19 @@ app.post("/api/pin/change", requireAuth, async (req, res, next) => {
   const updated = structuredClone(state); const user = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === req.user.id); user.pinHash = pinHash(newPin); user.mustChangePin = false; await persist(updated); return res.json({ message: "PIN changed successfully.", user: safeUser(user) });
 });
 
+function hasUnsupportedCashEntryFields(body) {
+  const fields = body && typeof body === "object" ? body : {};
+  return (Object.hasOwn(fields, "flowDirection") && fields.flowDirection !== "in") ||
+    ["cashOutType", "cashOutLoanId", "customType"].some(field => Object.hasOwn(fields, field));
+}
+
 function recordManualPayment(forcedPaymentType = null) {
   return idempotent((req, res, next) => {
-  const memberId = clean(req.body?.memberId);
-  const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
-  if (foreignMember) return res.status(404).json({ message: "Member not found." });
-  const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const paymentType = forcedPaymentType || clean(req.body?.paymentType); const method = clean(req.body?.method); const note = clean(req.body?.note);
+    const memberId = clean(req.body?.memberId);
+    const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
+    if (foreignMember) return res.status(404).json({ message: "Member not found." });
+    if (hasUnsupportedCashEntryFields(req.body)) return res.status(400).json({ message: "Cash-out entries are not supported; only cash received can be recorded." });
+    const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const paymentType = forcedPaymentType || clean(req.body?.paymentType); const method = clean(req.body?.method); const note = clean(req.body?.note);
   if (!member || !Number.isSafeInteger(amount) || amount < 1 || !PAYMENT_TYPES.has(paymentType) || method !== "Cash" || note.length < 3 || note.length > 500) return res.status(400).json({ message: "Manual entries are cash-only and require a 3-500 character note." });
   if (paymentType === "Loan Repayment") return res.status(400).json({ message: "Record loan repayments with the loan repayment form." });
   const updated = structuredClone(state);
@@ -1963,8 +1970,9 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   const memberId = clean(req.body?.memberId);
   const foreignMember = state.users.find(item => item.id === memberId && item.chamaId !== req.user.chamaId);
   if (foreignMember) return res.status(404).json({ message: "Member not found." });
-  const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
-  if (!member || !Number.isSafeInteger(amount) || amount < 1 || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, a real non-future date, and a 3-500 character note." });
+  if (hasUnsupportedCashEntryFields(req.body)) return res.status(400).json({ message: "Cash-out entries are not supported; only cash received can be recorded." });
+  const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const paymentType = clean(req.body?.paymentType); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
+  if (!member || !Number.isSafeInteger(amount) || amount < 1 || (Object.hasOwn(req.body ?? {}, "paymentType") && paymentType !== "Monthly Contribution") || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Contributions are cash-only and require a member, amount, 3-40 character reference number, a real non-future date, and a 3-500 character note." });
   if (hasReceiptReferenceConflict(state, req.user.chamaId, parsedReference.normalized)) return res.status(409).json({ message: "That receipt reference has already been used in this chama." });
   const contributionMonth = date.slice(0, 7);
   const welfarePaid = scopeToChama(state.transactions, req.user.chamaId).some(item => item.memberId === member.id && item.contributionMonth === contributionMonth && item.welfareAmount > 0);
@@ -2041,11 +2049,12 @@ app.post("/api/settings/meeting-date", requireAuth, requirePinChanged, requireRo
 function repayLoan() {
   return idempotent((req, res, next) => {
     const loanId = clean(req.body?.loanId);
+    if (hasUnsupportedCashEntryFields(req.body)) return res.status(400).json({ message: "Cash-out entries are not supported; only cash received can be recorded." });
     const foreignLoan = state.loans.find(item => item.id === loanId && item.chamaId !== req.user.chamaId);
     if (foreignLoan) return res.status(404).json({ message: "Loan not found." });
     const loan = scopeToChama(state.loans, req.user.chamaId).find(item => item.id === loanId && item.status === "approved");
-    const amount = Number(req.body?.amount); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
-    if (!loan || !Number.isSafeInteger(amount) || amount < 1 || amount > loan.outstanding || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Select an approved loan and enter a cash amount no larger than its outstanding balance, with a receipt reference, real non-future date, and note." });
+    const paymentType = clean(req.body?.paymentType); const amount = Number(req.body?.amount); const note = clean(req.body?.note); const parsedReference = parseReceiptReference(req.body?.referenceNumber); const referenceNumber = parsedReference.display; const date = clean(req.body?.date);
+    if (!loan || !Number.isSafeInteger(amount) || amount < 1 || amount > loan.outstanding || (Object.hasOwn(req.body ?? {}, "paymentType") && paymentType !== "Loan Repayment") || clean(req.body?.method) !== "Cash" || note.length < 3 || note.length > 500 || !parsedReference.valid || !isValidContributionDate(date)) return res.status(400).json({ message: "Select an approved loan and enter a cash amount no larger than its outstanding balance, with a receipt reference, real non-future date, and note." });
     if (hasReceiptReferenceConflict(state, req.user.chamaId, parsedReference.normalized)) return res.status(409).json({ message: "That receipt reference has already been used in this chama." });
     const updated = structuredClone(state); const saved = scopeToChama(updated.loans, req.user.chamaId).find(item => item.id === loan.id);
     let remaining = amount; let principalAmount = amount; let interestAmount = 0;

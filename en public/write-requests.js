@@ -23,6 +23,19 @@
     return error;
   }
 
+  const cashEntryPaths = Object.freeze({
+    "Monthly Contribution": "/api/contributions",
+    "Loan Repayment": "/api/loans/repay",
+    Fine: "/api/payments",
+  });
+
+  function cashEntryRequest(formData) {
+    const body = Object.fromEntries(formData);
+    if (!Object.hasOwn(cashEntryPaths, body.paymentType)) throw new TypeError("Unsupported cash entry type.");
+    body.amount = Number(body.amount);
+    return { path: cashEntryPaths[body.paymentType], body };
+  }
+
   function createWriteRequester({ fetchImpl = globalThis.fetch, keyGenerator = uuid, timeoutMs = 30000 } = {}) {
     const pending = new WeakMap();
 
@@ -81,7 +94,7 @@
       }
     }
 
-    return { submit };
+    return { submit, cashEntryRequest };
   }
 
   function unconfirmedMessage(section) {

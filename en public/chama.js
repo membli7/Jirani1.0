@@ -1111,11 +1111,15 @@ function confirmCashPayment(values) {
   return new Promise(resolve => { dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true }); dialog.showModal(); });
 }
 $("#payment-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const values = Object.fromEntries(new FormData(form)); values.amount = Number(values.amount); values.memberName = $("#payment-member option:checked")?.textContent || "Selected member"; if (!(await confirmCashPayment(values))) return; setButton(form, true);
+  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
+  let request;
+  try { request = writeRequester.cashEntryRequest(new FormData(form)); }
+  catch (error) { notice(error.message, true); return; }
+  const values = request.body; values.memberName = $("#payment-member option:checked")?.textContent || "Selected member";
+  if (!(await confirmCashPayment(values))) return; setButton(form, true);
   try {
     delete values.memberName;
-    const route = values.paymentType === "Loan Repayment" ? "/api/loans/repay" : values.paymentType === "Fine" ? "/api/payments" : "/api/contributions";
-    await api(route, {
+    await api(request.path, {
       method: "POST",
       body: values,
       write: form,
