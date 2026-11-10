@@ -5,6 +5,7 @@ const fs = require("fs");
 const dotenv = require("dotenv");
 
 function loadAppEnv() {
+  if (process.env.NODE_ENV === "production") return;
   const projectRoot = path.join(__dirname, "..", "..");
   const neonEnvPath = path.join(projectRoot, ".env.local");
   const neonEnv = fs.existsSync(neonEnvPath) ? dotenv.parse(fs.readFileSync(neonEnvPath, "utf8")) : {};

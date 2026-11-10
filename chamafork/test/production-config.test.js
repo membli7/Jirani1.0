@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 const dotenv = require("dotenv");
-const { createTrustedProxyPredicate, isPrivateIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig } = require("../security/production-config");
+const { createRenderTrustedProxyPredicate, createTrustedProxyPredicate, isPrivateIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig } = require("../security/production-config");
 
 const good = {
   NODE_ENV: "production",
@@ -19,8 +19,7 @@ const good = {
   DATABASE_URL: "postgresql://runtime:private@db.example.test/chama",
   REDIS_URL: "rediss://redis.example.test",
   SESSION_STORE: "redis",
-  TRUST_PROXY: "1",
-  TRUSTED_PROXY_IPS: "127.0.0.1,::1",
+  TRUST_PROXY: "render",
   PGSSL: "verify-full",
 };
 
@@ -62,14 +61,25 @@ test("production trusts only explicit private proxies and rejects public proxy o
   assert.equal(isPrivateIp("0.0.0.0"), false);
   assert.equal(isPrivateIp("203.0.113.4"), false);
   assert.throws(() => parseTrustedProxyIps("203.0.113.4"), /exact loopback or private/);
-  assert.throws(() => validateProductionConfig({ ...good, APP_BIND_HOST: "0.0.0.0" }), /APP_BIND_HOST must be/);
-  assert.throws(() => validateProductionConfig({ ...good, TRUSTED_PROXY_IPS: "" }), /TRUSTED_PROXY_IPS must list/);
+  assert.throws(() => validateProductionConfig({ ...good, APP_BIND_HOST: "203.0.113.4" }), /APP_BIND_HOST must be/);
+  assert.doesNotThrow(() => validateProductionConfig({ ...good, TRUST_PROXY: "1", TRUSTED_PROXY_IPS: "127.0.0.1" }));
+  assert.throws(() => validateProductionConfig({ ...good, TRUST_PROXY: "1", TRUSTED_PROXY_IPS: "" }), /TRUSTED_PROXY_IPS must list/);
 });
 
-test("the app binds to localhost by default and honors an explicit bind address", () => {
+test("the app binds to localhost locally and 0.0.0.0 in production", () => {
   assert.equal(resolveAppBindHost({ NODE_ENV: "development" }), "127.0.0.1");
+  assert.equal(resolveAppBindHost({ NODE_ENV: "production" }), "0.0.0.0");
   assert.equal(resolveAppBindHost({ APP_BIND_HOST: "10.0.0.8" }), "10.0.0.8");
   assert.equal(resolveAppBindHost({ APP_BIND_HOST: "  " }), "127.0.0.1");
+});
+
+test("Render proxy trust accepts only one private immediate hop", () => {
+  const trustsRenderProxy = createRenderTrustedProxyPredicate();
+  assert.equal(trustsRenderProxy("10.0.0.8", 0), true);
+  assert.equal(trustsRenderProxy("::ffff:10.0.0.8", 0), true);
+  assert.equal(trustsRenderProxy("10.0.0.8", 1), false);
+  assert.equal(trustsRenderProxy("203.0.113.4", 0), false);
+  assert.equal(trustsRenderProxy("0.0.0.0", 0), false);
 });
 
 test("the example environment selects safe local development services", () => {
@@ -82,6 +92,22 @@ test("the example environment selects safe local development services", () => {
   assert.equal(example.REDIS_URL, "");
   assert.equal(example.TRUST_PROXY, "0");
   assert.equal(resolveAppBindHost(example), "127.0.0.1");
+});
+
+test("production environment loading does not read local dotenv files", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalPort = process.env.PORT;
+  process.env.NODE_ENV = "production";
+  process.env.PORT = "render-dashboard-port";
+  try {
+    require("../config/env").loadAppEnv();
+    assert.equal(process.env.PORT, "render-dashboard-port");
+  } finally {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalPort === undefined) delete process.env.PORT;
+    else process.env.PORT = originalPort;
+  }
 });
 
 test("secret strength rejects short and placeholder values", () => {

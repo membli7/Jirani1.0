@@ -33,8 +33,12 @@ function createTrustedProxyPredicate(value) {
   return address => trusted.has(normalizeIp(address));
 }
 
+function createRenderTrustedProxyPredicate() {
+  return (address, hop) => hop === 0 && isPrivateIp(address);
+}
+
 function resolveAppBindHost(env = process.env) {
-  return String(env.APP_BIND_HOST || "").trim() || "127.0.0.1";
+  return String(env.APP_BIND_HOST || "").trim() || (env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 }
 
 function strongSecret(value) {
@@ -79,13 +83,16 @@ function validateProductionConfig(env = process.env) {
   let redisProtocol = null;
   try { redisProtocol = new URL(env.REDIS_URL).protocol; } catch {}
   if (redisProtocol !== "rediss:" || env.SESSION_STORE !== "redis") errors.push("Production requires a TLS-protected rediss:// REDIS_URL and SESSION_STORE=redis for shared sessions and rate limits.");
-  if (env.TRUST_PROXY !== "1") errors.push("Production TLS termination requires TRUST_PROXY=1 behind the trusted public HTTPS proxy.");
-  try { parseTrustedProxyIps(env.TRUSTED_PROXY_IPS); }
-  catch (error) { errors.push(error.message); }
-  if (env.APP_BIND_HOST && !isPrivateIp(env.APP_BIND_HOST)) errors.push("APP_BIND_HOST must be a loopback or private IP address in production.");
+  if (!["1", "render"].includes(env.TRUST_PROXY)) errors.push("Production TLS termination requires TRUST_PROXY=render for Render or TRUST_PROXY=1 with an exact private proxy allowlist.");
+  if (env.TRUST_PROXY === "1") {
+    try { parseTrustedProxyIps(env.TRUSTED_PROXY_IPS); }
+    catch (error) { errors.push(error.message); }
+  }
+  const bindHost = resolveAppBindHost(env);
+  if (bindHost !== "0.0.0.0" && !isPrivateIp(bindHost)) errors.push("APP_BIND_HOST must be 0.0.0.0 for Render or a loopback/private IP address.");
   if (env.PGSSL !== "verify-full") errors.push("Production requires PGSSL=verify-full to validate the database TLS certificate.");
   if (!strongSecret(env.METRICS_BEARER_TOKEN)) errors.push("METRICS_BEARER_TOKEN must be a non-placeholder value of at least 32 bytes with sufficient character diversity.");
   if (errors.length) throw new Error(`Unsafe production configuration: ${errors.join(" ")}`);
 }
 
-module.exports = { createTrustedProxyPredicate, isPrivateIp, normalizeIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig };
+module.exports = { createRenderTrustedProxyPredicate, createTrustedProxyPredicate, isPrivateIp, normalizeIp, parseAllowedOrigins, parseTrustedProxyIps, resolveAppBindHost, strongSecret, validateProductionConfig };

@@ -17,7 +17,7 @@ const { makeRedisClient } = require("./redis-client");
 const nodemailer = require("nodemailer");
 const { createWriteQueue } = require("./storage/write-queue");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
-const { createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
+const { createRenderTrustedProxyPredicate, createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = require("./security/mpesa-c2b-subscriptions");
 const { createOneTimeCodeVerifier } = require("./security/one-time-code");
 const { appendJsonEmailCapture } = require("./security/email-log");
@@ -102,7 +102,11 @@ const pinRecoveryLimiter = sharedRateLimit("pin-recovery", { windowMs: 15 * 60 *
 const loginLimiter = sharedRateLimit("login", { windowMs: 15 * 60 * 1000, max: 100, message: { message: "Too many login attempts. Please try again later." } });
 
 const app = express();
-const trustedProxyTrust = process.env.NODE_ENV === "production" ? createTrustedProxyPredicate(process.env.TRUSTED_PROXY_IPS) : null;
+const trustedProxyTrust = process.env.NODE_ENV === "production"
+  ? process.env.TRUST_PROXY === "render"
+    ? createRenderTrustedProxyPredicate()
+    : createTrustedProxyPredicate(process.env.TRUSTED_PROXY_IPS)
+  : null;
 app.set("trust proxy", trustedProxyTrust
   ? trustedProxyTrust
   : process.env.TRUST_PROXY === "1" ? 1 : false);
