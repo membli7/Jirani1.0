@@ -22,3 +22,9 @@
 2026-11-10 01:11:41.606 EAT [18212] FATAL:  role "ADMIN" does not exist
 2026-11-10 01:31:59.013 EAT [29324] LOG:  checkpoint starting: time
 2026-11-10 01:31:59.927 EAT [29324] LOG:  checkpoint complete: wrote 8 buffers (0.0%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.892 s, sync=0.010 s, total=0.915 s; sync files=8, longest=0.003 s, average=0.002 s; distance=16 kB, estimate=16 kB; lsn=0/1E1E948, redo lsn=0/1E1E8F0
+2026-11-10 08:51:02.566 EAT [39488] FATAL:  role "ADMIN" does not exist
+2026-11-10 09:09:56.748 EAT [29972] LOG:  background worker "logical replication launcher" (PID 22812) was terminated by exception 0xC000013A
+2026-11-10 09:09:56.748 EAT [29972] HINT:  See C include file "ntstatus.h" for a description of the hexadecimal value.
+2026-11-10 09:09:56.749 EAT [29972] LOG:  terminating any other active server processes
+2026-11-10 09:09:56.837 EAT [29972] LOG:  received fast shutdown request
+^C
