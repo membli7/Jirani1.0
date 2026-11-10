@@ -6,3 +6,4 @@ data.json
 data.json.*.tmp
 data.json.pre-setup-backup-*
 en public.code-workspace
+/frontend-dist/

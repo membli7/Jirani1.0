@@ -1178,7 +1178,12 @@ body {
   flex: 1 0 auto;
 }
 
-body > .site-footer {
+.react-root {
+  display: contents;
+}
+
+body > .site-footer,
+.react-root > .site-footer {
   margin-top: auto;
   width: 100%;
 }

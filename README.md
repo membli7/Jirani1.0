@@ -1,6 +1,6 @@
 # Jirani Chama — MVP
 
-A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, penalties, dividends, in-app group chat, and a read-only month-end close review. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. The front end is a single-page app with vanilla JavaScript and English/Kiswahili language support. Translation coverage still needs a review.
+A web app for running a savings chama: cash contributions with a welfare fee, member loans with guarantors, penalties, dividends, in-app group chat, and a read-only month-end close review. The server is Node.js and Express, local development uses a JSON data file, and production can use PostgreSQL. React/Vite frontend source is in `en public/react`; existing HTML and vanilla-JavaScript controllers remain mounted as a compatibility bridge during the migration. The frontend supports English and Kiswahili; translation coverage still needs a review.
 
 This README describes the state at the end of the sprint. Anything not listed under "What it does" is not built.
 
@@ -51,7 +51,7 @@ This README describes the state at the end of the sprint. Anything not listed un
 
 ## Install and run
 
-Requirements: Node.js 20 or newer (tested on Node 24), on Windows PowerShell or any shell.
+Requirements: Node.js `^20.19.0` or `>=22.12.0` (tested on Node 24), on Windows PowerShell or any shell.
 
 1. Install dependencies:
 

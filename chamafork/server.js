@@ -121,6 +121,7 @@ const postgresPool = DATA_BACKEND === "postgres" ? createPostgresPool() : null;
 let postgresRuntimeLock;
 const DATA_FILE = process.env.CHAMA_DATA_FILE || path.join(__dirname, "data.json");
 const FRONTEND = path.join(__dirname, "..", "en public");
+const FRONTEND_BUILD = path.join(__dirname, "frontend-dist");
 const PROFILE_ICON_DIR = process.env.CHAMA_PROFILE_ICON_DIR || path.join(__dirname, "uploads", "profile-icons");
 const PROFILE_DETAILS_FILE = process.env.CHAMA_PROFILE_DETAILS_FILE || path.join(__dirname, "uploads", "profile-details.json");
 const PROFILE_ICON_SIZES = new Set([32, 180, 192, 512]);
@@ -1209,6 +1210,12 @@ app.get("/manifest.webmanifest", (req, res) => {
     icons: [{ src: "/brand-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
   });
 });
+app.use(express.static(FRONTEND_BUILD, {
+  setHeaders(res, filePath) {
+    const isHashedAsset = path.dirname(filePath) === path.join(FRONTEND_BUILD, "assets");
+    res.setHeader("Cache-Control", isHashedAsset ? "public, max-age=31536000, immutable" : "no-store");
+  }
+}));
 app.use(express.static(FRONTEND));
 app.get("/", (req, res) => res.sendFile(path.join(FRONTEND, "index.html")));
 app.get("/api/health/live", (_req, res) => res.json({ status: "ok" }));

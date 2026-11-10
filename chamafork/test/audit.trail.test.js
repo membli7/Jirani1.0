@@ -209,8 +209,10 @@ test("dashboard shows the audit panel only to the Chairperson and Treasurer", as
 
 test("audit viewer is hidden by default and handles a 403 without the global permission notice", async () => {
   const page = await (await fetch(`${baseUrl}/`)).text();
-  assert.match(page, /<section class="panel" id="audit-panel"[^>]*hidden>/);
-  assert.match(page, /id="audit-notice"[^>]*hidden/);
+  assert.match(page, /<div id="root"><\/div>/);
+  const dashboardTemplate = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "index.html"), "utf8");
+  assert.match(dashboardTemplate, /<section class="panel" id="audit-panel"[^>]*hidden>/);
+  assert.match(dashboardTemplate, /id="audit-notice"[^>]*hidden/);
   const script = await (await fetch(`${baseUrl}/chama.js`)).text();
   assert.match(script, /api\("\/api\/audit-log", \{ silentForbidden: true \}\)/);
   assert.match(script, /You do not have permission to view the audit log\./);

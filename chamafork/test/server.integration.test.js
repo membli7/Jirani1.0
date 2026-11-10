@@ -122,14 +122,22 @@ describe("Jirani Chama server", () => {
 
     const registerPage = await request("/register.html");
     assert.equal(registerPage.status, 200);
-    assert.match(await registerPage.text(), /id="register-chama-form"/);
+    const registerHtml = await registerPage.text();
+    assert.match(registerHtml, /<div id="root"><\/div>/);
+    assert.equal(registerPage.headers.get("cache-control"), "no-store");
+    const registerBundlePath = registerHtml.match(/src="([^"]+\.js)"/)?.[1];
+    assert.ok(registerBundlePath, "registration page must reference a built React bundle");
+    const registerBundle = await request(registerBundlePath);
+    assert.equal(registerBundle.status, 200);
+    assert.match(registerBundle.headers.get("content-type"), /javascript/);
+    assert.match(registerBundle.headers.get("cache-control"), /immutable/);
     const registerScript = await request("/register.js");
     assert.equal(registerScript.status, 200);
     assert.match(await registerScript.text(), /fetch\("\/api\/setup"/);
 
     const loginPage = await request("/member-login.html");
     assert.equal(loginPage.status, 200);
-    assert.match(await loginPage.text(), /method="post" action="\/api\/login"/);
+    assert.match(await loginPage.text(), /<div id="root"><\/div>/);
     const authPagesScript = await request("/auth-pages.js");
     assert.equal(authPagesScript.status, 200);
     const authPagesSource = await authPagesScript.text();
@@ -273,7 +281,9 @@ describe("Jirani Chama server", () => {
   test("profile page loads profile API data and securely saves profile details and photo icons", async () => {
     const page = await request("/profile.html");
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /src="\/profile\.js\?v=20261104\.2"/);
+    const pageHtml = await page.text();
+    assert.match(pageHtml, /<div id="root"><\/div>/);
+    assert.match(pageHtml, /src="\/assets\/main-[^\"]+\.js"/);
     const script = await request("/profile.js?v=20261104.2");
     assert.equal(script.status, 200);
     assert.match(await script.text(), /\/api\/profile\/photo\/\$\{size\}/);
