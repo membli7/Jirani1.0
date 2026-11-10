@@ -24,6 +24,8 @@ const memberLoginPage = fs.readFileSync(path.join(reactSource, "pages", "MemberL
 const authActions = fs.readFileSync(path.join(reactSource, "authActions.mjs"), "utf8");
 const chatPage = fs.readFileSync(path.join(reactSource, "components", "ChatPanel.jsx"), "utf8");
 const chatActions = fs.readFileSync(path.join(reactSource, "chatActions.mjs"), "utf8");
+const financePage = fs.readFileSync(path.join(reactSource, "components", "FinancialOverview.jsx"), "utf8");
+const financeActions = fs.readFileSync(path.join(reactSource, "financeActions.mjs"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
 const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
 
@@ -574,7 +576,7 @@ test("registration redirects to member sign-in when setup login requires a chama
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261110\.2" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261111\.1" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -670,31 +672,49 @@ test("authenticated dashboard navigation uses an accessible hamburger drawer", (
   assert.match(css, /\.topbar\.is-authenticated \.dashboard-tab svg\s*\{\s*width:\s*28px;\s*height:\s*28px;/);
 });
 
-test("You and Group have separate financial views with accessible monthly line charts", () => {
-  assert.match(html, /id="dashboard-tabs"[\s\S]*?data-dashboard-tab="you"[\s\S]*?data-dashboard-tab="group"/);
-  assert.match(html, /id="you-chart"/);
-  assert.match(html, /id="group-chart"/);
-  assert.match(script, /api\("\/api\/profile\/summary"\)/);
-  assert.match(script, /api\("\/api\/summary"\)/);
-  assert.match(script, /function renderFinancialTrend\(/);
-  assert.match(script, /function monthlyTransactionSeries\(/);
-  assert.match(script, /summary\.financialTrends/);
-  assert.match(script, /<polyline points=/);
-  assert.match(script, /<table class="trend-data">/);
-  assert.match(html, /Your monthly financial trends/);
-  assert.match(html, /Group monthly financial trends/);
-  assert.match(script, /await loadFinancialViews\(\)/);
+test("You and Group finance tabs and monthly charts are owned by React while preserving API feeds", () => {
+  assert.match(html, /<nav class="dashboard-tabs" id="react-dashboard-root"/);
+  assert.match(html, /id="react-finance-root"/);
+  assert.doesNotMatch(html, /id="dashboard-tabs"|id="you-dashboard"|id="group-chart"/);
+  assert.match(financePage, /createPortal\(<div hidden=\{!overviewVisible\}>\{section\}<\/div>, financeTarget\)/);
+  assert.match(financePage, /fetchFinanceSummary\("\/api\/profile\/summary"/);
+  assert.match(financePage, /fetchFinanceSummary\("\/api\/summary"/);
+  assert.match(financeActions, /summary\.financialTrends/);
+  assert.match(financePage, /<polyline points=\{points\}/);
+  assert.match(financePage, /className="trend-data"/);
+  assert.match(financePage, /Your monthly financial trends/);
+  assert.match(financePage, /Group monthly financial trends/);
+  assert.match(financePage, /group-contributions-title/);
+  assert.match(financePage, /window\.addEventListener\("chama:app-page"/);
+  assert.match(script, /new CustomEvent\("chama:dashboard-state"/);
+  assert.match(script, /new CustomEvent\("chama:app-page"/);
+  assert.doesNotMatch(script, /loadFinancialViews|renderFinancialTrend|function financeRows|selectedDashboardView/);
   assert.match(css, /\.topbar\.is-authenticated \.dashboard-tabs\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?bottom:\s*0;/);
+  assert.match(financeActions, /credentials: "same-origin"/);
 });
 
-test("phone financial views keep details readable and expose trend data by swipe", () => {
-  assert.match(script, /class="trend-data-wrap" role="region"[^>]*tabindex="0"/);
+test("attendance markup and behavior are owned by React, not the vanilla controller", () => {
+  const attendance = fs.readFileSync(path.join(reactSource, "components", "AttendancePanel.jsx"), "utf8");
+  const actions = fs.readFileSync(path.join(reactSource, "attendanceActions.mjs"), "utf8");
+  assert.match(html, /<div id="react-attendance-root"><\/div>/);
+  assert.doesNotMatch(html, /id="attendance-date"|id="attendance-members"|id="attendance-save"|attendance-overwrite-dialog/);
+  assert.match(attendance, /id="attendance-panel"/);
+  assert.match(attendance, /role === "secretary"/);
+  assert.match(attendance, /Mark all present/);
+  assert.match(attendance, /Meeting history/);
+  assert.match(attendance, /Edit history/);
+  assert.match(actions, /"\/api\/attendance"/);
+  assert.doesNotMatch(script, /renderAttendance|updateAttendanceCount|attendance-date|attendance-members|attendance-save|api\("\/api\/attendance"/);
+});
+
+test("phone React financial views keep details readable and expose trend data by swipe", () => {
+  assert.match(financePage, /className="trend-data-wrap" role="region"[^>]*tabIndex="0"/);
   assert.match(css, /\.trend-data-wrap\s*\{[^}]*overflow-x:\s*auto/);
   assert.match(css, /\.trend-data\s*\{\s*display:\s*table;\s*width:\s*max-content;/);
   assert.match(css, /\.finance-data-table\s*\{\s*min-width:\s*0;/);
   assert.match(css, /td::before\s*\{\s*content:\s*attr\(data-label\)/);
-  assert.match(script, /<table class="trend-data"><thead><tr><th>Month<\/th>/);
-  assert.match(script, /series\.map\(item => `<td>\$\{esc\(money\(item\.values\[index\]\)\)\}<\/td>`\)/);
+  assert.match(financePage, /className="trend-data"/);
+  assert.match(financePage, /tabIndex="0"/);
   assert.match(css, /button, \.button-primary, \.mini-btn, input, select, textarea \{ min-height: 44px; \}/);
   assert.match(css, /\.field input, \.field select, textarea \{ min-height: 44px; font-size: 16px; \}/);
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
@@ -702,9 +722,9 @@ test("phone financial views keep details readable and expose trend data by swipe
   assert.match(html, /href="\/chama\.css\?v=20261110\.2"/);
   assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
   assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
-  assert.match(html, /src="\/chama\.js\?v=20261110\.2"/);
-  assert.match(script, /const colorClass = item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
-  assert.doesNotMatch(script, /<i style=/);
+  assert.match(html, /src="\/chama\.js\?v=20261111\.1"/);
+  assert.match(financePage, /item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
+  assert.doesNotMatch(financePage, /dangerouslySetInnerHTML|innerHTML/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);
   assert.match(css, /\.trend-legend-item i\.is-ochre \{ background: #bd7b35; \}/);
 });

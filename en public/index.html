@@ -27,16 +27,7 @@
         <a href="#features" data-i18n="landingNavFeatures">Features</a><a href="#how-it-works" data-i18n="landingNavHowItWorks">How it works</a><a href="#pricing" data-i18n="landingNavPricing">Pricing</a><a href="#security" data-i18n="landingNavSecurity">Security</a><a href="#faq" data-i18n="landingNavFaq">FAQ</a><a href="#contact" data-i18n="landingNavContact">Contact</a>
       </nav>
      </div>
-     <nav class="dashboard-tabs" id="dashboard-tabs" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews">
-       <button class="dashboard-tab is-active" type="button" role="tab" data-dashboard-tab="you" aria-controls="you-dashboard" aria-selected="true" tabindex="0">
-         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5"></path></svg>
-         <span data-i18n="youTab">You</span>
-       </button>
-       <button class="dashboard-tab" type="button" role="tab" data-dashboard-tab="group" aria-controls="dashboard" aria-selected="false" tabindex="-1">
-         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"></circle><circle cx="17" cy="9" r="2.5"></circle><path d="M3 20c.7-3.3 2.6-5 6-5s5.3 1.7 6 5M15 15c3.3-.3 5.2 1.3 6 4"></path></svg>
-         <span data-i18n="groupTab">Group</span>
-       </button>
-     </nav>
+     <nav class="dashboard-tabs" id="react-dashboard-root" role="tablist" aria-label="Financial views" data-i18n-aria-label="financialViews"></nav>
      <div class="top-actions">
          <button id="notification-button" class="header-icon-button notification-button" type="button" aria-label="Open group messages" title="Messages" aria-controls="chat-panel">
            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
@@ -138,275 +129,10 @@
     </div>
     <ul id="setup-checklist-items" class="setup-checklist-items"></ul>
   </section>
-  <section class="financial-view" id="you-dashboard" role="tabpanel" tabindex="0" aria-labelledby="you-dashboard-title" hidden>
-    <div class="finance-view-heading">
-        <h2 id="you-dashboard-title" data-i18n="yourFinances">Your finances</h2>
-        <p data-i18n="yourFinancesCopy">Only your own records are shown here.</p>
-    </div>
-    <p class="finance-data-notice" id="you-data-notice" role="status" aria-live="polite" hidden></p>
-    <div class="finance-view-layout">
-      <div class="finance-table-grid">
-        <section class="finance-section" aria-labelledby="you-contributions-title">
-          <h3 id="you-contributions-title" data-i18n="yourContributions">Your contributions</h3>
-          <div class="table-wrap finance-table-wrap">
-            <table class="finance-data-table">
-                <caption class="screen-reader-only" data-i18n="yourContributions">Your contributions</caption>
-                <thead>
-                    <tr>
-                        <th scope="col" data-i18n="date">Date</th>
-                        <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        <th scope="col" data-i18n="note">Note</th>
-                    </tr>
-                </thead>
-                <tbody id="you-contributions"></tbody>
-            </table>
-        </div>
-        </section>
-        <section class="finance-section" aria-labelledby="you-fines-title">
-          <h3 id="you-fines-title" data-i18n="yourFines">Your fines</h3>
-          <div class="table-wrap finance-table-wrap">
-            <table class="finance-data-table">
-                <caption class="screen-reader-only" data-i18n="yourFines">Your fines</caption>
-                <thead>
-                    <tr>
-                        <th scope="col" data-i18n="date">Date</th>
-                        <th scope="col" data-i18n="reason">Reason</th>
-                        <th scope="col" data-i18n="amountDue">Amount due</th>
-                    </tr>
-                </thead>
-                <tbody id="you-fines"></tbody>
-            </table>
-          </div>
-        </section>
-        <section class="finance-section" aria-labelledby="you-loans-title">
-            <h3 id="you-loans-title" data-i18n="yourLoanBalances">Your loan balances</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="yourLoanBalances">Your loan balances</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="date">Date</th>
-                            <th scope="col" data-i18n="status">Status</th>
-                            <th scope="col" data-i18n="balanceDue">Balance due</th>
-                        </tr>
-                    </thead>
-                    <tbody id="you-loans"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="you-arrears-title">
-            <h3 id="you-arrears-title" data-i18n="yourArrears">Your arrears</h3>
-            <p class="finance-section-copy" data-i18n="arrearsIncludedCopy">Based on recorded outstanding loan balances and assessed unpaid fines.</p>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="yourArrears">Your arrears</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="dueItem">Amount due</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="you-arrears"></tbody>
-                </table>
-            </div>
-        </section>
-      </div>
-      <aside class="finance-chart-section" aria-labelledby="you-chart-title">
-        <h3 id="you-chart-title">Your monthly financial trends (KES)</h3>
-        <div class="dashboard-chart" id="you-chart"></div>
-      </aside>
-    </div>
-  </section>
-  <section class="financial-view" id="dashboard" role="tabpanel" tabindex="0" aria-labelledby="group-dashboard-title" hidden>
-    <div class="finance-view-heading">
-        <h2 id="group-dashboard-title" data-i18n="groupFinances">Group finances</h2>
-        <p data-i18n="groupFinancesCopy">Group totals are shown without individual member records.</p>
-    </div>
-    <p class="finance-data-notice" id="group-data-notice" role="status" aria-live="polite" hidden></p>
-    <div class="finance-view-layout">
-      <div class="group-finance-summary" id="group-finance-summary" aria-label="Group financial totals">
-        <article class="finance-summary-card"><span>This month’s contributions</span><strong id="group-contributions-total">Loading…</strong></article>
-        <article class="finance-summary-card"><span>Outstanding loans</span><strong id="group-loans-total">Loading…</strong></article>
-        <article class="finance-summary-card"><span>Group balance</span><strong id="group-balance-total">Loading…</strong></article>
-        <article class="finance-summary-card"><span>Active members</span><strong id="group-members-total">Loading…</strong></article>
-      </div>
-      <div class="finance-table-grid">
-        <section class="finance-section" aria-labelledby="group-balance-title">
-            <h3 id="group-balance-title" data-i18n="balance">Chama balance</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="balanceHistory">Chama balance by month</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="balance-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-contributions-title">
-            <h3 id="group-contributions-title" data-i18n="contributionHistory">Monthly contributions</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="contributionHistory">Monthly contributions</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="contributions-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-loans-title">
-            <h3 id="group-loans-title" data-i18n="loanApprovalHistory">Loan amounts approved each month</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="loanApprovalHistory">Loan amounts approved each month</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="outstanding-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-loan-balances-title">
-            <h3 id="group-loan-balances-title" data-i18n="groupLoanBalances">Group loan balance</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="groupLoanBalances">Group loan balance</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="dueItem">Due item</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="group-loan-balances"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-investments-title">
-            <h3 id="group-investments-title" data-i18n="shareCapitalToDate">Share capital (all time)</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="investmentHistory">Share capital by month</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="investments-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-fines-title">
-            <h3 id="group-fines-title" data-i18n="penaltiesToDate">Penalties recorded (all time)</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="fineHistory">Penalties by month</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fines-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-expenses-title">
-            <h3 id="group-expenses-title" data-i18n="expensesToDate">Expenses (all time)</h3>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="expenseHistory">Expenses by month</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="month">Month</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="expenses-history"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="finance-section" aria-labelledby="group-arrears-title">
-            <h3 id="group-arrears-title" data-i18n="groupArrears">Group arrears</h3>
-            <p class="finance-section-copy" data-i18n="arrearsIncludedCopy">Based on recorded outstanding loan balances and assessed unpaid fines.</p>
-            <div class="table-wrap finance-table-wrap">
-                <table class="finance-data-table">
-                    <caption class="screen-reader-only" data-i18n="groupArrears">Group arrears</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="dueItem">Amount due</th>
-                            <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="group-arrears"></tbody>
-                </table>
-            </div>
-        </section>
-      </div>
-      <aside class="finance-chart-section" aria-labelledby="group-chart-title">
-        <h3 id="group-chart-title">Group monthly financial trends (KES)</h3>
-        <div class="dashboard-chart" id="group-chart"></div>
-      </aside>
-    </div>
-  </section>
-  <section class="panel attendance-panel" id="attendance-panel" aria-labelledby="attendance-title">
-    <div class="panel-heading">
-      <div>
-        <h2 id="attendance-title">Meetings · attendance register</h2>
-        <p>Choose a meeting date to record attendance or review meeting history.</p>
-      </div>
-      <span id="attendance-readonly-label" class="status-pill" hidden>View-only for non-Secretary</span>
-    </div>
-    <div class="form-body">
-      <label class="field" for="attendance-date">Meeting date<input id="attendance-date" type="date" required></label>
-      <div id="attendance-editor" hidden>
-        <div class="attendance-quick-actions">
-          <button id="attendance-all-present" class="mini-btn" type="button">Mark all present</button>
-          <button id="attendance-all-absent" class="mini-btn" type="button">Mark all absent</button>
-        </div>
-        <div id="attendance-members" class="attendance-members" role="group" aria-label="Member attendance" data-i18n-aria-label="memberAttendance"></div>
-        <div class="attendance-summary-actions">
-          <strong id="attendance-count" aria-live="polite"></strong>
-          <button id="attendance-save" class="button-primary" type="button">Save register</button>
-        </div>
-      </div>
-      <div id="attendance-view" hidden>
-        <p id="attendance-personal-label" class="form-note" hidden></p>
-        <div id="attendance-view-members" class="attendance-members"></div>
-      </div>
-      <p id="attendance-attribution" class="form-note"></p>
-      <details id="attendance-edit-history" hidden>
-        <summary>Edit history</summary>
-        <div id="attendance-history" class="schedule-body"></div>
-      </details>
-      <div>
-        <h3 class="attendance-history-title">Meeting history</h3>
-        <div id="attendance-registers" class="schedule-body" aria-live="polite"></div>
-      </div>
-    </div>
-  </section>
+  <div id="react-finance-root"></div>
+  <div id="react-attendance-root"></div>
   <section class="panel loan-panel" id="loans-panel" aria-labelledby="loans-title">
-    <div class="panel-heading">
-      <div>
-        <h2 id="loans-title">Loan requests</h2>
-        <p id="loan-copy"></p>
-      </div>
-      <span class="status-pill">Three-role review</span>
-    </div>
-    <div class="loan-panel-body">
-      <p class="form-note">A loan needs three role decisions; borrowers cannot decide their own requests. If the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. This app records the decision; it does not transfer loan funds.</p>
-      <div id="loans" class="loan-list" aria-live="polite"></div>
-    </div>
+    <div id="react-loans-root"></div>
   </section>
   <div class="main-grid">
     <div class="column">
@@ -561,32 +287,9 @@
                 </table>
             </div>
         </section>
-    </section>
+        </section>
    <section class="panel" id="loan-request-panel">
-        <div class="panel-heading">
-            <div>
-                <h2>Request a loan</h2>
-                <p>For your own account</p>
-            </div>
-        </div>
-        <form id="loan-form" class="form-body">
-            <label class="field" for="loan-amount">Amount (KES)<input id="loan-amount" name="amount" type="number" min="1" step="1" required>
-            </label>
-            <label class="field" for="loan-months">Repayment period<select id="loan-months" name="months">
-                <option value="1">1 month</option>
-                <option value="2">2 months</option>
-                <option value="3">3 months</option>
-                <option value="6">6 months</option>
-                </select>
-            </label>
-            <label class="field" for="loan-guarantor-1">First guarantor<select id="loan-guarantor-1" name="guarantorIds" required></select></label>
-            <label class="field" for="loan-guarantor-2">Second guarantor<select id="loan-guarantor-2" name="guarantorIds" required></select></label>
-            <div id="loan-request-access-note" class="subscription-action-gate" role="status" aria-live="polite" hidden>
-                <p data-i18n="loanRequestUnavailable">New loan requests are unavailable while the group subscription is unpaid or expired.</p>
-                <a id="loan-request-renewal-link" href="#subscription-renewal-link" data-i18n="contactPlanRenewal">Contact us about a plan or renewal</a>
-            </div>
-           <button id="loan-submit" class="button-primary" type="submit" disabled>Submit request</button>
-        </form>
+        <div id="react-loan-request-root"></div>
    </section>
    <section class="panel" id="invite-panel" hidden>
         <div class="panel-heading">
@@ -1184,16 +887,7 @@
         </div>
     </form>
 </dialog>
- <dialog id="attendance-overwrite-dialog" aria-labelledby="attendance-overwrite-title">
-    <form method="dialog">
-        <h2 id="attendance-overwrite-title">Update attendance register?</h2>
-        <p>This meeting already has a register. Saving will replace its attendance and record the changes.</p>
-        <div class="dialog-actions">
-            <button value="cancel" class="mini-btn" type="submit">Cancel</button>
-            <button value="confirm" class="button-primary" type="submit">Continue</button>
-        </div>
-    </form>
- </dialog>
+
  <dialog id="contribution-date-dialog" aria-labelledby="contribution-date-title">
     <form id="contribution-date-form" class="form-body contribution-correction-form">
         <h2 id="contribution-date-title" data-i18n="correctContributionDate">Correct contribution date</h2>
@@ -1209,7 +903,7 @@
  </dialog>
  <script src="/i18n.js?v=20261108.3" defer></script>
  <script src="/write-requests.js?v=20261110.1" defer></script>
- <script src="/chama.js?v=20261110.2" defer></script>
+ <script src="/chama.js?v=20261111.1" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>
 </body>
 </html>

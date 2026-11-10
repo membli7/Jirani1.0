@@ -6,6 +6,9 @@ import MemberLoginPage from "./pages/MemberLoginPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
 import ChatPanel from "./components/ChatPanel.jsx";
+import FinancialOverview from "./components/FinancialOverview.jsx";
+import AttendancePanel from "./components/AttendancePanel.jsx";
+import LoansPanel, { LoanRequestPanel } from "./components/LoansPanel.jsx";
 
 const legacyControllerNames = new Set([
   "chama.js",
@@ -60,6 +63,19 @@ function LegacyPage({ pageKey }) {
     const chatHost = host.querySelector("#react-chat-root");
     const chatRoot = chatHost ? createRoot(chatHost) : null;
     chatRoot?.render(<ChatPanel />);
+    const dashboardHost = host.querySelector("#react-dashboard-root");
+    const financeTarget = host.querySelector("#react-finance-root");
+    const dashboardRoot = dashboardHost ? createRoot(dashboardHost) : null;
+    dashboardRoot?.render(<FinancialOverview financeTarget={financeTarget} />);
+    const attendanceHost = host.querySelector("#react-attendance-root");
+    const attendanceRoot = attendanceHost ? createRoot(attendanceHost) : null;
+    attendanceRoot?.render(<AttendancePanel />);
+    const loanRequestHost = host.querySelector("#react-loan-request-root");
+    const loanRequestRoot = loanRequestHost ? createRoot(loanRequestHost) : null;
+    loanRequestRoot?.render(<LoanRequestPanel />);
+    const loansHost = host.querySelector("#react-loans-root");
+    const loansRoot = loansHost ? createRoot(loansHost) : null;
+    loansRoot?.render(<LoansPanel />);
 
     let mounted = true;
     const loadedScripts = [];
@@ -84,6 +100,10 @@ function LegacyPage({ pageKey }) {
     return () => {
       mounted = false;
       chatRoot?.unmount();
+      dashboardRoot?.unmount();
+      attendanceRoot?.unmount();
+      loanRequestRoot?.unmount();
+      loansRoot?.unmount();
       loadedScripts.forEach(script => script.remove());
       document.body.querySelectorAll('script[data-chama-react-controller="true"]').forEach(script => script.remove());
     };

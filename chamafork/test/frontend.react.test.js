@@ -41,7 +41,7 @@ test("auth forms stack on mobile widths and retain scrollability and 44px touch 
   assert.match(frontendCss, /\.toggle-pin-btn\s*\{[^}]*width: 44px;[^}]*height: 44px;[^}]*min-height: 44px;[^}]*min-width: 44px;/);
 });
 
-test("signed-out landing, registration, member login and profile are React-owned while authenticated dashboard stays bridged", () => {
+test("React owns dashboard finance and attendance features plus the existing account routes", () => {
   const main = readSource("src/main.jsx");
   const app = readSource("src/App.jsx");
   const templates = readSource("src/pageTemplates.js");
@@ -50,6 +50,8 @@ test("signed-out landing, registration, member login and profile are React-owned
   const profile = readSource("src/pages/ProfilePage.jsx");
   const landing = readSource("src/pages/LandingPage.jsx");
   const chat = readSource("src/components/ChatPanel.jsx");
+  const finance = readSource("src/components/FinancialOverview.jsx");
+  const attendance = readSource("src/components/AttendancePanel.jsx");
   const profileMode = readSource("src/profileMode.mjs");
   const actions = readSource("src/registrationActions.mjs");
   assert.match(main, /createRoot\(mountNode\)/);
@@ -66,9 +68,25 @@ test("signed-out landing, registration, member login and profile are React-owned
   assert.match(app, /authenticated \? <LegacyPage pageKey="dashboard" \/> : <LandingPage \/>/);
   assert.match(app, /createRoot\(chatHost\)/);
   assert.match(app, /chatRoot\?\.render\(<ChatPanel \/>\)/);
+  assert.match(app, /dashboardRoot\?\.render\(<FinancialOverview financeTarget=\{financeTarget\} \/>\)/);
+  assert.match(app, /dashboardRoot\?\.unmount\(\)/);
+  assert.match(app, /createRoot\(attendanceHost\)/);
+  assert.match(app, /attendanceRoot\?\.render\(<AttendancePanel \/>\)/);
+  assert.match(app, /attendanceRoot\?\.unmount\(\)/);
   assert.match(chat, /useState\(\[\]\)/);
   assert.match(chat, /onSubmit=\{handleSubmit\}/);
   assert.match(chat, /postChatMessage\(/);
+  assert.match(finance, /onClick=\{\(\) => chooseView\("you"\)\}/);
+  assert.match(finance, /onClick=\{\(\) => chooseView\("group"\)\}/);
+  assert.match(finance, /createPortal\(<div hidden=\{!overviewVisible\}>\{section\}<\/div>, financeTarget\)/);
+  assert.match(finance, /window\.addEventListener\("chama:dashboard-state"/);
+  assert.match(finance, /fetchFinanceSummary\("\/api\/profile\/summary"/);
+  assert.match(finance, /fetchFinanceSummary\("\/api\/summary"/);
+  assert.match(attendance, /const secretary = user\?\.role === "secretary"/);
+  assert.match(attendance, /expectedRevision: register\?\.revision \?\? null/);
+  assert.match(attendance, /saveAttendance\(writeRequester, writeOwner\.current/);
+  assert.match(attendance, /dialogRef\.current/);
+  assert.match(attendance, /data-page-inactive=\{String\(!active\)\}/);
   assert.doesNotMatch(app, /"register\.js"|"auth-pages\.js"|"profile\.js"/);
   assert.match(registration, /<form id="register-chama-form"/);
   assert.match(registration, /onSubmit=\{handleSubmit\}/);
@@ -102,6 +120,70 @@ test("signed-out landing, registration, member login and profile are React-owned
   assert.match(app, /parsed\.body\.querySelectorAll\("script"\)/);
   assert.match(app, /dangerouslySetInnerHTML=\{\{ __html: page\.markup \}\}/);
   assert.match(app, /pageTemplates\[pageKey\]/);
+});
+
+test("React attendance helpers keep reads same-origin and writes revision-bound through the shared writer", async () => {
+  const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "attendanceActions.mjs")).href;
+  const { fetchAttendance, saveAttendance, todayNairobiDate } = await import(helperUrl);
+  let request;
+  const data = { members: [{ id: "m1", name: "Member" }], registers: [] };
+  const result = await fetchAttendance(async (url, options) => {
+    request = { url, options };
+    return { ok: true, status: 200, json: async () => data };
+  }, new AbortController().signal);
+  assert.equal(request.url, "/api/attendance");
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.credentials, "same-origin");
+  assert.equal(request.options.cache, "no-store");
+  assert.equal(request.options.headers["X-Requested-With"], "chama");
+  assert.equal(request.options.signal.aborted, false);
+  assert.deepEqual(result, data);
+  assert.equal(todayNairobiDate(new Date("2026-11-10T21:30:00Z")), "2026-11-11");
+
+  const owner = {};
+  const payload = { date: "2026-11-11", expectedRevision: 4, attendees: [{ userId: "m1", present: true }] };
+  let write;
+  const saved = await saveAttendance({ submit: async value => { write = value; return { message: "Attendance register updated." }; } }, owner, payload);
+  assert.strictEqual(write.owner, owner);
+  assert.equal(write.path, "/api/attendance");
+  assert.equal(write.method, "POST");
+  assert.deepEqual(write.body, payload);
+  assert.equal(saved.message, "Attendance register updated.");
+});
+
+test("React finance helpers preserve Nairobi month buckets, filters, and same-origin API contracts", async () => {
+  const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "financeActions.mjs")).href;
+  const { financialMonths, monthlyTransactionSeries, derivePersonalFinance, deriveGroupTrend, fetchFinanceSummary } = await import(helperUrl);
+  const months = financialMonths(new Date("2026-11-11T00:00:00+03:00"));
+  assert.equal(months[0].key, "2026-06");
+  assert.equal(months.at(-1).key, "2026-11");
+  const series = monthlyTransactionSeries([
+    { date: "2026-11-02", paymentType: "Monthly Contribution", amount: "1200", status: "confirmed" },
+    { date: "2026-11-03", paymentType: "Monthly Contribution", amount: "999", status: "pending-member" },
+    { date: "2026-11-04", paymentType: "Loan Repayment", amount: "300", status: "confirmed" },
+  ], months, "Contributions", "Monthly Contribution", "#347c62");
+  assert.equal(series.values.at(-1), 1200);
+  const personal = derivePersonalFinance({
+    contributions: [{ id: "c1", amount: 1200, status: "confirmed" }, { id: "c2", amount: 1, status: "pending-member" }],
+    fines: [{ id: "f1", amount: 50, status: "outstanding" }],
+    loans: { ongoing: [{ id: "l1", status: "approved", outstanding: 400 }], fullyPaid: [] },
+  });
+  assert.equal(personal.contributions.length, 1);
+  assert.deepEqual(personal.arrears.map(item => item.amount), [400, 50]);
+  assert.equal(deriveGroupTrend({ financialTrends: { months: ["2026-11"], contributions: [2300], loanRepayments: [400] } }, months)[0].values.at(-1), 2300);
+
+  let request;
+  const payload = await fetchFinanceSummary("/api/summary", async (url, options) => {
+    request = { url, options };
+    return { ok: true, status: 200, json: async () => ({ data: { contributions: 12 } }) };
+  });
+  assert.equal(request.url, "/api/summary");
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.credentials, "same-origin");
+  assert.equal(request.options.cache, "no-store");
+  assert.equal(request.options.headers["X-Requested-With"], "chama");
+  assert.deepEqual(payload, { contributions: 12 });
+  await assert.rejects(fetchFinanceSummary("/api/summary", async () => ({ ok: false, status: 503, json: async () => ({ message: "Unavailable" }) })), error => error.status === 503);
 });
 
 test("React landing contact helper preserves the same-origin endpoint, headers and JSON fields", async () => {

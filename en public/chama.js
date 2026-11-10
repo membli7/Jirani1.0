@@ -22,15 +22,12 @@ function memberStatusPresentation(value) {
 }
 const writeRequester = window.chamaWriteRequests.createWriteRequester();
 let state;
-let attendanceData;
 let guarantorMembers = [];
-let selectedAttendanceDate;
 let eventStream;
 let streamRetryTimer;
 let pollingTimer;
 let activityTimer;
 let authenticated = false;
-let selectedDashboardView = "you";
 let activeAppPage = "overview";
 let auditEntries = [];
 let auditPage = 0;
@@ -367,12 +364,12 @@ function render() {
   populateSelects(members, loans, guarantorMembers);
   if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
   renderElections(leadershipElections, user, notifications);
-  renderAttendance(user);
   renderSimulatedPaymentInbox(state.simulatedPayments || []);
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
   showAppPage(activeAppPage);
   window.jiraniI18n?.apply();
+  if (typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:dashboard-state", { detail: { user: state.user, transactions: state.transactions, activePage: activeAppPage } }));
   window.dispatchEvent(new Event("chama:dashboard-ready"));
 }
 function updateNavigationVisibility() {
@@ -395,25 +392,16 @@ function renderSimulatedPaymentInbox(payments = []) {
     return `<tr><td data-label="${esc(t("simulatedTransactionId"))}">${esc(payment.transactionId)}</td><td data-label="${esc(t("fakePhoneIdentifier"))}">${esc(payment.phoneNumber)}</td><td data-label="${esc(t("amountKes"))}">${money(payment.amount)}</td><td data-label="${esc(t("simulatedReference"))}">${esc(payment.reference)}</td><td data-label="${esc(t("receivedAt"))}">${esc(received)}</td><td data-label="${esc(t("status"))}"><span class="status-pill pending">${esc(status)}</span></td><td data-label="${esc(t("rawTestPayload"))}"><details><summary>${esc(t("rawTestPayload"))}</summary><pre class="simulated-payment-payload">${payload}</pre></details></td></tr>`;
   }).join("") || `<tr><td colspan="7" class="empty-state" data-i18n="noSimulatedPayments">${esc(t("noSimulatedPayments"))}</td></tr>`;
 }
-function updateDashboardTabs() {
-  for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
-    const selected = tab.dataset.dashboardTab === selectedDashboardView;
-    tab.classList.toggle("is-active", selected);
-    tab.setAttribute("aria-selected", String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-  }
-}
 function showAppPage(panelId, { scrollTarget } = {}) {
   const overview = panelId === "overview" || panelId === "dashboard";
-  if (panelId === "dashboard") selectedDashboardView = "you";
-  const financePanel = selectedDashboardView === "group" ? "dashboard" : "you-dashboard";
-  const activeIds = overview ? new Set([financePanel]) : new Set([panelId]);
+  if (panelId === "dashboard" && typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:finance-view", { detail: { view: "you" } }));
+  const activeIds = overview ? new Set() : new Set([panelId]);
   activeAppPage = overview ? "overview" : panelId;
-  const sectionIds = ["you-dashboard", "dashboard", "attendance-panel", "loans-panel"];
+  if (typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:app-page", { detail: { overview, panelId } }));
+  const sectionIds = ["attendance-panel", "loans-panel"];
   for (const sectionId of sectionIds) {
     const section = document.getElementById(sectionId);
     if (!section) continue;
-    if (sectionId === "you-dashboard" || sectionId === "dashboard") section.hidden = false;
     section.dataset.pageInactive = String(!activeIds.has(sectionId));
   }
 
@@ -436,85 +424,15 @@ function showAppPage(panelId, { scrollTarget } = {}) {
   for (const dropdown of menuBar.querySelectorAll(".nav-dropdown")) {
     dropdown.classList.toggle("active", !!dropdown.querySelector("a[aria-current='page']"));
   }
-  updateDashboardTabs();
   setNavigationOpen(false);
   if (scrollTarget) requestAnimationFrame(() => document.getElementById(scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   else window.scrollTo({ top: 0, behavior: "smooth" });
-}
-function renderAttendance(user) {
-  if (!attendanceData) return;
-  const isSecretary = user.role === "secretary";
-  const date = $("#attendance-date").value || selectedAttendanceDate || meetingDateToday();
-  selectedAttendanceDate = date;
-  $("#attendance-date").value = date;
-  $("#attendance-readonly-label").hidden = isSecretary;
-  $("#attendance-editor").hidden = !isSecretary;
-  $("#attendance-view").hidden = isSecretary;
-  const register = attendanceData.registers.find(item => item.date === date);
-  const current = new Map((register?.attendees || []).map(item => [item.userId, item]));
-  const editHistory = register?.history || [];
-
-  if (isSecretary) {
-    const visibleMembers = new Map(attendanceData.members.map(member => [member.id, {
-      userId: member.id,
-      name: member.name,
-      present: current.get(member.id)?.present ?? false
-    }]));
-    for (const attendee of register?.attendees || []) {
-      if (!visibleMembers.has(attendee.userId)) visibleMembers.set(attendee.userId, attendee);
-    }
-    const attendees = [...visibleMembers.values()].sort((left, right) => left.name.localeCompare(right.name));
-    $("#attendance-members").innerHTML = attendees.map(attendee => `<label class="attendance-row"><span>${esc(attendee.name)}</span><input type="checkbox" data-attendance-member="${esc(attendee.userId)}" ${attendee.present ? "checked" : ""}><span data-attendance-status>${attendee.present ? "Present" : "Absent"}</span></label>`).join("") || '<p class="empty-state">No active members to record.</p>';
-    updateAttendanceCount();
-    $("#attendance-save").textContent = register ? "Save changes" : "Save register";
-  } else {
-    $("#attendance-personal-label").hidden = user.role !== "member";
-    if (user.role === "member") {
-      const self = register?.attendees.find(item => item.userId === user.id);
-      $("#attendance-personal-label").textContent = self ? `Your attendance: ${self.present ? "Present" : "Absent"}` : "Your attendance is not listed in this register.";
-    }
-    $("#attendance-view-members").innerHTML = register
-      ? register.attendees.map(attendee => `<div class="attendance-row"><span>${esc(attendee.name)}</span><strong>${attendee.present ? "Present" : "Absent"}</strong></div>`).join("") || '<p class="empty-state">No attendance details recorded.</p>'
-      : '<p class="empty-state">No attendance register for this date.</p>';
-  }
-  const latestEdit = editHistory.at(-1);
-  const latestChanges = latestEdit?.changes.map(change => change.from
-    ? `changed ${change.name} from ${change.from} to ${change.to}${change.from === "present" && change.to === "absent" ? " (removed from present)" : ""}`
-    : `recorded ${change.name} as ${change.to}`).join("; ");
-  const editAttribution = latestEdit
-    ? ` Last edited by ${roleName(latestEdit.by.role)} at ${fmtDate(latestEdit.at)} ${fmtTime(latestEdit.at)} (${latestChanges || "edit recorded"}).`
-    : "";
-  $("#attendance-attribution").textContent = register
-    ? `Created by ${roleName(register.createdBy.role)} on ${fmtDate(register.createdAt)} at ${fmtTime(register.createdAt)}.${editAttribution}`
-    : "";
-  $("#attendance-edit-history").hidden = !register || editHistory.length === 0;
-  $("#attendance-history").innerHTML = editHistory.map(item => {
-    const changes = item.changes.length
-      ? item.changes.map(change => change.from
-        ? `changed ${esc(change.name)} from ${esc(change.from)} to ${esc(change.to)}${change.from === "present" && change.to === "absent" ? " (removed from present)" : ""}`
-        : `recorded ${esc(change.name)} as ${esc(change.to)}`).join("; ")
-      : "No attendance changes.";
-    return `<div class="schedule-item"><div><strong>Edited by ${esc(roleName(item.by.role))} ${esc(item.by.name)}</strong><span class="schedule-sub">${fmtDate(item.at)} at ${fmtTime(item.at)} · ${changes}</span></div></div>`;
-  }).join("") || "";
-  $("#attendance-registers").innerHTML = attendanceData.registers.map(item => {
-    return `<div class="schedule-item"><div><strong>${esc(fmtDate(`${item.date}T12:00:00`))}</strong><span class="schedule-sub">${item.presentCount} present · ${item.absentCount} absent · ${item.memberCount} members</span></div><button class="panel-link" type="button" data-attendance-date="${esc(item.date)}">Open register</button></div>`;
-  }).join("") || '<div class="empty-state">No meeting attendance recorded yet.</div>';
-}
-function updateAttendanceCount() {
-  const choices = [...$("#attendance-members").querySelectorAll("[data-attendance-member]")];
-  const present = choices.filter(input => input.checked).length;
-  const translate = value => window.jiraniI18n?.translateText(value) || value;
-  $("#attendance-count").textContent = `${present} ${translate("present")} · ${choices.length - present} ${translate("absent")} · ${choices.length} ${translate("members")}`;
-  choices.forEach(input => { input.closest(".attendance-row").querySelector("[data-attendance-status]").textContent = input.checked ? "Present" : "Absent"; });
 }
 function populateSelects(members, loans, guarantors = []) {
   $("#payment-member").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
   $("#incoming-user").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)} (${esc(roleName(member.role))})</option>`).join("");
   const selected = $("#payment-member").value;
   $("#payment-loan").innerHTML = `<option value="">Select a loan</option>${loans.filter(loan => loan.status === "approved" && loan.memberId === selected).map(loan => `<option value="${esc(loan.id)}">${esc(loan.memberName)} — ${money(loan.outstanding)}</option>`).join("")}`;
-  const options = `<option value="">Select a guarantor</option>${guarantors.map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("")}`;
-  $("#loan-guarantor-1").innerHTML = options;
-  $("#loan-guarantor-2").innerHTML = options;
 }
 function renderLeadership(changes, members, user) {
   $("#leadership-list").innerHTML = changes.map(change => {
@@ -645,39 +563,6 @@ function financeDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : esc(fmtDate(date));
 }
-function financeRows(selector, rows, columns, emptyMessage) {
-  const body = $(selector);
-  if (!body) return;
-  body.innerHTML = rows.length
-    ? rows.map(row => `<tr>${columns.map(([label], index) => `<td data-label="${esc(label)}">${row[index] ?? "—"}</td>`).join("")}</tr>`).join("")
-    : `<tr><td colspan="${columns.length}" class="empty-state">${esc(emptyMessage)}</td></tr>`;
-}
-function renderFinancialTrend(selector, months, series) {
-  const container = $(selector);
-  if (!container) return;
-  const width = 720, height = 270, left = 64, right = 20, top = 18, bottom = 50;
-  const plotWidth = width - left - right, plotHeight = height - top - bottom;
-  const maxValue = Math.max(0, ...series.flatMap(item => item.values.map(Number)));
-  const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 1000) * 1000 : 1000;
-  const x = index => left + (months.length < 2 ? plotWidth / 2 : index * plotWidth / (months.length - 1));
-  const y = value => top + plotHeight - Number(value) / scaleMax * plotHeight;
-  const grid = Array.from({ length: 5 }, (_, index) => {
-    const value = scaleMax * index / 4, py = y(value);
-    return `<line x1="${left}" y1="${py}" x2="${width - right}" y2="${py}" class="trend-grid"/><text x="${left - 8}" y="${py + 4}" text-anchor="end" class="trend-axis-label">${esc(Math.round(value).toLocaleString("en-KE"))}</text>`;
-  }).join("");
-  const paths = series.map(item => {
-    const points = item.values.map((value, index) => `${x(index)},${y(value)}`).join(" ");
-    const dots = item.values.map((value, index) => `<circle cx="${x(index)}" cy="${y(value)}" r="4" fill="${item.color}"><title>${esc(item.label)} · ${esc(months[index].label)}: ${esc(money(value))}</title></circle>`).join("");
-    return `<polyline points="${points}" fill="none" stroke="${item.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
-  }).join("");
-  const monthLabels = months.map((month, index) => `<text x="${x(index)}" y="${height - 20}" text-anchor="middle" class="trend-axis-label">${esc(month.label)}</text>`).join("");
-  const legend = series.map(item => {
-    const colorClass = item.color === "#bd7b35" ? "is-ochre" : "is-green";
-    return `<span class="trend-legend-item"><i class="trend-legend-dot ${colorClass}"></i>${esc(item.label)}</span>`;
-  }).join("");
-  const table = `<table class="trend-data"><thead><tr><th>Month</th>${series.map(item => `<th>${esc(item.label)}</th>`).join("")}</tr></thead><tbody>${months.map((month, index) => `<tr><th scope="row">${esc(month.label)}</th>${series.map(item => `<td>${esc(money(item.values[index]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  container.innerHTML = `<div class="financial-trend-legend">${legend}</div><svg class="financial-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly financial trends for the last six months">${grid}${paths}${monthLabels}</svg><div class="trend-data-wrap" role="region" aria-label="Monthly financial trend data. Scroll horizontally to view all series." tabindex="0">${table}</div>`;
-}
 function renderMonthlyClose(data) {
   if (!data) return;
   monthlyCloseData = data;
@@ -710,95 +595,13 @@ function renderMonthlyClose(data) {
   $("#month-close-entries").innerHTML = entryCards || `<p class="month-close-empty">${esc(t("monthCloseNoEntries"))}</p>`;
   if (omitted) $("#month-close-entries").insertAdjacentHTML("afterbegin", omitted);
 }
-function financialMonths(count = 6) {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
-  const year = Number(parts.find(item => item.type === "year").value), month = Number(parts.find(item => item.type === "month").value);
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(Date.UTC(year, month - 1 - (count - 1 - index), 1));
-    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-    return { key, label: date.toLocaleDateString("en-KE", { month: "short", year: "2-digit", timeZone: "UTC" }) };
-  });
-}
-function monthlyTransactionSeries(transactions, months, label, paymentType, color) {
-  const values = Object.fromEntries(months.map(month => [month.key, 0]));
-  for (const item of transactions) {
-    const date = item.date || item.at;
-    const key = typeof date === "string" ? date.slice(0, 7) : "";
-    if (item.paymentType === paymentType && item.status !== "pending-member" && Object.hasOwn(values, key)) values[key] += Number(item.amount) || 0;
-  }
-  return { label, color, values: months.map(month => values[month.key]) };
-}
-async function loadFinancialViews() {
-  const personalNotice = $("#you-data-notice");
-  const groupNotice = $("#group-data-notice");
-  const results = await Promise.allSettled([api("/api/profile/summary"), api("/api/summary")]);
-  const [personalResult, groupResult] = results;
-  if (personalResult.status === "fulfilled") {
-    const data = personalResult.value.data || {};
-    const contributions = Array.isArray(data.contributions) ? data.contributions : [];
-    const fines = Array.isArray(data.fines) ? data.fines : [];
-    const loans = [...(data.loans?.ongoing || []), ...(data.loans?.fullyPaid || [])];
-    const unpaidFines = fines.filter(item => item.status === "outstanding");
-    const openLoans = loans.filter(item => item.status === "approved");
-    const contributionTotal = contributions.filter(item => item.status !== "pending-member").reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    const loanTotal = openLoans.reduce((sum, item) => sum + (Number(item.outstanding) || 0), 0);
-    const finesTotal = unpaidFines.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    financeRows("#you-contributions", contributions.filter(item => item.status !== "pending-member").map(item => [financeDate(item.at), money(item.amount), esc(item.note || item.paymentType || "Monthly contribution")]), [[t("date")], [t("amountKes")], [t("note")]], "No contributions recorded.");
-    financeRows("#you-fines", fines.map(item => [financeDate(item.at || item.date), esc(item.reason || "Fine"), `${money(item.amount)}${item.status === "outstanding" ? " · Unpaid" : " · Paid"}`]), [[t("date")], [t("reason")], [t("amountDue")]], "No fines recorded.");
-    financeRows("#you-loans", loans.map(item => [financeDate(item.createdAt), esc(item.status), money(item.status === "approved" ? item.outstanding : 0)]), [[t("date")], [t("status")], [t("balanceDue")]], "No loans recorded.");
-    const arrears = [];
-    if (loanTotal > 0) arrears.push(["Outstanding loans", money(loanTotal)]);
-    if (finesTotal > 0) arrears.push(["Unpaid fines", money(finesTotal)]);
-    financeRows("#you-arrears", arrears, [[t("dueItem")], [t("amountKes")]], "No arrears recorded.");
-    const months = financialMonths();
-    const personalTransactions = state.transactions || [];
-    renderFinancialTrend("#you-chart", months, [
-      monthlyTransactionSeries(personalTransactions, months, "Contributions", "Monthly Contribution", "#347c62"),
-      monthlyTransactionSeries(personalTransactions, months, "Loan repayments", "Loan Repayment", "#bd7b35"),
-    ]);
-    if (personalNotice) personalNotice.hidden = true;
-  } else if (personalNotice) {
-    personalNotice.textContent = "Your financial details could not load. Try refreshing the page.";
-    personalNotice.hidden = false;
-  }
-  if (groupResult.status === "fulfilled") {
-    const summary = groupResult.value.data || {};
-    $("#group-contributions-total").textContent = money(summary.contributions);
-    $("#group-loans-total").textContent = money(summary.outstanding);
-    $("#group-balance-total").textContent = money(summary.balance);
-    $("#group-members-total").textContent = Number(summary.memberCount || 0).toLocaleString("en-KE");
-    const months = financialMonths();
-    const trends = summary.financialTrends;
-    const trendSeries = (key, label, color) => {
-      const positions = new Map((trends?.months || []).map((month, index) => [month, index]));
-      return {
-        label, color,
-        values: months.map(month => {
-          const index = positions.get(month.key);
-          return index === undefined ? 0 : Number(trends?.[key]?.[index]) || 0;
-        }),
-      };
-    };
-    renderFinancialTrend("#group-chart", months, [
-      trendSeries("contributions", "Contributions", "#347c62"),
-      trendSeries("loanRepayments", "Loan repayments", "#bd7b35"),
-    ]);
-    if (groupNotice) groupNotice.hidden = true;
-  } else if (groupNotice) {
-    groupNotice.textContent = "Group financial totals could not load. Try refreshing the page.";
-    groupNotice.hidden = false;
-  }
-}
 async function refresh() {
   try {
     state = await api("/api/dashboard");
     state.simulatedPayments = state.permissions.simulatePayments ? (await api("/api/payments/inbox")).data || [] : [];
-    attendanceData = await api("/api/attendance");
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
-    if (!selectedAttendanceDate) selectedAttendanceDate = meetingDateToday();
     $("#retry").hidden = true;
     render();
-    await loadFinancialViews();
     if (state.permissions.viewAuditLog) await loadAuditLog();
     connectEventStream();
   }
@@ -873,17 +676,13 @@ function connectEventStream() {
 function clearAppData() {
   state = null;
   monthlyCloseData = null;
-  attendanceData = null;
   $("#contribution-date-dialog")?.close();
   $("#contribution-date-form")?.reset();
   guarantorMembers = [];
   dividendDraft = null;
-  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#month-close-notice", "#month-close-summary", "#month-close-exceptions", "#month-close-entries", "#attendance-members", "#attendance-view-members", "#attendance-attribution", "#attendance-history", "#attendance-registers"]) {
+  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#month-close-notice", "#month-close-summary", "#month-close-exceptions", "#month-close-entries"]) {
     const node = $(selector); if (node) node.textContent = "";
   }
-  $("#attendance-editor").hidden = true;
-  $("#attendance-view").hidden = true;
-  $("#attendance-readonly-label").hidden = true;
   $("#invite-result").hidden = true;
   $("#month-close-notice").hidden = true;
   $("#copy-invite-code").hidden = true;
@@ -961,58 +760,6 @@ async function signOut() { try { await api("/api/logout", { method: "POST" }); s
 $("#logout").addEventListener("click", signOut);
 $("#menu-logout").addEventListener("click", signOut);
 $("#export-csv").addEventListener("click", () => { window.location.assign("/api/export.csv"); });
-$("#attendance-date").value = meetingDateToday();
-selectedAttendanceDate = $("#attendance-date").value;
-$("#attendance-date").addEventListener("change", () => renderAttendance(state.user));
-$("#attendance-registers").addEventListener("click", event => {
-  const button = event.target.closest("[data-attendance-date]");
-  if (!button) return;
-  $("#attendance-date").value = button.dataset.attendanceDate;
-  renderAttendance(state.user);
-});
-$("#attendance-members").addEventListener("change", event => {
-  if (event.target.matches("[data-attendance-member]")) updateAttendanceCount();
-});
-$("#attendance-all-present").addEventListener("click", () => {
-  $("#attendance-members").querySelectorAll("[data-attendance-member]").forEach(input => { input.checked = true; });
-  updateAttendanceCount();
-});
-$("#attendance-all-absent").addEventListener("click", () => {
-  $("#attendance-members").querySelectorAll("[data-attendance-member]").forEach(input => { input.checked = false; });
-  updateAttendanceCount();
-});
-function confirmAttendanceOverwrite() {
-  const dialog = $("#attendance-overwrite-dialog");
-  return new Promise(resolve => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
-    dialog.showModal();
-  });
-}
-$("#attendance-save").addEventListener("click", async event => {
-  const button = event.currentTarget;
-  const date = $("#attendance-date").value;
-  const existing = attendanceData.registers.find(item => item.date === date);
-  if (existing && !(await confirmAttendanceOverwrite())) return;
-  button.disabled = true;
-  try {
-    const attendees = [...$("#attendance-members").querySelectorAll("[data-attendance-member]")].map(input => ({
-      userId: input.dataset.attendanceMember,
-      present: input.checked
-    }));
-    await api("/api/attendance", {
-      method: "POST",
-      body: { date, expectedRevision: existing?.revision ?? null, attendees },
-      write: true
-    });
-    attendanceData = await api("/api/attendance");
-    renderAttendance(state.user);
-    notice("Attendance register saved.");
-  } catch (error) {
-    notice(error.message, true);
-  } finally {
-    button.disabled = false;
-  }
-});
 $("#retry").addEventListener("click", () => { $("#retry").disabled = true; refresh().finally(() => { $("#retry").disabled = false; }); });
 $("#month-close-form")?.addEventListener("submit", async event => {
   event.preventDefault();
@@ -1294,6 +1041,7 @@ function setNavigationOpen(open) {
   menuBar.setAttribute("aria-hidden", String(!open));
 }
 menuToggle.addEventListener("click", () => setNavigationOpen(menuToggle.getAttribute("aria-expanded") !== "true"));
+window.addEventListener("chama:financial-tab-selected", () => showAppPage("overview"));
 menuBar.addEventListener("click", event => {
   const dropdownToggle = event.target.closest(".nav-dropdown-toggle");
   if (dropdownToggle) {
@@ -1306,8 +1054,9 @@ menuBar.addEventListener("click", event => {
   const contributionsLink = event.target.closest("a[data-contributions-link]");
   if (contributionsLink) {
     event.preventDefault();
-    selectedDashboardView = state?.user?.role === "member" ? "you" : "group";
-    const targetId = selectedDashboardView === "group" ? "group-contributions-title" : "you-contributions-title";
+    const selectedView = state?.user?.role === "member" ? "you" : "group";
+    if (typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:finance-view", { detail: { view: selectedView } }));
+    const targetId = selectedView === "group" ? "group-contributions-title" : "you-contributions-title";
     showAppPage("overview", { scrollTarget: targetId });
     return;
   }
@@ -1317,12 +1066,6 @@ menuBar.addEventListener("click", event => {
     showAppPage(panelLink.dataset.panel);
   }
 });
-for (const tab of document.querySelectorAll("[data-dashboard-tab]")) {
-  tab.addEventListener("click", () => {
-    selectedDashboardView = tab.dataset.dashboardTab;
-    showAppPage("overview");
-  });
-}
 $("#notification-button").addEventListener("click", () => showAppPage("chat-panel"));
 document.addEventListener("click", event => {
   if (!state?.user || state.user.role !== "chairperson") return;
