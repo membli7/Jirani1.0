@@ -414,8 +414,7 @@ function pendingSubscriptionForPayment(source, payment, config, at = Date.now())
   return { chama, subscription, pending, plan };
 }
 function memberCapFor(source, chamaId) {
-  const cap = subscriptionFor(source, chamaId)?.maxMembers;
-  return Number.isSafeInteger(cap) && cap > 0 ? cap : null;
+  return null;
 }
 function settingAmount(key, fallback) {
   const raw = state.settings?.[key];
@@ -630,12 +629,7 @@ function requireAuth(req, res, next) {
 function requireRole(...roles) { return (req, res, next) => roles.includes(req.user.role) ? next() : res.status(403).json({ message: "Your role is not allowed to perform this action." }); }
 function requirePinChanged(req, res, next) { return req.user.mustChangePin ? res.status(403).json({ message: "Change your temporary PIN before making any records.", mustChangePin: true }) : next(); }
 function requireActiveSubscription(req, res, next) {
-  const subscription = subscriptionFor(state, req.user.chamaId);
-  if (subscriptionIsActive(subscription)) return next();
-  return res.status(402).json({
-    message: "This chama is in view-only access because its subscription is unpaid or expired. Renew to create new records.",
-    subscription: subscriptionView(subscription)
-  });
+  return next();
 }
 function protectWriteRequest(req, res, next) {
   const callbackPath = req.originalUrl.split("?")[0];
@@ -1918,8 +1912,6 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
         return { status: 400, body: { message: saved.attemptsRemaining === 0 ? "Invitation locked after too many incorrect activation codes." : "Incorrect activation code." } };
       }
       if (!validEmail(matchingCode.email) || !validNewPin(pin)) return { status: 400, body: { message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." } };
-      const subscription = subscriptionFor(state, matchingCode.chamaId);
-      if (!subscriptionIsActive(subscription)) return { status: 402, body: { message: "This chama is in view-only access because its subscription is unpaid or expired. Contact the Chairperson to arrange a plan or renewal.", subscription: subscriptionView(subscription) } };
       const memberCap = memberCapFor(state, matchingCode.chamaId);
       const activeMembers = scopeToChama(state.users, matchingCode.chamaId).filter(item => item.status === "active").length;
       if (memberCap !== null && activeMembers >= memberCap) return { status: 409, body: { message: `This chama has reached its ${memberCap}-member plan limit. Ask its Chairperson to renew or change plans before activating this invitation.` } };

@@ -271,14 +271,14 @@ test("landing pricing presents capped tiers and transparent enquiries without in
   assert.match(css, /\.pricing-card-featured\s*\{\s*border: 2px solid var\(--green\)/);
 });
 
-test("subscription rollout copy keeps access activation server-verified and makes expiry view-only", () => {
+test("subscription UI remains informational while server access is not subscription-gated", () => {
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   assert.doesNotMatch(server, /SUBSCRIPTION_TRIAL_DAYS/);
   assert.match(server, /function unpaidSubscription/);
   assert.match(server, /function requireActiveSubscription/);
   assert.match(server, /app\.post\("\/api\/invitations"[\s\S]*?requireActiveSubscription/);
   assert.match(server, /app\.post\("\/api\/payments"[\s\S]*?requireActiveSubscription/);
-  assert.match(server, /memberCap !== null && activeOrInvited >= memberCap/);
+  assert.match(server, /function memberCapFor\(source, chamaId\) \{\s+return null;/);
   assert.match(server, /app\.post\("\/api\/loans\/:id\/decisions"[\s\S]*?requireActiveSubscription/);
   assert.match(server, /app\.post\("\/api\/mpesa\/callback"[\s\S]*?STK payment requests are not implemented/);
   assert.match(server, /app\.post\("\/api\/mpesa\/c2b\/validation"/);
@@ -293,12 +293,13 @@ test("subscription rollout copy keeps access activation server-verified and make
   assert.match(script, /landingMenuToggle\?\.addEventListener/);
 });
 
-test("unpaid loan requests show a renewal path while officer-role revocation remains a security exception", () => {
+test("loan UI remains available while officer-role revocation stays protected", () => {
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   assert.match(html, /id="loan-request-access-note"[\s\S]*?id="loan-request-renewal-link"/);
   assert.match(html, /id="loan-submit" class="button-primary" type="submit" disabled/);
   assert.match(script, /function updateLoanRequestAccess\(/);
-  assert.match(script, /if \(state\?\.subscription\?\.status !== "active"\)/);
+  assert.match(script, /if \(note\) note\.hidden = true;/);
+  assert.match(script, /if \(submit\) submit\.disabled = false;/);
   assert.match(server, /app\.post\("\/api\/loans", requireAuth, requirePinChanged, requireActiveSubscription/);
   assert.match(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke", requireAuth, requirePinChanged, requireRole\("chairperson"\), idempotent/);
   assert.doesNotMatch(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke"[^\n]*requireActiveSubscription/);

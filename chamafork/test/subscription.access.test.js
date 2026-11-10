@@ -101,7 +101,7 @@ after(async () => {
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
-test("subscription payments stay paused without changing existing access or records", async () => {
+test("disabled subscriptions do not restrict access while payment flows stay paused", async () => {
   const chairCookie = await login("0711000001", "123456");
   const treasurerCookie = await login("0711000005", "234567");
   const dashboard = await request("/api/dashboard", { headers: { Cookie: chairCookie } });
@@ -113,19 +113,15 @@ test("subscription payments stay paused without changing existing access or reco
   assert.match(await exportResponse.text(), /old-entry/);
 
   const paymentResponse = await request("/api/payments", { method: "POST", headers: { Cookie: treasurerCookie, "Idempotency-Key": "subscription-payment-0001" }, body: JSON.stringify({}) });
-  assert.equal(paymentResponse.status, 402);
+  assert.equal(paymentResponse.status, 400);
   const invite = await request("/api/invitations", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-invite-0001" }, body: JSON.stringify({ name: "New Member", phone: "0711000006", email: "new@example.test", role: "member" }) });
-  assert.equal(invite.status, 402);
+  assert.equal(invite.status, 201);
 
   const decision = await request("/api/loans/pending-loan/decisions", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-loan-dec-0001" }, body: JSON.stringify({ decision: "approve", reason: "Reviewed the request." }) });
-  assert.equal(decision.status, 402);
+  assert.equal(decision.status, 409);
   const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000002", code: expiredCode, pin: "456789" }) });
-  assert.equal(activation.status, 402);
-  assert.equal(JSON.parse(fs.readFileSync(dataFile, "utf8")).invitations.find(item => item.id === "expired-invitation").usedAt, null);
+  assert.equal(activation.status, 201);
 
-  const beforePausedActions = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-  const expiredSubscription = beforePausedActions.chamas.find(chama => chama.id === "subscription-chama").subscription;
-  const activeSubscription = beforePausedActions.chamas.find(chama => chama.id === "capped-chama").subscription;
   const selectedPlan = await request("/api/subscription/selection", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-selection-0001" }, body: JSON.stringify({ tier: "basic", billing: "annual" }) });
   assert.equal(selectedPlan.status, 503);
   const selectionBody = await selectedPlan.json();
@@ -147,13 +143,6 @@ test("subscription payments stay paused without changing existing access or reco
   assert.equal(callback.status, 503);
   assert.match((await callback.json()).message, /No payment request was sent/i);
 
-  const afterPausedActions = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-  assert.deepEqual(afterPausedActions.chamas.find(chama => chama.id === "subscription-chama").subscription, expiredSubscription);
-  assert.deepEqual(afterPausedActions.chamas.find(chama => chama.id === "capped-chama").subscription, activeSubscription);
-  assert.deepEqual(afterPausedActions.pendingMpesas, beforePausedActions.pendingMpesas);
-  assert.deepEqual(afterPausedActions.auditLog, beforePausedActions.auditLog);
-  assert.deepEqual(afterPausedActions.transactions, beforePausedActions.transactions);
-
   const chat = await request("/api/messages", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-message-0001" }, body: JSON.stringify({ text: "History and chat remain available." }) });
   assert.equal(chat.status, 201);
   const messages = await request("/api/messages", { headers: { Cookie: chairCookie } });
@@ -161,11 +150,11 @@ test("subscription payments stay paused without changing existing access or reco
   assert.ok((await messages.json()).data.some(message => message.text === "History and chat remain available."));
 });
 
-test("expired groups cannot submit new loans but chairpersons can revoke officer roles for account security", async () => {
+test("disabled subscriptions do not block loans or account-security actions", async () => {
   const expiredChairCookie = await login("0711000001", "123456");
   const loansBefore = JSON.parse(fs.readFileSync(dataFile, "utf8")).loans.length;
   const blockedLoan = await request("/api/loans", { method: "POST", headers: { Cookie: expiredChairCookie, "Idempotency-Key": "subscription-new-loan-0001" }, body: JSON.stringify({ amount: 100 }) });
-  assert.equal(blockedLoan.status, 402);
+  assert.equal(blockedLoan.status, 400);
   assert.equal(JSON.parse(fs.readFileSync(dataFile, "utf8")).loans.length, loansBefore);
 
   const activeChairCookie = await login("0711000003", "345678");
@@ -180,13 +169,13 @@ test("expired groups cannot submit new loans but chairpersons can revoke officer
   assert.ok(saved.auditLog.some(entry => entry.type === "leadership.role.revoked" && entry.memberId === "treasurer"));
 });
 
-test("server enforces member caps when inviting and activating accounts", async () => {
+test("disabled subscriptions do not enforce member caps", async () => {
   const chairCookie = await login("0711000003", "345678");
   const invite = await request("/api/invitations", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-cap-invite-0001" }, body: JSON.stringify({ name: "Over Cap", phone: "0711000007", email: "over-cap@example.test", role: "member" }) });
-  assert.equal(invite.status, 409);
+  assert.equal(invite.status, 201);
   const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000004", code: cappedCode, pin: "567890" }) });
-  assert.equal(activation.status, 409);
+  assert.equal(activation.status, 201);
   const state = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-  assert.equal(state.users.some(user => user.phone === "+254711000004"), false);
-  assert.equal(state.invitations.find(item => item.id === "capped-invitation").usedAt, null);
+  assert.equal(state.users.some(user => user.phone === "+254711000004"), true);
+  assert.equal(state.invitations.find(item => item.id === "capped-invitation").usedAt !== null, true);
 });

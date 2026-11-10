@@ -6,17 +6,12 @@ const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&a
 const t = key => window.jiraniI18n?.t(key) || key;
 const SUBSCRIPTION_PAYMENTS_ENABLED = false;
 function updateLoanRequestAccess(subscription = state?.subscription) {
-  const blocked = subscription?.status !== "active";
   const note = $("#loan-request-access-note");
   const submit = $("#loan-submit");
   const renewalLink = $("#loan-request-renewal-link");
-  const contactLink = $("#subscription-renewal-link");
-  if (note) note.hidden = !blocked;
-  if (submit) submit.disabled = blocked;
-  if (renewalLink && contactLink) {
-    renewalLink.href = contactLink.href;
-    renewalLink.hidden = !blocked || contactLink.hidden;
-  }
+  if (note) note.hidden = true;
+  if (submit) submit.disabled = false;
+  if (renewalLink) renewalLink.hidden = true;
 }
 function memberStatusPresentation(value) {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
@@ -278,7 +273,7 @@ function render() {
   $("#greeting").textContent = `${t("welcome")}, ${user.name}`;
   const subscriptionNotice = $("#subscription-notice");
   if (subscriptionNotice) {
-    const renewalMessage = subscription?.renewalMessage || "";
+    const renewalMessage = "";
     const subscriptionNoticeCopy = $("#subscription-notice-copy");
     const subscriptionRenewalLink = $("#subscription-renewal-link");
     if (subscriptionNoticeCopy) subscriptionNoticeCopy.textContent = renewalMessage;
@@ -1167,10 +1162,6 @@ $("#simulated-payment-form").addEventListener("submit", async event => {
 $("#loan-form").addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
-  if (state?.subscription?.status !== "active") {
-    updateLoanRequestAccess(state?.subscription);
-    return;
-  }
   setButton(form, true);
   try {
     const formData = new FormData(form);
@@ -1184,11 +1175,6 @@ $("#loan-form").addEventListener("submit", async event => {
     await refresh();
   } catch (error) {
     notice(error.message, true);
-    if (error.status === 402) {
-      if (state?.subscription) state.subscription = { ...state.subscription, status: "expired" };
-      updateLoanRequestAccess(state?.subscription);
-      try { await refresh(); } catch {}
-    }
   } finally {
     setButton(form, false);
     updateLoanRequestAccess();
