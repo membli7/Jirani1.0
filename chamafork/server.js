@@ -1959,6 +1959,7 @@ function recordManualPayment(forcedPaymentType = null) {
     const member = scopeToChama(state.users, req.user.chamaId).find(item => item.id === memberId && item.status === "active"); const amount = Number(req.body?.amount); const paymentType = forcedPaymentType || clean(req.body?.paymentType); const method = clean(req.body?.method); const note = clean(req.body?.note);
   if (!member || !Number.isSafeInteger(amount) || amount < 1 || !PAYMENT_TYPES.has(paymentType) || method !== "Cash" || note.length < 3 || note.length > 500) return res.status(400).json({ message: "Manual entries are cash-only and require a 3-500 character note." });
   if (paymentType === "Loan Repayment") return res.status(400).json({ message: "Record loan repayments with the loan repayment form." });
+  if (paymentType === "Monthly Contribution") return res.status(400).json({ message: "Record contributions via /api/contributions endpoint." });
   const updated = structuredClone(state);
   const transaction = { id: newId(), at: now(), memberId: member.id, memberName: member.name, amount, method, paymentType, note, loanId: null, recordedBy: req.user.id, recordedByName: req.user.name, source: "manual-cash", status: "confirmed", idempotencyKey: req.idempotency.key, chamaId: req.user.chamaId }; updated.transactions.push(transaction);
   updated.auditLog.push(auditEntry("payment.recorded", transaction.id, req.user, { memberId: member.id, memberName: member.name, amount, paymentType }));

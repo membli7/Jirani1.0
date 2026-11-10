@@ -486,3 +486,18 @@ test("a legacy file gains the penalties ledger and member share capital", async 
   assert.equal(saved.users.find(item => item.id === member.id).shareCapital, 1950);
   assert.equal(Array.isArray(saved.penalties), true);
 });
+
+test("generic /api/payments rejects Monthly Contribution", async () => {
+  const before = persistedState();
+  const response = await postCash("/api/payments", {
+    memberId: member.id,
+    amount: 100,
+    paymentType: "Monthly Contribution",
+    method: "Cash",
+    note: "Monthly contribution attempt",
+  });
+  assert.equal(response.status, 400);
+  const after = persistedState();
+  assert.deepEqual(after.transactions, before.transactions, "no transaction recorded");
+  assert.deepEqual(after.auditLog, before.auditLog, "no audit event recorded");
+});
