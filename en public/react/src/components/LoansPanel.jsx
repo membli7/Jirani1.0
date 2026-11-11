@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loanRequestFromForm,
+  loanStatusPresentation,
   recordLoanDecision,
   requestDashboardRefresh,
   submitLoanRequest,
@@ -120,16 +121,6 @@ export function LoanRequestPanel() {
   </>;
 }
 
-function statusPresentation(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (["pending", "requested", "waiting for decisions"].includes(normalized)) return { label: "Pending", className: "pending" };
-  if (normalized === "approved") return { label: "Approved", className: "success" };
-  if (normalized === "rejected") return { label: "Rejected", className: "inactive" };
-  if (normalized === "repaid") return { label: "Repaid", className: "success" };
-  if (normalized === "closed") return { label: "Closed", className: "inactive" };
-  return { label: status || "Unknown", className: "pending" };
-}
-
 export default function LoansPanel() {
   const snapshot = useDashboardSnapshot();
   const [reasons, setReasons] = useState({});
@@ -182,7 +173,7 @@ export default function LoansPanel() {
         {!snapshot
           ? <div className="empty-state">Loading loan requests…</div>
           : visibleLoans.length ? visibleLoans.map(loan => {
-            const presentation = statusPresentation(loan.status);
+            const presentation = loanStatusPresentation(loan.status);
             const steps = Array.isArray(loan.approvalSteps) ? loan.approvalSteps : [];
             const canDecide = snapshot.permissions?.decideLoans === true && loan.canDecide === true;
             return <article className="loan-card" key={loan.id}>

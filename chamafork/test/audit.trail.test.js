@@ -212,8 +212,12 @@ test("audit viewer is hidden by default and handles a 403 without the global per
   assert.match(page, /<div id="root"><\/div>/);
   const dashboardTemplate = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "index.html"), "utf8");
   assert.match(dashboardTemplate, /<section class="panel" id="audit-panel"[^>]*hidden>/);
-  assert.match(dashboardTemplate, /id="audit-notice"[^>]*hidden/);
+  assert.match(dashboardTemplate, /id="react-audit-root"/);
+  const auditPanel = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "react", "src", "components", "AuditLogPanel.jsx"), "utf8");
+  const auditActions = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "react", "src", "auditActions.mjs"), "utf8");
+  assert.match(auditPanel, /permissions\?\.viewAuditLog === true/);
+  assert.match(auditPanel, /You do not have permission to view the audit log\./);
+  assert.match(auditActions, /\/api\/audit-log/);
   const script = await (await fetch(`${baseUrl}/chama.js`)).text();
-  assert.match(script, /api\("\/api\/audit-log", \{ silentForbidden: true \}\)/);
-  assert.match(script, /You do not have permission to view the audit log\./);
+  assert.doesNotMatch(script, /api\("\/api\/audit-log/);
 });

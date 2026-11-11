@@ -1,5 +1,15 @@
 const allowedTerms = new Set([1, 2, 3, 6]);
 
+export function loanStatusPresentation(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (["pending", "requested", "waiting for decisions"].includes(normalized)) return { label: "Pending", className: "pending" };
+  if (normalized === "approved") return { label: "Approved", className: "success" };
+  if (normalized === "rejected") return { label: "Rejected", className: "inactive" };
+  if (normalized === "repaid") return { label: "Repaid", className: "success" };
+  if (normalized === "closed") return { label: "Closed", className: "inactive" };
+  return { label: status || "Unknown", className: "pending" };
+}
+
 export function loanRequestFromForm(formData) {
   const amount = Number(formData.get("amount"));
   const months = Number(formData.get("months"));

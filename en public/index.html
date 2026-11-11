@@ -137,89 +137,10 @@
   <div class="main-grid">
     <div class="column">
        <section class="panel" id="ledger-panel">
-        <div class="panel-heading">
-            <div>
-                <h2>Transactions</h2>
-                <p id="transaction-copy"></p>
-            </div>
-            <button id="export-csv" class="mini-btn" type="button">Export transactions & attendance CSV</button>
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Member</th>
-                        <th>Amount</th>
-                        <th>Method</th>
-                        <th>Type</th>
-                        <th data-i18n="transactionActions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="transactions">
-                    <tr>
-                        <td colspan="6" class="skeleton" data-i18n="loading">Loading…</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="transaction-pagination" class="transaction-pagination" role="navigation" aria-label="Transaction pages" data-i18n-aria-label="transactionPages" hidden>
-            <button id="transactions-previous" class="mini-btn" type="button" data-i18n="previousPage" disabled>Previous</button>
-            <span id="transactions-page-info" role="status" aria-live="polite"></span>
-            <button id="transactions-next" class="mini-btn" type="button" data-i18n="nextPage" disabled>Next</button>
-        </div>
+        <div id="react-ledger-root"></div>
     </section>
     <section class="panel" id="members-panel">
-        <div class="panel-heading">
-            <div>
-                <h2>Members</h2>
-                <p data-i18n="membersPanelCopy">The active roster and invitation history are shown separately.</p>
-            </div>
-        </div>
-        <section class="member-directory" aria-labelledby="active-members-title">
-            <div class="member-directory-heading">
-                <div>
-                    <h3 id="active-members-title" data-i18n="activeMembersTitle">Active members</h3>
-                    <p class="member-directory-copy" data-i18n="activeMembersCopy">Current accounts in the chama roster.</p>
-                </div>
-            </div>
-            <div class="table-wrap members-table-wrap">
-                <table class="members-table" aria-labelledby="active-members-title">
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="memberNameColumn">Name</th>
-                            <th scope="col" data-i18n="memberPhoneColumn">Phone</th>
-                            <th scope="col" data-i18n="memberRoleColumn">Role</th>
-                            <th scope="col" data-i18n="memberStatusColumn">Status</th>
-                            <th scope="col" data-i18n="memberActionsColumn">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="members"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="member-directory member-history-section" aria-labelledby="member-history-title">
-            <div class="member-directory-heading">
-                <div>
-                    <h3 id="member-history-title" data-i18n="memberHistoryTitle">Invitation &amp; account history</h3>
-                    <p class="member-directory-copy" data-i18n="memberHistoryCopy">Review invitations, activations, expiry, revocation, and inactive accounts.</p>
-                </div>
-            </div>
-            <div class="table-wrap members-table-wrap">
-                <table class="members-table" aria-labelledby="member-history-title">
-                    <thead>
-                        <tr>
-                            <th scope="col" data-i18n="memberNameColumn">Name</th>
-                            <th scope="col" data-i18n="memberPhoneColumn">Phone</th>
-                            <th scope="col" data-i18n="memberRoleColumn">Role</th>
-                            <th scope="col" data-i18n="memberStatusColumn">Status</th>
-                            <th scope="col" data-i18n="memberActionsColumn">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="member-invitation-history"></tbody>
-                </table>
-            </div>
-        </section>
+        <div id="react-member-directory-root"></div>
     </section>
     </div>
     <aside class="column">
@@ -230,62 +151,9 @@
                 <p data-i18n="cashReceivedOnly">Record cash received only. This app records the entry; it does not transfer money.</p>
             </div>
         </div>
-        <form id="payment-form" class="form-body">
-            <label class="field" id="payment-member-field" for="payment-member" data-i18n="memberLabel">Member<select name="memberId" id="payment-member"></select>
-            </label>
-            <label class="field" for="cash-amount" data-i18n="amountKes">Amount (KES)<input id="cash-amount" name="amount" type="number" min="1" step="1" required></label>
-            <label class="field" for="cash-reference" data-i18n="receiptReference">Receipt reference<input id="cash-reference" name="referenceNumber" maxlength="80"></label>
-            <label class="field" for="cash-date" data-i18n="date">Date<input id="cash-date" name="date" type="date" required>
-                <small data-i18n="cashDateLimit">Dates can be backdated up to 30 days.</small>
-            </label>
-            <label class="field" id="payment-type-field" for="payment-type">Type<select name="paymentType" id="payment-type">
-                <option value="Monthly Contribution" data-i18n="monthlyContribution">Monthly Contribution</option>
-                <option value="Loan Repayment" data-i18n="repayment">Loan Repayment</option>
-                <option value="Fine" data-i18n="fine">Fine</option>
-            </select>
-        </label>
-        <label class="field" id="repayment-field" for="payment-loan" hidden>Loan<select name="loanId" id="payment-loan"></select>
-        </label>
-        <input type="hidden" name="method" value="Cash">
-        <label class="field" for="cash-note" data-i18n="note">Note<textarea name="note" id="cash-note" minlength="3" maxlength="500" required placeholder="e.g. Cash received at the weekly meeting" data-i18n-placeholder="cashNotePlaceholder"></textarea>
-        </label>
-        <button class="button-primary" type="submit">Record cash</button>
-        </form>
+        <div id="react-payment-root"></div>
         <section class="finance-section simulated-payment-section" id="simulated-payment-section" aria-labelledby="simulated-payment-title">
-            <h3 id="simulated-payment-title" data-i18n="simulatedInboxTitle">Simulated payment inbox (local test only)</h3>
-            <p class="finance-section-copy" data-i18n="simulatedInboxCopy">Use fake TEST-* values only. This does not connect to M-Pesa or any payment provider. Saving a simulation never changes a balance.</p>
-            <form id="simulated-payment-form" class="form-body">
-                <label class="field" for="simulated-transaction-id" data-i18n="simulatedTransactionId">Test transaction ID
-                    <input id="simulated-transaction-id" name="transactionId" type="text" pattern="TEST-[A-Za-z0-9][A-Za-z0-9-]{2,60}" maxlength="65" placeholder="TEST-PAY-2026-001" required>
-                </label>
-                <label class="field" for="simulated-phone-number" data-i18n="fakePhoneIdentifier">Fake phone identifier
-                    <input id="simulated-phone-number" name="phoneNumber" type="text" pattern="TEST-[A-Za-z0-9][A-Za-z0-9-]{2,60}" maxlength="65" placeholder="TEST-PHONE-001" required>
-                </label>
-                <label class="field" for="simulated-amount" data-i18n="simulatedAmount">Amount (KES)
-                    <input id="simulated-amount" name="amount" type="number" min="0.01" max="10000000" step="0.01" required>
-                </label>
-                <label class="field" for="simulated-reference" data-i18n="simulatedReference">Reference
-                    <input id="simulated-reference" name="reference" type="text" maxlength="80" placeholder="TEST-REF-001" required>
-                </label>
-                <label class="field" for="simulated-timestamp" data-i18n="simulatedTimestamp">Payment timestamp
-                    <input id="simulated-timestamp" name="timestamp" type="datetime-local" required>
-                </label>
-                <button class="button-primary" type="submit" data-i18n="createSimulation">Add unverified test payment</button>
-            </form>
-            <div class="finance-table-wrap simulated-payment-table-wrap">
-                <table class="finance-data-table simulated-payment-table">
-                    <thead><tr>
-                        <th scope="col" data-i18n="simulatedTransactionId">Test transaction ID</th>
-                        <th scope="col" data-i18n="fakePhoneIdentifier">Fake phone identifier</th>
-                        <th scope="col" data-i18n="amountKes">Amount (KES)</th>
-                        <th scope="col" data-i18n="simulatedReference">Reference</th>
-                        <th scope="col" data-i18n="receivedAt">Received</th>
-                        <th scope="col" data-i18n="status">Status</th>
-                        <th scope="col" data-i18n="rawTestPayload">Test payload</th>
-                    </tr></thead>
-                    <tbody id="simulated-payment-rows"></tbody>
-                </table>
-            </div>
+            <div id="react-simulated-payment-root"></div>
         </section>
         </section>
    <section class="panel" id="loan-request-panel">
@@ -333,25 +201,7 @@
             </fieldset>
             <button class="button-primary" type="submit" data-i18n="inviteBothOfficials">Invite both officials</button>
         </form>
-        <form id="invite-form" class="form-body">
-            <label class="field" for="invite-name">Name<input id="invite-name" name="name" autocomplete="name" required></label>
-            <label class="field" for="invite-phone">Kenyan phone<input id="invite-phone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required></label>
-            <label class="field" for="invite-email">Email address<input id="invite-email" name="email" type="email" autocomplete="email" maxlength="254" required></label>
-            <label class="field" for="invite-role">Requested role<select id="invite-role" name="role">
-                <option value="member" data-i18n="member">Member</option>
-                <option value="secretary" data-i18n="secretary">Secretary</option>
-                <option value="treasurer" data-i18n="treasurer">Treasurer</option>
-                </select>
-            </label>
-            <button class="button-primary" type="submit">Create invitation</button>
-        </form>
-        <div id="invite-result" class="invite-result" role="status" aria-live="polite" hidden>
-            <p id="invite-result-message"></p>
-            <div class="invite-code-row">
-                <output id="invite-code" aria-label="One-time activation code" data-i18n-aria-label="activationCodeLabel"></output>
-                <button id="copy-invite-code" class="mini-btn" type="button" data-i18n="copyCode" hidden>Copy code</button>
-            </div>
-        </div>
+        <div id="react-invite-root"></div>
     </section>
     <section class="panel" id="leadership-panel" hidden>
         <div class="panel-heading">
@@ -360,145 +210,22 @@
                 <p>After setup, the Secretary proposes officer candidates. Eligible group accounts vote by secret ballot; the Chairperson opens and closes voting and verifies the result. Verified changes take effect after 24 hours.</p>
             </div>
         </div>
-        <form id="leadership-form" class="form-body">
-            <label class="field" for="leadership-role">Office<select name="role" id="leadership-role">
-                <option value="chairperson" data-i18n="chairperson">Chairperson</option>
-                <option value="secretary" data-i18n="secretary">Secretary</option>
-                <option value="treasurer" data-i18n="treasurer">Treasurer</option>
-              </select>
-            </label>
-            <label class="field" for="incoming-user">Incoming official<select name="incomingUserId" id="incoming-user" required></select>
-            </label>
-            <label class="field" for="effective-date">Effective date<input id="effective-date" name="effectiveDate" type="date" required></label>
-            <button class="button-primary" type="submit">Propose assignment</button>
-        </form>
-        <div id="leadership-list" class="schedule-body"></div>
+        <div id="react-leadership-root"></div>
     </section>
     <section class="panel" id="leadership-elections-panel" aria-labelledby="leadership-elections-title" hidden>
-        <div class="panel-heading">
-            <div>
-                <h2 id="leadership-elections-title">Leadership elections</h2>
-                <p>The Chairperson or Secretary schedules candidates and a date. Eligible chama accounts can cast one secret vote on that date only, from midnight to 11:59 p.m. Nairobi time. The highest vote count wins and takes office when voting closes; a tie requires a scheduled runoff.</p>
-            </div>
-        </div>
-        <form id="election-proposal-form" class="form-body" hidden>
-            <h3>Schedule an election</h3>
-            <label class="field" for="election-date">Election date<input id="election-date" name="scheduledDate" type="date" required></label>
-            <label class="field" for="election-role">Office<select id="election-role" name="role" required>
-                <option value="chairperson">Chairperson</option>
-                <option value="secretary">Secretary</option>
-                <option value="treasurer">Treasurer</option>
-            </select></label>
-            <label class="field" for="election-candidates">Candidates (choose at least two active Members)
-                <select id="election-candidates" name="candidateIds" multiple size="6" required></select>
-            </label>
-            <button class="button-primary" type="submit">Schedule election</button>
-        </form>
-        <h3>Election notices</h3>
-        <div id="election-notifications" class="election-notifications" aria-live="polite"></div>
-        <h3>Ballots and results</h3>
-        <div id="leadership-elections" class="leadership-elections" aria-live="polite"></div>
+        <div id="react-elections-root"></div>
     </section>
     <section class="panel" id="audit-panel" aria-labelledby="audit-title" hidden>
-        <div class="panel-heading">
-            <div>
-                <h2 id="audit-title">Audit log</h2>
-                <p>Payments, loan decisions, and officer changes, newest first. Filter and page through entries; audit records cannot be edited or deleted.</p>
-            </div>
-        </div>
-        <p id="audit-notice" class="notice" role="status" hidden></p>
-        <div class="audit-controls">
-          <label class="audit-search" for="audit-search">Filter audit entries<input id="audit-search" type="search" placeholder="Name, action, or date" autocomplete="off"></label>
-          <div class="audit-pagination" role="navigation" aria-label="Audit log pages">
-            <button id="audit-previous" class="mini-btn" type="button" disabled>Previous</button>
-            <span id="audit-page-info" role="status" aria-live="polite">0 / 0 · 0 entries</span>
-            <button id="audit-next" class="mini-btn" type="button" disabled>Next</button>
-          </div>
-        </div>
-        <div class="table-wrap audit-table-wrap" role="region" aria-label="Audit log entries. Scroll within this area to review older entries." tabindex="0">
-            <table class="audit-table audit-log-table">
-                <thead>
-                    <tr>
-                        <th>When</th>
-                        <th>Who</th>
-                        <th>What happened</th>
-                    </tr>
-                </thead>
-                <tbody id="audit-list" aria-live="polite"></tbody>
-            </table>
-        </div>
-        <div class="panel-heading">
-            <div><h3 data-i18n="cashFlowTableTitle">Recent cash flows</h3></div>
-        </div>
-        <p id="audit-cash-flows-notice" class="notice" role="status" hidden></p>
-        <div class="table-wrap audit-table-wrap" role="region" aria-label="Cash flow entries in the audit log. Scroll within this area to review entries." tabindex="0">
-            <table class="audit-table cash-flow-table">
-                <thead>
-                    <tr>
-                        <th data-i18n="flow">Flow</th>
-                        <th data-i18n="type">Type</th>
-                        <th data-i18n="memberLabel">Member</th>
-                        <th data-i18n="amountKes">Amount</th>
-                        <th data-i18n="date">Date</th>
-                        <th data-i18n="time">Time</th>
-                        <th data-i18n="recordedBy">Recorded by</th>
-                        <th data-i18n="reason">Reason</th>
-                        <th data-i18n="status">Status</th>
-                        <th data-i18n="actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="audit-cash-flows-list" aria-live="polite"></tbody>
-            </table>
-        </div>
+        <div id="react-audit-root"></div>
     </section>
     <section class="panel" id="cash-flows-panel" aria-labelledby="cash-flows-title" aria-label="Monthly close review" data-i18n-aria-label="monthClosePanelLabel" hidden>
-        <div class="panel-heading">
-            <div>
-                <h2 id="cash-flows-title" data-i18n="monthCloseTitle">Month-end review</h2>
-                <p data-i18n="monthCloseIntro">Review cash entries and open items recorded in this chama. This is a read-only ledger review; it doesn't reconcile with bank or M-PESA statements or move money.</p>
-            </div>
-        </div>
-        <form id="month-close-form" class="month-close-form">
-            <label class="field" for="month-close-month"><span data-i18n="monthCloseMonth">Review month</span><input id="month-close-month" name="month" type="month" required></label>
-            <button class="button-primary" type="submit" data-i18n="monthCloseLoad">Build review</button>
-        </form>
-        <p id="month-close-notice" class="notice" role="status" aria-live="polite" hidden></p>
-        <div id="month-close-summary" class="month-close-summary" aria-live="polite"></div>
-        <h3 class="month-close-section-title" data-i18n="monthCloseItemsTitle">Items to review</h3>
-        <div id="month-close-exceptions" class="month-close-exceptions" aria-live="polite"></div>
-        <h3 class="month-close-section-title" data-i18n="monthCloseEntriesTitle">Cash ledger entries for this month</h3>
-        <div id="month-close-entries" class="month-close-entries" aria-live="polite"></div>
+        <div id="react-month-close-root"></div>
     </section>
     <section class="panel" id="penalty-panel" aria-labelledby="penalty-title" hidden>
-        <div class="panel-heading">
-            <div>
-                <h2 id="penalty-title">Monthly penalties</h2>
-                <p data-i18n="penaltyExplanation">After the configured deadline, active members who have not met the chama's configured welfare contribution may be charged the configured penalty.</p>
-            </div>
-        </div>
-        <form id="penalty-form" class="form-body">
-            <label class="field" for="penalty-month">Month<input id="penalty-month" name="month" type="month" required></label>
-            <button class="button-primary" type="submit">Assess monthly penalties</button>
-        </form>
-        <p id="penalty-result" class="form-note" role="status"></p>
+        <div id="react-penalty-root"></div>
     </section>
     <section class="panel" id="dividend-panel" aria-labelledby="dividend-title" hidden>
-        <div class="panel-heading">
-            <div>
-                <h2 id="dividend-title">Dividends</h2>
-                <p data-i18n="dividendExplanation">Preview each member's pro-rata share of a cycle's interest and penalties, after admin expenses. Nothing is paid out until you commit.</p>
-            </div>
-        </div>
-        <form id="dividend-form" class="form-body">
-            <label class="field" for="dividend-start" data-i18n="cycleStart">Cycle start<input id="dividend-start" name="cycleStartDate" type="date" required></label>
-            <label class="field" for="dividend-end" data-i18n="cycleEnd">Cycle end<input id="dividend-end" name="cycleEndDate" type="date" required></label>
-            <label class="field" for="dividend-expenses" data-i18n="adminExpensesKes">Admin expenses (KES)<input id="dividend-expenses" name="adminExpenses" type="number" min="0" step="1" required></label>
-            <button class="button-primary" type="submit">Calculate</button>
-        </form>
-        <div id="dividend-preview" aria-live="polite"></div>
-        <div class="form-body">
-            <button id="dividend-commit" class="button-primary" type="button" hidden>Commit dividends to share capital</button>
-        </div>
+        <div id="react-dividend-root"></div>
     </section>
     <section class="panel" id="chat-panel" aria-labelledby="chat-title">
         <div id="react-chat-root"></div>
@@ -876,31 +603,7 @@
        </nav>
     </footer>
 </section>
- <dialog id="cash-confirm-dialog" aria-labelledby="cash-confirm-title">
-    <form method="dialog" id="cash-confirm-form">
-        <h2 id="cash-confirm-title" data-i18n="confirmCashEntry">Confirm cash entry</h2>
-        <p>This records cash already received; it does not transfer money.</p>
-        <p id="cash-confirm-summary"></p>
-        <div class="dialog-actions">
-            <button value="cancel" class="mini-btn" type="submit" data-i18n="cancel">Cancel</button>
-            <button value="confirm" class="button-primary" type="submit" data-i18n="confirmCashEntry">Confirm cash entry</button>
-        </div>
-    </form>
-</dialog>
-
- <dialog id="contribution-date-dialog" aria-labelledby="contribution-date-title">
-    <form id="contribution-date-form" class="form-body contribution-correction-form">
-        <h2 id="contribution-date-title" data-i18n="correctContributionDate">Correct contribution date</h2>
-        <p data-i18n="dateCorrectionRules">Only Chairpersons and Treasurers can correct a recorded cash contribution. The change requires a reason, must stay in the same month and cannot change whether the contribution was on time or late.</p>
-        <p id="contribution-date-notice" class="notice" role="status" aria-live="polite" hidden></p>
-        <label class="field" for="contribution-correction-date"><span data-i18n="correctedDate">Corrected date</span><input id="contribution-correction-date" name="date" type="date" required></label>
-        <label class="field" for="contribution-correction-reason"><span data-i18n="correctionReason">Reason for correction</span><textarea id="contribution-correction-reason" name="reason" maxlength="500" required></textarea></label>
-        <div class="dialog-actions">
-            <button id="contribution-date-cancel" class="mini-btn" type="button" data-i18n="cancel">Cancel</button>
-            <button class="button-primary" type="submit" data-i18n="saveCorrection">Save correction</button>
-        </div>
-    </form>
- </dialog>
+<div id="react-pin-change-root"></div>
  <script src="/i18n.js?v=20261108.3" defer></script>
  <script src="/write-requests.js?v=20261110.1" defer></script>
  <script src="/chama.js?v=20261111.1" defer></script>

@@ -5,21 +5,6 @@ const money = value => value === null || value === undefined ? "Private" : `KES 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const t = key => window.jiraniI18n?.t(key) || key;
 const SUBSCRIPTION_PAYMENTS_ENABLED = false;
-function updateLoanRequestAccess(subscription = state?.subscription) {
-  const note = $("#loan-request-access-note");
-  const submit = $("#loan-submit");
-  const renewalLink = $("#loan-request-renewal-link");
-  if (note) note.hidden = true;
-  if (submit) submit.disabled = false;
-  if (renewalLink) renewalLink.hidden = true;
-}
-function memberStatusPresentation(value) {
-  const normalized = String(value ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
-  const labels = { active: "activeStatus", inactive: "inactiveStatus", pending: "pendingActivationStatus", activated: "activatedStatus", expired: "expiredStatus", revoked: "revokedStatus" };
-  const statusClass = normalized === "active" || normalized === "activated" ? "active" : normalized === "pending" ? "pending" : "inactive";
-  const label = labels[normalized] ? t(labels[normalized]) : normalized ? normalized.replace(/\b[a-z]/g, char => char.toUpperCase()) : t("unknownStatus");
-  return { normalized, statusClass, label };
-}
 const writeRequester = window.chamaWriteRequests.createWriteRequester();
 let state;
 let guarantorMembers = [];
@@ -29,10 +14,6 @@ let pollingTimer;
 let activityTimer;
 let authenticated = false;
 let activeAppPage = "overview";
-let auditEntries = [];
-let auditPage = 0;
-const auditPageSize = 25;
-let monthlyCloseData = null;
 let lastActivity = Date.now();
 let lastActivityPing = 0;
 const idleLimitMs = 15 * 60 * 1000;
@@ -192,13 +173,12 @@ function setLoginNotice(node, message) {
   node.hidden = !message;
 }
 function notice(message, error = false) { const node = $("#notice"); node.textContent = window.jiraniI18n?.translateText(message) || message; node.classList.toggle("error", error); node.setAttribute("aria-live", error ? "assertive" : "polite"); node.setAttribute("role", error ? "alert" : "status"); }
+window.addEventListener("chama:notice-requested", event => {
+  const message = event.detail?.message;
+  if (typeof message === "string" && message) notice(message, event.detail?.error === true);
+});
 function setButton(form, disabled) { form.querySelector("button[type=submit]").disabled = disabled; }
 function roleName(role) { return window.jiraniI18n?.roleName(role) || (role ? role[0].toUpperCase() + role.slice(1) : ""); }
-function loanStatusLabel(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (["pending", "requested", "waiting for decisions"].includes(normalized)) return "Pending";
-  return ({ approved: "Approved", rejected: "Rejected", repaid: "Repaid", closed: "Closed" })[normalized] || status;
-}
 function chairpersonChecklistItems(members, invitations, overviewReviewed) {
   const hasRole = role => members.some(member => member.role === role && member.status === "active") ||
     invitations.some(invitation => invitation.requestedRole === role && !invitation.usedAt && !invitation.revocation && Date.parse(invitation.expiresAt) > Date.now());
@@ -250,7 +230,7 @@ function meetingDateToday() {
 }
 
 function render() {
-  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges, leadershipElections = [], notifications = [], subscription } = state;
+  const { user, permissions, summary, members, invitations = [], transactions, loans, approvalQueue = [], pendingLoans, leadershipChanges, subscription } = state;
   if (!authenticated) {
     authenticated = true;
     lastActivity = Date.now();
@@ -274,7 +254,6 @@ function render() {
     if (subscriptionRenewalLink) subscriptionRenewalLink.hidden = !renewalMessage;
     subscriptionNotice.hidden = !renewalMessage;
   }
-  updateLoanRequestAccess(subscription);
   renderChairpersonSetupChecklist(user, members, invitations);
   const balance = $("#balance");
   const contributions = $("#contributions");
@@ -283,7 +262,6 @@ function render() {
   if (contributions) contributions.textContent = money(summary.contributions);
   if (outstanding) outstanding.textContent = money(summary.outstanding);
   [$("#balance"), $("#contributions"), $("#outstanding")].forEach(node => node?.classList.remove("skeleton"));
-  $("#transaction-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Only your confirmed entries are shown." : "All confirmed group entries.");
   $("#members-panel").hidden = user.role === "member";
   $("#payment-panel").hidden = !permissions.recordPayments;
   $("#simulated-payment-section").hidden = !permissions.simulatePayments;
@@ -293,83 +271,14 @@ function render() {
   $("#penalty-panel").hidden = !permissions.assessPenalties;
   $("#dividend-panel").hidden = !permissions.manageDividends;
   $("#cash-flows-panel").hidden = user.role === "member";
-  const monthCloseInput = $("#month-close-month");
-  if (monthCloseInput) {
-    monthCloseInput.max = meetingDateToday().slice(0, 7);
-    if (!monthCloseInput.value) monthCloseInput.value = meetingDateToday().slice(0, 7);
-  }
-  $("#leadership-form").hidden = !permissions.bootstrapLeadership;
   $("#leadership-elections-panel").hidden = false;
-  $("#election-proposal-form").hidden = !permissions.proposeLeadershipElection;
-  $("#election-date").min = meetingDateToday();
-  $("#election-candidates").innerHTML = members
-    .filter(member => member.status === "active" && member.role === "member")
-    .map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
-  $("#pin-change").hidden = !user.mustChangePin;
   if (user.mustChangePin) notice("Change your temporary PIN before making any records.", true);
 
-  const canCorrectContributionDates = ["chairperson", "treasurer"].includes(user.role);
-  $("#transactions").innerHTML = transactions.map(item => {
-    const contributionDate = item.date || item.at;
-    const canCorrect = canCorrectContributionDates && item.status === "confirmed" && item.paymentType === "Monthly Contribution" && item.method === "Cash" && /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || ""));
-    const correctionButton = canCorrect ? `<button class="mini-btn" type="button" data-correct-contribution="${esc(item.id)}">${esc(t("correctDate"))}</button>` : "";
-    return `<tr><td data-label="Date">${esc(fmtDate(contributionDate))}</td><td data-label="Member">${esc(item.memberName)}<span class="schedule-sub">${esc(item.payer || item.recordedByName || "")}</span></td><td data-label="Amount">${money(item.amount)}</td><td data-label="Method">${esc(item.method)}${item.ref ? `<span class="schedule-sub">${esc(item.ref)}</span>` : ""}</td><td data-label="Type">${esc(item.paymentType)}</td><td data-label="${esc(t("transactionActions"))}">${correctionButton}</td></tr>`;
-  }).join("") || '<tr><td colspan="6" class="empty-state">No transactions available.</td></tr>';
-  const memberRow = member => {
-    const status = memberStatusPresentation(member.status);
-    const activeRoleChange = (leadershipChanges || []).slice().reverse().find(change =>
-      change.status === "confirmed" && change.incomingUserId === member.id && change.role === member.role &&
-      !(change.audit || []).some(item => item.action === "revoked"));
-    const revokeButton = permissions.revokeLeadershipRoles && status.normalized === "active" && member.role !== "member" && activeRoleChange
-      ? `<button class="mini-btn danger" type="button" data-revoke-role="${esc(activeRoleChange.id)}">Revoke this role</button>`
-      : "";
-    return `<tr><td data-label="${esc(t("memberNameColumn"))}">${esc(member.name)}</td><td data-label="${esc(t("memberPhoneColumn"))}">${esc(member.phone)}</td><td data-label="${esc(t("memberRoleColumn"))}">${esc(roleName(member.role))}</td><td data-label="${esc(t("memberStatusColumn"))}"><span class="status-pill ${status.statusClass}">${esc(status.label)}</span></td><td data-label="${esc(t("memberActionsColumn"))}">${revokeButton}</td></tr>`;
-  };
-  const activeMemberRows = members.filter(member => String(member.status || "").toLowerCase() === "active").map(memberRow);
-  const inactiveMemberRows = members.filter(member => String(member.status || "").toLowerCase() !== "active").map(memberRow);
-  const invitationRows = permissions.manageMembers ? invitations.map(invitation => {
-    const revocation = invitation.revocation;
-    const expired = Date.parse(invitation.expiresAt) <= Date.now();
-    const age = Date.now() - Date.parse(invitation.invitedAt);
-    const statusKey = revocation ? "revokedStatus" : invitation.usedAt ? "activatedStatus" : expired ? "expiredStatus" : "pendingActivationStatus";
-    const statusClass = revocation || expired ? "inactive" : invitation.usedAt ? "active" : "pending";
-    const history = revocation
-      ? `<span class="schedule-sub">This invitation was revoked by ${esc(roleName(revocation.by?.role))} on ${esc(fmtDate(revocation.at))} at ${esc(fmtTime(revocation.at))} (reason: ${esc(revocation.reason)})</span>`
-      : invitation.usedAt ? `<span class="schedule-sub">Activated on ${esc(fmtDate(invitation.usedAt))} at ${esc(fmtTime(invitation.usedAt))}</span>` : "";
-    const undoButton = permissions.revokeInvitations && !revocation && !invitation.usedAt && age >= 0 && age <= 24 * 60 * 60 * 1000
-      ? `<button class="mini-btn danger" type="button" data-revoke-invitation="${esc(invitation.id)}">Undo</button>`
-      : "";
-    return `<tr><td data-label="${esc(t("memberNameColumn"))}">${esc(invitation.name)}${history}</td><td data-label="${esc(t("memberPhoneColumn"))}">${esc(invitation.phone)}</td><td data-label="${esc(t("memberRoleColumn"))}">${esc(roleName(invitation.requestedRole))}</td><td data-label="${esc(t("memberStatusColumn"))}"><span class="status-pill ${statusClass}">${esc(t(statusKey))}</span></td><td data-label="${esc(t("memberActionsColumn"))}">${undoButton}</td></tr>`;
-  }) : [];
-  $("#members").innerHTML = activeMemberRows.join("") || `<tr><td colspan="5" class="empty-state" data-i18n="noActiveMembers">${esc(t("noActiveMembers"))}</td></tr>`;
-  $("#member-invitation-history").innerHTML = [...inactiveMemberRows, ...invitationRows].join("") || `<tr><td colspan="5" class="empty-state" data-i18n="noMemberHistory">${esc(t("noMemberHistory"))}</td></tr>`;
-  $("#loan-copy").textContent = window.jiraniI18n.translateText(user.role === "member" ? "Your requests and eligible independent approvals." : "Three roles review each request; the Secretary fills a Chairperson or Treasurer borrower’s approval seat.");
-  const visibleLoans = [...new Map([...loans, ...approvalQueue].map(loan => [loan.id, loan])).values()];
-  $("#loans").innerHTML = visibleLoans.map(loan => {
-    const steps = loan.approvalSteps.map(step => {
-      const completed = step.status === "approve" || step.status === "reject";
-      const icon = step.status === "approve" ? "✓" : step.status === "reject" ? "✕" : "Awaiting";
-      const reason = step.reason ? `<span class="loan-step-reason">Reason: ${esc(step.reason)}</span>` : "";
-      const attribution = completed
-        ? `<span class="loan-step-meta">${esc(step.approverName)} · ${esc(fmtDate(step.at))} at ${esc(fmtTime(step.at))}</span>`
-        : '<span class="loan-step-meta">Decision not yet recorded</span>';
-      return `<li class="loan-step ${completed ? `is-${esc(step.status)}` : "is-awaiting"}"><strong>${esc(roleName(step.role))} <span aria-label="${step.status === "approve" ? "Approved" : step.status === "reject" ? "Rejected" : "Awaiting"}">${icon}</span></strong>${attribution}${reason}</li>`;
-    }).join("");
-    const action = permissions.decideLoans && loan.canDecide
-      ? `<div class="loan-decision"><label for="loan-reason-${esc(loan.id)}">Decision reason</label><textarea id="loan-reason-${esc(loan.id)}" aria-label="Reason for loan decision" data-reason-for="${esc(loan.id)}" minlength="5" maxlength="500" placeholder="Reason (required)"></textarea><div class="loan-decision-actions"><button class="mini-btn" data-loan="${esc(loan.id)}" data-decision="approve">Approve</button><button class="mini-btn danger" data-loan="${esc(loan.id)}" data-decision="reject">Reject</button></div></div>`
-      : "";
-    const statusClass = loan.status === "approved" ? "success" : loan.status === "rejected" ? "inactive" : "pending";
-    return `<article class="loan-card"><div class="loan-card-heading"><div><h3>${esc(loan.memberName)} · ${money(loan.amount)}</h3><span class="schedule-sub">${loan.months} month${loan.months === 1 ? "" : "s"} · Requested ${esc(fmtDate(loan.createdAt))}</span></div><span class="status-pill ${statusClass}">${esc(loanStatusLabel(loan.status))}</span></div><p class="loan-progress">${esc(loan.progressMessage)}</p><ol class="loan-approval-trail" aria-label="Approval trail for ${esc(loan.memberName)}">${steps}</ol>${action}</article>`;
-  }).join("") || '<div class="empty-state">No loans available.</div>';
-  populateSelects(members, loans, guarantorMembers);
-  if (permissions.manageLeadership) renderLeadership(leadershipChanges || [], members, user);
-  renderElections(leadershipElections, user, notifications);
-  renderSimulatedPaymentInbox(state.simulatedPayments || []);
   $("#app").hidden = false; $("#login").hidden = true;
   updateNavigationVisibility();
   showAppPage(activeAppPage);
   window.jiraniI18n?.apply();
-  if (typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:dashboard-state", { detail: { user: state.user, transactions: state.transactions, activePage: activeAppPage } }));
+  if (typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("chama:dashboard-state", { detail: { user: state.user, transactions: state.transactions, loans: state.loans, approvalQueue: state.approvalQueue, members: state.members, invitations: state.invitations, leadershipChanges: state.leadershipChanges, leadershipElections: state.leadershipElections, notifications: state.notifications, simulatedPayments: state.simulatedPayments || [], permissions: state.permissions, guarantorMembers, subscription: state.subscription, activePage: activeAppPage } }));
   window.dispatchEvent(new Event("chama:dashboard-ready"));
 }
 function updateNavigationVisibility() {
@@ -381,16 +290,6 @@ function updateNavigationVisibility() {
     const links = [...dropdown.querySelectorAll("a[data-panel]")];
     dropdown.hidden = links.length > 0 && links.every(link => link.hidden);
   }
-}
-function renderSimulatedPaymentInbox(payments = []) {
-  const body = $("#simulated-payment-rows");
-  if (!body) return;
-  body.innerHTML = payments.map(payment => {
-    const payload = esc(JSON.stringify(payment.rawPayload || {}, null, 2));
-    const status = window.jiraniI18n?.translateText(payment.status) || payment.status;
-    const received = `${fmtDate(payment.receivedAt)} ${fmtTime(payment.receivedAt)}`;
-    return `<tr><td data-label="${esc(t("simulatedTransactionId"))}">${esc(payment.transactionId)}</td><td data-label="${esc(t("fakePhoneIdentifier"))}">${esc(payment.phoneNumber)}</td><td data-label="${esc(t("amountKes"))}">${money(payment.amount)}</td><td data-label="${esc(t("simulatedReference"))}">${esc(payment.reference)}</td><td data-label="${esc(t("receivedAt"))}">${esc(received)}</td><td data-label="${esc(t("status"))}"><span class="status-pill pending">${esc(status)}</span></td><td data-label="${esc(t("rawTestPayload"))}"><details><summary>${esc(t("rawTestPayload"))}</summary><pre class="simulated-payment-payload">${payload}</pre></details></td></tr>`;
-  }).join("") || `<tr><td colspan="7" class="empty-state" data-i18n="noSimulatedPayments">${esc(t("noSimulatedPayments"))}</td></tr>`;
 }
 function showAppPage(panelId, { scrollTarget } = {}) {
   const overview = panelId === "overview" || panelId === "dashboard";
@@ -428,173 +327,6 @@ function showAppPage(panelId, { scrollTarget } = {}) {
   if (scrollTarget) requestAnimationFrame(() => document.getElementById(scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   else window.scrollTo({ top: 0, behavior: "smooth" });
 }
-function populateSelects(members, loans, guarantors = []) {
-  $("#payment-member").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)}</option>`).join("");
-  $("#incoming-user").innerHTML = members.filter(member => member.status === "active").map(member => `<option value="${esc(member.id)}">${esc(member.name)} (${esc(roleName(member.role))})</option>`).join("");
-  const selected = $("#payment-member").value;
-  $("#payment-loan").innerHTML = `<option value="">Select a loan</option>${loans.filter(loan => loan.status === "approved" && loan.memberId === selected).map(loan => `<option value="${esc(loan.id)}">${esc(loan.memberName)} — ${money(loan.outstanding)}</option>`).join("")}`;
-}
-function renderLeadership(changes, members, user) {
-  $("#leadership-list").innerHTML = changes.map(change => {
-    const incoming = members.find(member => member.id === change.incomingUserId)?.name || "Unknown member";
-    const proposer = members.find(member => member.id === change.proposedBy)?.name || "Officer";
-    const revocation = (change.audit || []).find(item => item.action === "revoked");
-    const canConfirm = change.status === "pending" && change.proposedBy !== user.id;
-    const details = revocation
-      ? `<span class="schedule-sub">${esc(incoming)} was ${esc(roleName(change.role))} (${esc(fmtDate(`${change.effectiveDate}T12:00:00Z`))}), revoked (${esc(fmtDate(revocation.at))} ${esc(fmtTime(revocation.at))} by ${esc(roleName(revocation.byRole || "chairperson"))}; reason: ${esc(revocation.reason)})</span>`
-      : `<span class="schedule-sub">Officer assignment proposed by ${esc(proposer)} · ${esc(change.status)}</span>`;
-    return `<div class="schedule-item"><div><strong>${esc(revocation ? `${incoming} — role revoked` : `${roleName(change.role)}: ${incoming}`)}</strong>${details}</div>${canConfirm ? `<button class="mini-btn" data-confirm="${esc(change.id)}">Confirm</button>` : ""}</div>`;
-  }).join("") || '<div class="empty-state">No officer assignments recorded.</div>';
-}
-function renderElections(elections, user, notifications) {
-  $("#election-notifications").innerHTML = notifications.slice().reverse().map(item =>
-    `<article class="election-notice"><strong>${esc(fmtDate(item.at))} · Election update</strong><p>${esc(item.text)}</p></article>`
-  ).join("") || '<p class="empty-state">No election notices yet.</p>';
-  $("#leadership-elections").innerHTML = elections.slice().reverse().map(election => {
-    const candidates = election.candidates.map(candidate => `<li>${esc(candidate.name)}${candidate.active ? "" : " · no longer eligible"}</li>`).join("");
-    const labels = {
-      proposed: "Awaiting Chairperson acceptance", scheduled: "Scheduled", voting: "Voting open", closed: "Closed · awaiting verification",
-      verified: "Verified · role change scheduled", "verified-tie": "Tie verified · runoff open",
-      "verified-no-winner": "No winner", "runoff-needed": "Tie · runoff date needed", completed: "Role updated", cancelled: "Election cancelled", declined: "Proposal declined",
-    };
-    const countSummary = election.result
-      ? `<div class="election-counts"><strong>${election.result.votesCast} vote${election.result.votesCast === 1 ? "" : "s"}</strong><ul>${election.candidates.map(candidate => `<li>${esc(candidate.name)}: ${election.result.counts[candidate.id] || 0}</li>`).join("")}</ul></div>`
-      : election.status === "scheduled" ? `<p>${esc(t("Ballots become available on the election date."))}</p>` : `<p>${election.votesCast} vote${election.votesCast === 1 ? "" : "s"} recorded · ${election.eligibleVoters} eligible members</p>`;
-    const voteForm = election.canVote
-      ? `<form class="election-ballot" data-election-ballot="${esc(election.id)}"><label class="field" for="election-choice-${esc(election.id)}">Choose one candidate<select id="election-choice-${esc(election.id)}" name="candidateId" required><option value="">Select a candidate</option>${election.candidates.filter(candidate => candidate.active).map(candidate => `<option value="${esc(candidate.id)}">${esc(candidate.name)}</option>`).join("")}</select></label><button class="button-primary" type="submit">Cast secret vote</button></form>`
-      : election.hasVoted ? '<p class="election-action-note">Your secret vote is recorded.</p>' : "";
-    const actions = [
-      !election.scheduledDate && election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="accept" data-election-id="${esc(election.id)}">Accept candidates and open voting</button>` : "",
-      !election.scheduledDate && election.status === "proposed" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="decline" data-election-id="${esc(election.id)}">Decline proposal</button>` : "",
-      !election.scheduledDate && election.status === "voting" && user.role === "chairperson" ? `<button class="mini-btn danger" data-election-action="close" data-election-id="${esc(election.id)}">Close voting</button>` : "",
-      !election.scheduledDate && election.status === "closed" && user.role === "chairperson" ? `<button class="mini-btn" data-election-action="verify" data-election-id="${esc(election.id)}">Verify result</button>` : "",
-    ].filter(Boolean).join("");
-    const winner = election.winnerName ? `<p class="election-result">Winner: <strong>${esc(election.winnerName)}</strong>. ${election.activationAt ? `Portal access changes ${esc(fmtDate(election.activationAt))} at ${esc(fmtTime(election.activationAt))}.` : ""}</p>` : "";
-    const runoff = election.runoff ? '<p class="election-action-note">Runoff ballot for the tied candidates.</p>' : "";
-    const schedule = election.scheduledDate ? `<p class="election-action-note">${esc(t(election.status === "scheduled" ? "Voting opens" : "Election date"))} ${esc(fmtDate(election.scheduledDate))}. ${esc(t("Voting is available from midnight to 11:59 p.m. Nairobi time on that date."))}</p>` : "";
-    const runoffForm = election.canScheduleRunoff ? `<form class="election-runoff" data-election-runoff="${esc(election.id)}"><label class="field" for="runoff-date-${esc(election.id)}">${esc(t("Runoff date"))}<input id="runoff-date-${esc(election.id)}" name="scheduledDate" type="date" min="${meetingDateToday()}" required></label><button class="mini-btn" type="submit">${esc(t("Schedule runoff"))}</button></form>` : "";
-    return `<article class="election-card"><div class="election-card-heading"><div><h4>${esc(roleName(election.role))} election${election.runoff ? " · runoff" : ""}</h4><span class="schedule-sub">${election.scheduledDate ? `Scheduled ${esc(fmtDate(election.proposedAt))}` : election.acceptedAt ? `Voting opened ${esc(fmtDate(election.acceptedAt))} at ${esc(fmtTime(election.acceptedAt))}` : `Proposed ${esc(fmtDate(election.proposedAt))} by the Secretary`}</span></div><span class="status-pill ${election.status === "completed" ? "active" : ["verified-no-winner", "cancelled", "declined"].includes(election.status) ? "inactive" : "pending"}">${esc(t(labels[election.status] || election.status))}</span></div><ul class="election-candidates">${candidates}</ul>${schedule}${countSummary}${winner}${runoff}${voteForm}${runoffForm}${actions}</article>`;
-  }).join("") || '<p class="empty-state">No leadership elections are active.</p>';
-}
-function auditDescription(entry) {
-  switch (entry.type) {
-    case "payment.recorded": return `KES ${entry.amount} cash payment recorded for ${entry.memberName}`;
-    case "loan.requested": return `Loan requested: KES ${entry.amount} over ${entry.months} month${entry.months === 1 ? "" : "s"}`;
-    case "loan.decided": return `Loan ${entry.decision === "approve" ? "approved" : "rejected"}`;
-    case "leadership.proposed": return `${roleName(entry.role)} assignment proposed`;
-    case "leadership.confirmed": return `${roleName(entry.role)} assignment confirmed`;
-    case "leadership.role.revoked": return `${entry.memberName} removed as ${roleName(entry.role)}: ${entry.reason}`;
-    case "attendance.created": return `Attendance register created for ${entry.date}`;
-    case "attendance.edited": return `Attendance register edited for ${entry.date}`;
-    case "invitation.revoked": return `Invitation revoked: ${entry.reason}`;
-    default: return entry.type;
-  }
-}
-let dividendDraft = null;
-function clearDividendDraft() { dividendDraft = null; $("#dividend-preview").innerHTML = ""; $("#dividend-commit").hidden = true; }
-function renderDividendPreview(data) {
-  const rows = data.payouts.map(item => `<tr><td>${esc(item.name)}</td><td>${money(item.shareCapital)}</td><td>${money(item.dividend)}</td></tr>`).join("");
-  $("#dividend-preview").innerHTML = `<p class="form-note">Interest ${money(data.interestIncome)} and penalties ${money(data.penaltyIncome)}, less admin expenses ${money(data.adminExpenses)}, leave a pool of <strong>${money(data.distributablePool)}</strong>. Total share capital: ${money(data.totalShareCapital)}.${data.overlapsCommitted ? " This cycle overlaps a dividend already paid out, so it cannot be committed." : ""}</p><div class="table-wrap"><table><thead><tr><th>Member</th><th>Share capital</th><th>Dividend</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-$("#dividend-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; clearDividendDraft();
-  const values = Object.fromEntries(new FormData(form));
-  const input = { cycleStartDate: values.cycleStartDate, cycleEndDate: values.cycleEndDate, adminExpenses: Number(values.adminExpenses) };
-  try {
-    const { data } = await api("/api/dividends/calculate", { method: "POST", body: input });
-    dividendDraft = { input, data }; renderDividendPreview(data);
-    $("#dividend-commit").hidden = data.overlapsCommitted;
-    notice("Dividend preview ready. Nothing has been paid out yet.");
-  } catch (error) { notice(error.message, true); }
-});
-$("#dividend-form").addEventListener("input", clearDividendDraft);
-$("#dividend-commit").addEventListener("click", async event => {
-  if (!dividendDraft) return; const { input, data } = dividendDraft; const button = event.currentTarget; button.disabled = true;
-  try {
-    await api("/api/dividends/commit", { method: "POST", body: { ...input, payouts: data.payouts.map(item => ({ memberId: item.memberId, dividend: item.dividend })) }, write: true });
-    clearDividendDraft(); $("#dividend-form").reset(); notice("Dividends added to share capital."); await refresh();
-  } catch (error) { notice(error.message, true); }
-  finally { button.disabled = false; }
-});
-$("#penalty-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; setButton(form, true);
-  try {
-    const { data, message } = await api("/api/penalties/assess", { method: "POST", body: { month: new FormData(form).get("month") }, write: true });
-    const names = data.assessed.map(item => item.memberName);
-    $("#penalty-result").textContent = names.length ? `Penalised for ${data.month}: ${names.join(", ")}.` : `No members to penalise for ${data.month}.`;
-    notice(message); await refresh();
-  } catch (error) { notice(error.message, true); }
-  finally { setButton(form, false); }
-});
-async function loadAuditLog() {
-  const auditNotice = $("#audit-notice");
-  try {
-    const { data = [] } = await api("/api/audit-log", { silentForbidden: true });
-    auditNotice.hidden = true;
-    auditEntries = Array.isArray(data) ? data : [];
-    renderAuditLogPage();
-  } catch (error) {
-    auditEntries = [];
-    renderAuditLogPage();
-    auditNotice.textContent = error.status === 403 ? "You do not have permission to view the audit log." : "The audit log could not load. Try again.";
-    auditNotice.hidden = false;
-  }
-}
-function renderAuditLogPage() {
-  const query = $("#audit-search")?.value.trim().toLocaleLowerCase() || "";
-  const matches = auditEntries.filter(entry => !query || [
-    entry.by?.name,
-    entry.by?.role,
-    entry.type,
-    auditDescription(entry),
-    entry.at,
-  ].some(value => String(value ?? "").toLocaleLowerCase().includes(query)));
-  const pageCount = Math.max(1, Math.ceil(matches.length / auditPageSize));
-  auditPage = Math.min(auditPage, pageCount - 1);
-  const pageEntries = matches.slice(auditPage * auditPageSize, (auditPage + 1) * auditPageSize);
-  $("#audit-list").innerHTML = pageEntries.map(entry => `<tr><td>${esc(fmtDate(entry.at))} ${esc(fmtTime(entry.at))}</td><td>${esc(entry.by?.name || "Unknown")}${entry.by?.role ? ` (${esc(roleName(entry.by.role))})` : ""}</td><td>${esc(auditDescription(entry))}</td></tr>`).join("") || '<tr><td colspan="3" class="empty-state">No audit entries match this filter.</td></tr>';
-  const label = $("#audit-page-info");
-  if (label) label.textContent = `${matches.length ? auditPage + 1 : 0} / ${matches.length ? pageCount : 0} · ${matches.length} entries`;
-  $("#audit-previous").disabled = auditPage === 0;
-  $("#audit-next").disabled = auditPage >= pageCount - 1;
-}
-function financeDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : esc(fmtDate(date));
-}
-function renderMonthlyClose(data) {
-  if (!data) return;
-  monthlyCloseData = data;
-  const totals = data.totals || {};
-  const exceptions = data.exceptions || {};
-  const count = value => Number(value) || 0;
-  const summaryCards = [
-    { label: t("monthCloseContributions"), value: money(totals.contributionTotal), detail: `${count(totals.contributionCount)} ${t("monthCloseContributionCount")} · ${t("monthCloseWelfare")} ${money(totals.welfareAmount)} · ${t("monthCloseShareCapital")} ${money(totals.shareCapitalAmount)}` },
-    { label: t("monthCloseRepayments"), value: money(totals.repaymentTotal), detail: `${count(totals.repaymentCount)} ${t("monthCloseRepaymentCount")}` },
-    { label: t("monthCloseOpenLoans"), value: money(totals.openLoanBalance), detail: t("monthCloseNoTransferNote") },
-  ];
-  $("#month-close-summary").innerHTML = summaryCards.map(card => `<article class="month-close-stat"><h3>${esc(card.label)}</h3><strong>${esc(card.value)}</strong><p>${esc(card.detail)}</p></article>`).join("");
-
-  const exceptionCards = [
-    { key: "membersWithoutContribution", title: t("monthCloseNoContribution"), format: item => esc(item.name), note: t("monthCloseMissingContributionNote") },
-    { key: "pendingLoanRequests", title: t("monthClosePendingLoans"), format: item => `${esc(item.memberName || t("member"))} · ${esc(money(item.amount))}` },
-    { key: "outstandingPenalties", title: t("monthCloseUnpaidPenalties"), format: item => `${esc(item.memberName || t("member"))} · ${esc(money(item.amount))}${item.reason ? ` · ${esc(item.reason)}` : ""}` },
-    { key: "incompleteReferences", title: t("monthCloseIncompleteReferences"), format: item => `${esc(item.memberName || t("member"))} · ${esc(item.paymentType)} · ${esc(money(item.amount))}` },
-  ];
-  $("#month-close-exceptions").innerHTML = exceptionCards.map(card => {
-    const items = Array.isArray(exceptions[card.key]) ? exceptions[card.key] : [];
-    const details = items.length ? `<ul>${items.map(item => `<li>${card.format(item)}</li>`).join("")}</ul>` : `<p class="month-close-empty">${esc(t("monthCloseNoItems"))}</p>`;
-    const note = card.note ? `<p class="month-close-note">${esc(card.note)}</p>` : "";
-    return `<article class="month-close-exception"><div class="month-close-exception-heading"><h4>${esc(card.title)}</h4><span>${items.length}</span></div>${details}${note}</article>`;
-  }).join("");
-
-  const entries = Array.isArray(data.entries) ? data.entries : [];
-  const entryCards = entries.map(item => `<article class="month-close-entry"><div class="month-close-entry-heading"><h4>${esc(item.memberName || t("member"))}</h4><strong>${esc(money(item.amount))}</strong></div><p>${esc(item.date)} · ${esc(item.type)}</p><p>${esc(t("monthCloseReference"))}: ${esc(item.referenceNumber || "—")} · ${esc(t("monthCloseRecordedBy"))}: ${esc(item.recordedByName || "—")}</p></article>`).join("");
-  const omitted = count(data.entriesOmittedCount) > 0 ? `<p class="month-close-note">${esc(t("monthCloseLatest100"))}</p>` : "";
-  $("#month-close-entries").innerHTML = entryCards || `<p class="month-close-empty">${esc(t("monthCloseNoEntries"))}</p>`;
-  if (omitted) $("#month-close-entries").insertAdjacentHTML("afterbegin", omitted);
-}
 async function refresh() {
   try {
     state = await api("/api/dashboard");
@@ -602,15 +334,16 @@ async function refresh() {
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
     $("#retry").hidden = true;
     render();
-    if (state.permissions.viewAuditLog) await loadAuditLog();
     connectEventStream();
   }
   catch (error) {
     if (error.data?.mustChangePin) {
-      authenticated = false; document.body.classList.remove("landing-mode"); $("#app").hidden = true; $("#login").hidden = true; $("#pin-change").hidden = false; $("#current-pin").focus();
+      authenticated = false; document.body.classList.remove("landing-mode"); $("#app").hidden = true; $("#login").hidden = true;
+      window.dispatchEvent(new CustomEvent("chama:pin-change-required"));
     } else if (!/session has expired/i.test(error.message)) { notice(error.message || t("retryError"), true); $("#retry").hidden = false; }
   }
 }
+window.addEventListener("chama:dashboard-refresh-requested", () => { void refresh(); });
 function setConnectionStatus(status) {
   const labels = { ready: t("checkingServer"), live: t("live"), reconnecting: t("reconnecting"), polling: t("polling"), offline: t("offline") };
   const node = $("#connection-status"); if (!node) return;
@@ -675,19 +408,10 @@ function connectEventStream() {
 }
 function clearAppData() {
   state = null;
-  monthlyCloseData = null;
-  $("#contribution-date-dialog")?.close();
-  $("#contribution-date-form")?.reset();
   guarantorMembers = [];
-  dividendDraft = null;
-  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#transactions", "#members", "#loans", "#leadership-list", "#leadership-elections", "#election-notifications", "#audit-list", "#audit-notice", "#dividend-preview", "#penalty-result", "#invite-result-message", "#invite-code", "#notice", "#month-close-notice", "#month-close-summary", "#month-close-exceptions", "#month-close-entries"]) {
+  for (const selector of ["#identity", "#greeting", "#role-label", "#balance", "#contributions", "#outstanding", "#notice"]) {
     const node = $(selector); if (node) node.textContent = "";
   }
-  $("#invite-result").hidden = true;
-  $("#month-close-notice").hidden = true;
-  $("#copy-invite-code").hidden = true;
-  for (const selector of ["#payment-member", "#payment-loan", "#incoming-user"]) $(selector)?.replaceChildren();
-  for (const selector of ["#payment-form", "#loan-form", "#invite-form", "#leadership-form", "#election-proposal-form", "#month-close-form", "#pin-form", "#setup-form"]) $(selector)?.reset();
   for (const key of Object.keys(sessionStorage)) if (key.startsWith("jirani:")) sessionStorage.removeItem(key);
 }
 function showLogin() { clearAppData(); if (eventStream) { eventStream.close(); eventStream = null; } stopPollingFallback(); clearTimeout(streamRetryTimer); streamRetryTimer = null; clearInterval(activityTimer); activityTimer = null; authenticated = false; document.body.classList.add("landing-mode"); setNavigationOpen(false); $(".topbar")?.classList.remove("is-authenticated"); $("#identity").textContent = ""; $("#menu-identity").textContent = ""; $("#logout").hidden = true; $("#app").hidden = true; $("#login").hidden = false; const setupForm = $("#setup-form"); const loginForm = $("#login-form"); const activationForm = $("#activation-form"); if (setupForm) setupForm.hidden = true; if (loginForm) loginForm.hidden = false; if (activationForm) activationForm.hidden = true; setLoginNotice($("#setup-notice"), ""); setLoginNotice($("#login-notice"), ""); setLoginNotice($("#activation-notice"), ""); if (typeof window !== "undefined") window.dispatchEvent(new Event("chama:session-ended")); }
@@ -707,47 +431,6 @@ $("#login-form")?.addEventListener("submit", async event => {
   try { await api("/api/login", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); setLoginNotice($("#login-notice"), ""); await refresh(); }
   catch (error) { if (error instanceof TypeError) { setConnectionStatus("offline"); setLoginNotice($("#login-notice"), "Cannot reach the server. Check that it is running, then try again."); } else setLoginNotice($("#login-notice"), error.message); } finally { setButton(form, false); }
 });
-const contributionDateDialog = $("#contribution-date-dialog");
-$("#transactions").addEventListener("click", event => {
-  const button = event.target.closest("[data-correct-contribution]");
-  if (!button || !state?.transactions) return;
-  const transaction = state.transactions.find(item => item.id === button.dataset.correctContribution);
-  if (!transaction?.date || !/^\d{4}-\d{2}-\d{2}$/.test(transaction.date)) return;
-  const month = transaction.date.slice(0, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) return;
-  const [year, monthNumber] = month.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-  const input = $("#contribution-correction-date");
-  input.min = `${month}-01`;
-  const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
-  input.max = meetingDateToday() < monthEnd ? meetingDateToday() : monthEnd;
-  input.value = transaction.date;
-  $("#contribution-correction-reason").value = "";
-  $("#contribution-date-notice").hidden = true;
-  $("#contribution-date-form").dataset.transactionId = transaction.id;
-  contributionDateDialog.showModal();
-});
-$("#contribution-date-cancel").addEventListener("click", () => contributionDateDialog.close());
-$("#contribution-date-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!form.reportValidity()) return;
-  setButton(form, true);
-  try {
-    const result = await api(`/api/contributions/${encodeURIComponent(form.dataset.transactionId)}/correct-date`, {
-      method: "POST", body: Object.fromEntries(new FormData(form)), write: form,
-    });
-    form.reset();
-    contributionDateDialog.close();
-    notice(result.message || t("contributionDateCorrected"));
-    await refresh();
-  } catch (error) {
-    const message = $("#contribution-date-notice");
-    message.textContent = window.jiraniI18n?.translateText(error.message) || error.message;
-    message.classList.add("error");
-    message.hidden = false;
-  } finally { setButton(form, false); }
-});
 
 $("#activation-form")?.addEventListener("submit", async event => {
   event.preventDefault(); const form = event.currentTarget; setButton(form, true);
@@ -759,39 +442,7 @@ $("#show-login")?.addEventListener("click", () => { $("#activation-form").hidden
 async function signOut() { try { await api("/api/logout", { method: "POST" }); showLogin(); notice("Signed out."); } catch (error) { notice(error.message, true); } }
 $("#logout").addEventListener("click", signOut);
 $("#menu-logout").addEventListener("click", signOut);
-$("#export-csv").addEventListener("click", () => { window.location.assign("/api/export.csv"); });
 $("#retry").addEventListener("click", () => { $("#retry").disabled = true; refresh().finally(() => { $("#retry").disabled = false; }); });
-$("#month-close-form")?.addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!form.reportValidity()) return;
-  const noticeNode = $("#month-close-notice");
-  if (noticeNode) {
-    noticeNode.textContent = t("monthCloseLoading");
-    noticeNode.classList.remove("error");
-    noticeNode.hidden = false;
-  }
-  setButton(form, true);
-  try {
-    const result = await api(`/api/monthly-close?month=${encodeURIComponent($("#month-close-month").value)}`);
-    renderMonthlyClose(result.data);
-    if (noticeNode) noticeNode.textContent = t("monthCloseReady");
-  } catch (error) {
-    if (noticeNode) {
-      noticeNode.textContent = error.status === 403 ? t("forbidden") : error.status === 400 ? t("monthCloseSelectMonth") : t("monthCloseFailed");
-      noticeNode.classList.add("error");
-    }
-  } finally {
-    setButton(form, false);
-  }
-});
-$("#language-switch")?.addEventListener("change", () => {
-  if (monthlyCloseData) {
-    renderMonthlyClose(monthlyCloseData);
-    const status = $("#month-close-notice");
-    if (status && !status.classList.contains("error") && !status.hidden) status.textContent = t("monthCloseReady");
-  }
-});
 window.addEventListener("online", () => {
   setConnectionStatus("reconnecting");
   if (streamRetryTimer) { clearTimeout(streamRetryTimer); streamRetryTimer = null; }
@@ -799,220 +450,6 @@ window.addEventListener("online", () => {
   if (authenticated) { startPollingFallback(); refresh(); } else checkBackendConnection();
 });
 window.addEventListener("offline", () => { if (eventStream) { eventStream.close(); eventStream = null; } setConnectionStatus("offline"); startPollingFallback(); });
-
-document.body.insertAdjacentHTML("beforeend", '<section class="login-overlay" id="pin-change" hidden><form id="pin-form" class="login-card"><h2>Change your PIN</h2><p>Choose a private 6–12 digit PIN before using the dashboard.</p><label class="field" for="current-pin">Current PIN<input id="current-pin" name="currentPin" type="password" inputmode="numeric" required></label><label class="field" for="new-pin">New PIN<input id="new-pin" name="newPin" type="password" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label><button class="button-primary">Save PIN</button></form></section>');
-$("#pin-form")?.addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; setButton(form, true);
-  try { await api("/api/pin/change", { method: "POST", body: Object.fromEntries(new FormData(form)) }); form.reset(); notice("PIN changed successfully."); await refresh(); }
-  catch (error) { notice(error.message, true); } finally { setButton(form, false); }
-});
-
-$("#payment-member").addEventListener("change", () => populateSelects(state.members, state.loans));
-$("#payment-type").addEventListener("change", event => { $("#repayment-field").hidden = event.target.value !== "Loan Repayment"; });
-function confirmCashPayment(values) {
-  const dialog = $("#cash-confirm-dialog"); $("#cash-confirm-summary").textContent = `${values.memberName} · ${money(values.amount)} · ${values.paymentType}. Note: ${values.note}`;
-  return new Promise(resolve => { dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true }); dialog.showModal(); });
-}
-$("#payment-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
-  let request;
-  try { request = writeRequester.cashEntryRequest(new FormData(form)); }
-  catch (error) { notice(error.message, true); return; }
-  const values = request.body; values.memberName = $("#payment-member option:checked")?.textContent || "Selected member";
-  if (!(await confirmCashPayment(values))) return; setButton(form, true);
-  try {
-    delete values.memberName;
-    await api(request.path, {
-      method: "POST",
-      body: values,
-      write: form,
-      validateResponse: (result, key) => {
-        const transaction = result?.data;
-        const fields = ["id", "at", "memberId", "memberName", "amount", "method", "paymentType", "note", "loanId", "recordedBy", "recordedByName", "source", "status", "idempotencyKey"];
-        return !!transaction && fields.every(field => Object.hasOwn(transaction, field)) &&
-          typeof transaction.id === "string" && typeof transaction.at === "string" && transaction.idempotencyKey === key &&
-          transaction.memberId === values.memberId && transaction.amount === values.amount &&
-          transaction.paymentType === values.paymentType && transaction.method === "Cash" &&
-          transaction.note === values.note && transaction.status === "confirmed";
-      },
-    });
-    form.reset(); notice("Cash payment recorded."); await refresh();
-  } catch (error) {
-    notice(error.uncertain ? writeRequests.unconfirmedMessage("Transactions") : error.message, true);
-  } finally { setButton(form, false); }
-});
-$("#simulated-payment-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!form.reportValidity()) return;
-  setButton(form, true);
-  try {
-    const values = Object.fromEntries(new FormData(form));
-    values.amount = Number(values.amount);
-    values.timestamp = new Date(values.timestamp).toISOString();
-    await api("/api/payments/simulate", {
-      method: "POST",
-      body: values,
-      write: form,
-      validateResponse: result => result?.data?.status === "Unverified" && result.data.transactionId === values.transactionId.toUpperCase() && result.data.rawPayload?.testOnly === true,
-    });
-    form.reset();
-    state.simulatedPayments = (await api("/api/payments/inbox")).data || [];
-    renderSimulatedPaymentInbox(state.simulatedPayments);
-    window.jiraniI18n?.apply();
-    notice("Simulated payment saved as Unverified; no balance was changed.");
-  } catch (error) {
-    notice(error.message, true);
-  } finally {
-    setButton(form, false);
-  }
-});
-$("#loan-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  setButton(form, true);
-  try {
-    const formData = new FormData(form);
-    const values = Object.fromEntries(formData);
-    values.amount = Number(values.amount);
-    values.months = Number(values.months);
-    values.guarantorIds = formData.getAll("guarantorIds");
-    await api("/api/loans", { method: "POST", body: values, write: true });
-    form.reset();
-    notice("Loan request submitted.");
-    await refresh();
-  } catch (error) {
-    notice(error.message, true);
-  } finally {
-    setButton(form, false);
-    updateLoanRequestAccess();
-  }
-});
-$("#invite-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; setButton(form, true);
-  $("#invite-result").hidden = true; $("#invite-result").classList.remove("error"); $("#invite-code").textContent = ""; $("#copy-invite-code").hidden = true;
-  try {
-    const nameField = form.elements.namedItem("name");
-    const phoneField = form.elements.namedItem("phone");
-    const emailField = form.elements.namedItem("email");
-    const roleField = form.elements.namedItem("role");
-    if (!nameField || !phoneField || !emailField || !roleField) throw new Error("The member name, phone, email, or role field is missing. Hard-refresh the page and try again.");
-    const values = { name: nameField.value.trim(), phone: phoneField.value.trim(), email: emailField.value.trim(), role: roleField.value };
-    if (!values.name) throw new Error("Enter the member's name.");
-    if (!values.phone) throw new Error("Enter the member's Kenyan phone number.");
-    if (!values.email) throw new Error("Enter the member's email address.");
-    if (!values.role) throw new Error("Choose a member role.");
-    const result = await api("/api/invitations", {
-      method: "POST",
-      body: values,
-      write: form,
-      validateResponse: (response, key) => {
-        const invitation = response?.invitation;
-        const fields = ["id", "name", "phone", "requestedRole", "idempotencyKey", "attemptsRemaining", "invitedBy", "invitedAt", "expiresAt", "usedAt"];
-        return !!invitation && fields.every(field => Object.hasOwn(invitation, field)) &&
-          typeof invitation.id === "string" && typeof invitation.invitedAt === "string" &&
-          typeof invitation.expiresAt === "string" && invitation.idempotencyKey === key &&
-          invitation.name === values.name && typeof invitation.phone === "string" &&
-          invitation.requestedRole === values.role;
-      },
-    });
-    form.reset();
-    $("#invite-result-message").textContent = result.activationCode ? `${result.message} Share the code privately with the member.` : result.message;
-    if (result.activationCode) { $("#invite-code").textContent = result.activationCode; $("#copy-invite-code").hidden = false; }
-    $("#invite-result").hidden = false;
-    notice(result.message);
-    await refresh();
-  }
-  catch (error) {
-    $("#invite-result-message").textContent = error.uncertain
-      ? writeRequests.unconfirmedMessage("Invitations")
-      : error.message;
-    $("#invite-result").classList.add("error"); $("#invite-result").hidden = false;
-    notice($("#invite-result-message").textContent, true);
-  } finally { setButton(form, false); }
-});
-$("#copy-invite-code").addEventListener("click", async () => {
-  const code = $("#invite-code").textContent;
-  try { await navigator.clipboard.writeText(code); notice("Activation code copied. Share it privately."); }
-  catch { notice("Copy failed. Select the activation code and copy it manually.", true); }
-});
-$("#members").addEventListener("click", async event => {
-  const invitationButton = event.target.closest("[data-revoke-invitation]");
-  const roleButton = event.target.closest("[data-revoke-role]");
-  const button = invitationButton || roleButton;
-  if (!button) return;
-  const reason = window.prompt(invitationButton ? "Why are you revoking this invitation?" : "Why are you revoking this role?");
-  if (reason === null) return;
-  const trimmedReason = reason.trim();
-  if (trimmedReason.length < 5 || trimmedReason.length > 500) {
-    notice("Enter a reason of 5-500 characters.", true);
-    return;
-  }
-  button.disabled = true;
-  const path = invitationButton
-    ? `/api/invitations/${encodeURIComponent(button.dataset.revokeInvitation)}/revoke`
-    : `/api/leadership-changes/${encodeURIComponent(button.dataset.revokeRole)}/revoke`;
-  try {
-    await api(path, { method: "POST", body: { reason: trimmedReason }, write: true });
-    notice(invitationButton ? "Invitation revoked and recorded in history." : "Role revoked and recorded in history.");
-    await refresh();
-  } catch (error) {
-    notice(error.message, true);
-    button.disabled = false;
-  }
-});
-$("#leadership-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const values = Object.fromEntries(new FormData(form)); setButton(form, true);
-  try { await api("/api/leadership-changes", { method: "POST", body: values, write: true }); form.reset(); notice("Officer assignment proposed."); await refresh(); }
-  catch (error) { notice(error.message, true); } finally { setButton(form, false); }
-});
-$("#election-proposal-form").addEventListener("submit", async event => {
-  event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return; const formData = new FormData(form);
-  const values = { role: formData.get("role"), candidateIds: formData.getAll("candidateIds"), scheduledDate: formData.get("scheduledDate") };
-  if (values.candidateIds.length < 2) { notice("Choose at least two active Members as candidates.", true); return; }
-  setButton(form, true);
-  try { await api("/api/leadership-elections", { method: "POST", body: values, write: form }); form.reset(); notice("Election scheduled."); await refresh(); }
-  catch (error) { notice(error.message, true); } finally { setButton(form, false); }
-});
-$("#leadership-elections").addEventListener("submit", async event => {
-  const runoffForm = event.target.closest("form[data-election-runoff]");
-  if (runoffForm) {
-    event.preventDefault(); if (!runoffForm.reportValidity()) return;
-    const electionId = runoffForm.dataset.electionRunoff;
-    const scheduledDate = new FormData(runoffForm).get("scheduledDate");
-    const button = runoffForm.querySelector("button[type=submit]"); if (button) button.disabled = true;
-    try {
-      await api(`/api/leadership-elections/${encodeURIComponent(electionId)}/runoff`, { method: "POST", body: { scheduledDate }, write: runoffForm });
-      notice("Runoff scheduled."); await refresh();
-    } catch (error) { notice(error.message, true); if (button) button.disabled = false; }
-    return;
-  }
-  const form = event.target.closest("form[data-election-ballot]"); if (!form) return;
-  event.preventDefault(); if (!form.reportValidity()) return; const electionId = form.dataset.electionBallot;
-  const candidateId = new FormData(form).get("candidateId"); const button = form.querySelector("button[type=submit]"); if (button) button.disabled = true;
-  try { await api("/api/leadership-elections/" + encodeURIComponent(electionId) + "/vote", { method: "POST", body: { candidateId }, write: form }); notice("Your secret vote has been recorded."); await refresh(); }
-  catch (error) { notice(error.message, true); if (button) button.disabled = false; }
-});
-$("#leadership-elections").addEventListener("click", async event => {
-  const button = event.target.closest("[data-election-action]"); if (!button) return;
-  const action = button.dataset.electionAction; const electionId = button.dataset.electionId;
-  const prompts = { accept: "Accept these candidates and open voting?", decline: "Decline this proposal? The Secretary can submit a new one.", close: "Close voting now? Members will no longer be able to vote.", verify: "Verify the displayed election result?" };
-  if (prompts[action] && !window.confirm(prompts[action])) return;
-  const path = "/api/leadership-elections/" + encodeURIComponent(electionId) + "/" + encodeURIComponent(action);
-  button.disabled = true;
-  try { const result = await api(path, { method: "POST", body: {}, write: true }); notice(result.message); await refresh(); }
-  catch (error) { notice(error.message, true); button.disabled = false; }
-});
-$("#loans").addEventListener("click", async event => {
-  const button = event.target.closest("[data-loan]"); if (!button) return; const reason = $("[data-reason-for='" + CSS.escape(button.dataset.loan) + "']")?.value.trim() || ""; if (reason.length < 5) { notice("Enter a reason of at least 5 characters.", true); return; } button.disabled = true;
-  try { await api(`/api/loans/${encodeURIComponent(button.dataset.loan)}/decisions`, { method: "POST", body: { decision: button.dataset.decision, reason }, write: true }); notice("Decision recorded."); await refresh(); }
-  catch (error) { notice(error.message, true); button.disabled = false; }
-});
-$("#leadership-list").addEventListener("click", async event => {
-  const button = event.target.closest("[data-confirm]"); if (!button) return; button.disabled = true;
-  try { await api(`/api/leadership-changes/${encodeURIComponent(button.dataset.confirm)}/confirm`, { method: "POST", body: {}, write: true }); notice("Officer assignment confirmed."); await refresh(); }
-  catch (error) { notice(error.message, true); button.disabled = false; }
-});
 
 async function restoreSession() {
   showLogin();
@@ -1124,6 +561,3 @@ document.addEventListener("keydown", event => {
   profileMenuButton.setAttribute("aria-expanded", "false");
   profileMenuButton.focus();
 });
-$("#audit-search").addEventListener("input", () => { auditPage = 0; renderAuditLogPage(); });
-$("#audit-previous").addEventListener("click", () => { auditPage = Math.max(0, auditPage - 1); renderAuditLogPage(); });
-$("#audit-next").addEventListener("click", () => { auditPage += 1; renderAuditLogPage(); });

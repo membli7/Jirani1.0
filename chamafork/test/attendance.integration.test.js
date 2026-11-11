@@ -263,14 +263,20 @@ describe("attendance registers", () => {
     assert.match(attendanceSource, /const secretary = user\?\.role === "secretary"/);
     assert.match(attendanceSource, /expectedRevision: register\?\.revision \?\? null/);
     assert.doesNotMatch(attendanceSource, /dangerouslySetInnerHTML|innerHTML/);
-    assert.match(dashboardTemplate, /Loan requests/);
+    assert.match(dashboardTemplate, /id="react-loans-root"/);
+    assert.match(bundle, /Loan requests/);
+    assert.match(bundle, /Three-role review/);
+    const loansSource = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "react", "src", "components", "LoansPanel.jsx"), "utf8");
+    assert.match(loansSource, /loan-approval-trail/);
+    assert.match(loansSource, /borrowers cannot decide their own requests/i);
+    assert.match(loansSource, /does not transfer loan funds/i);
     const clientSource = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "chama.js"), "utf8");
-    assert.match(clientSource, /loan-approval-trail/);
+    assert.doesNotMatch(clientSource, /loan-approval-trail|loanStatusLabel|updateLoanRequestAccess|\$\("#loan-form"\)|\$\("#loans"\)/);
     assert.doesNotMatch(clientSource, /renderAttendance|updateAttendanceCount|attendance-date|attendance-save/);
     assert.match(attendanceSource, /Last edited by/);
     assert.match(attendanceSource, /removed from present/);
-    assert.match(`${dashboardTemplate}\n${clientSource}`, /borrowers cannot decide their own requests/i);
-    assert.match(`${dashboardTemplate}\n${clientSource}`, /does not transfer loan funds/);
+    assert.match(`${dashboardTemplate}\n${loansSource}`, /borrowers cannot decide their own requests/i);
+    assert.match(`${dashboardTemplate}\n${loansSource}`, /does not transfer loan funds/);
     assert.doesNotMatch(`${dashboardTemplate}\n${clientSource}`, /broadcast-panel|vote-fields|M-Pesa Paybill payments appear automatically/);
     assert.doesNotMatch(clientSource, /leadership-type|payments\/mpesa|M-Pesa payment received/);
 

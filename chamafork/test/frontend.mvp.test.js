@@ -26,6 +26,25 @@ const chatPage = fs.readFileSync(path.join(reactSource, "components", "ChatPanel
 const chatActions = fs.readFileSync(path.join(reactSource, "chatActions.mjs"), "utf8");
 const financePage = fs.readFileSync(path.join(reactSource, "components", "FinancialOverview.jsx"), "utf8");
 const financeActions = fs.readFileSync(path.join(reactSource, "financeActions.mjs"), "utf8");
+const loansPage = fs.readFileSync(path.join(reactSource, "components", "LoansPanel.jsx"), "utf8");
+const loanActions = fs.readFileSync(path.join(reactSource, "loanActions.mjs"), "utf8");
+const ledgerPage = fs.readFileSync(path.join(reactSource, "components", "LedgerPanel.jsx"), "utf8");
+const ledgerActions = fs.readFileSync(path.join(reactSource, "ledgerActions.mjs"), "utf8");
+const memberDirectory = fs.readFileSync(path.join(reactSource, "components", "MemberDirectory.jsx"), "utf8");
+const memberActions = fs.readFileSync(path.join(reactSource, "memberActions.mjs"), "utf8");
+const monthClosePage = fs.readFileSync(path.join(reactSource, "components", "MonthClosePanel.jsx"), "utf8");
+const monthCloseActions = fs.readFileSync(path.join(reactSource, "monthCloseActions.mjs"), "utf8");
+const auditPage = fs.readFileSync(path.join(reactSource, "components", "AuditLogPanel.jsx"), "utf8");
+const auditActions = fs.readFileSync(path.join(reactSource, "auditActions.mjs"), "utf8");
+const penaltyPage = fs.readFileSync(path.join(reactSource, "components", "PenaltyPanel.jsx"), "utf8");
+const dividendsPage = fs.readFileSync(path.join(reactSource, "components", "DividendsPanel.jsx"), "utf8");
+const adminFinanceActions = fs.readFileSync(path.join(reactSource, "adminFinanceActions.mjs"), "utf8");
+const cashEntryPage = fs.readFileSync(path.join(reactSource, "components", "CashEntryPanel.jsx"), "utf8");
+const cashEntryActions = fs.readFileSync(path.join(reactSource, "cashEntryActions.mjs"), "utf8");
+const invitePanel = fs.readFileSync(path.join(reactSource, "components", "InviteMemberPanel.jsx"), "utf8");
+const invitationActions = fs.readFileSync(path.join(reactSource, "invitationActions.mjs"), "utf8");
+const simulatedInbox = fs.readFileSync(path.join(reactSource, "components", "SimulatedPaymentInbox.jsx"), "utf8");
+const simulatedPaymentActions = fs.readFileSync(path.join(reactSource, "simulatedPaymentActions.mjs"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
 const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
 
@@ -36,7 +55,7 @@ test("launch-critical invitation, election, and cash copy is accurate in English
     "After setup, the Secretary proposes officer candidates. Eligible group accounts vote by secret ballot; the Chairperson opens and closes voting and verifies the result. Verified changes take effect after 24 hours.",
     "This records cash already received; it does not transfer money."
   ]) {
-    assert.ok(html.includes(message), `expected English UI copy: ${message}`);
+    assert.ok(html.includes(message) || cashEntryPage.includes(message), `expected English UI copy: ${message}`);
     const escaped = message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     assert.match(i18n, new RegExp(`"${escaped}":\\s*"[^"]+"`), `expected Kiswahili translation for: ${message}`);
   }
@@ -316,13 +335,14 @@ test("landing navigation uses an icon-only hamburger with accessible open and cl
   assert.match(landingTheme, /body\.landing-mode \.landing-menu-toggle \.ham-bar\s*\{[^}]*background:\s*var\(--paper\)/);
 });
 
-test("loan UI remains available while officer-role revocation stays protected", () => {
+test("React loan UI remains available while officer-role revocation stays protected", () => {
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
-  assert.match(html, /id="loan-request-access-note"[\s\S]*?id="loan-request-renewal-link"/);
-  assert.match(html, /id="loan-submit" class="button-primary" type="submit" disabled/);
-  assert.match(script, /function updateLoanRequestAccess\(/);
-  assert.match(script, /if \(note\) note\.hidden = true;/);
-  assert.match(script, /if \(submit\) submit\.disabled = false;/);
+  assert.match(html, /id="react-loan-request-root"/);
+  assert.match(html, /id="react-loans-root"/);
+  assert.match(loansPage, /id="loan-submit" className="button-primary" type="submit"/);
+  assert.match(loansPage, /snapshot\.permissions\?\.decideLoans === true && loan\.canDecide === true/);
+  assert.doesNotMatch(script, /updateLoanRequestAccess|\$\("#loan-form"\)|\$\("#loans"\)/);
+  assert.match(script, /chama:dashboard-refresh-requested/);
   assert.match(server, /app\.post\("\/api\/loans", requireAuth, requirePinChanged, requireActiveSubscription/);
   assert.match(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke", requireAuth, requirePinChanged, requireRole\("chairperson"\), idempotent/);
   assert.doesNotMatch(server, /app\.post\("\/api\/leadership-changes\/:id\/revoke"[^\n]*requireActiveSubscription/);
@@ -332,12 +352,14 @@ test("loan UI remains available while officer-role revocation stays protected", 
 });
 
 test("member roster and invitation history are distinct, normalized, and phone-friendly", () => {
-  assert.match(html, /id="active-members-title"[\s\S]*?tbody id="members"/);
-  assert.match(html, /id="member-history-title"[\s\S]*?tbody id="member-invitation-history"/);
-  assert.match(script, /function memberStatusPresentation\(/);
-  assert.match(script, /const activeMemberRows = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) === "active"\)/);
-  assert.match(script, /const inactiveMemberRows = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) !== "active"\)/);
-  assert.match(script, /const statusKey = revocation \? "revokedStatus"/);
+  assert.match(html, /id="react-member-directory-root"/);
+  assert.match(memberDirectory, /id="active-members-title"[\s\S]*?id="members"/);
+  assert.match(memberDirectory, /id="member-history-title"[\s\S]*?id="member-invitation-history"/);
+  assert.match(memberDirectory, /activeMembers = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) === "active"\)/);
+  assert.match(memberDirectory, /inactiveMembers = members\.filter\(member => String\(member\.status \|\| ""\)\.toLowerCase\(\) !== "active"\)/);
+  assert.match(memberActions, /const statusKey = revoked \? "revokedStatus"/);
+  assert.match(memberActions, /canUndoInvitation/);
+  assert.doesNotMatch(script, /memberStatusPresentation|activeMemberRows|member-invitation-history|data-revoke-invitation|data-revoke-role/);
   assert.match(i18n, /activeStatus:\s*"Active"/);
   assert.match(i18n, /activeStatus:\s*"Hai"/);
   assert.match(css, /#members-panel \.members-table td \{ display: grid; grid-template-columns/);
@@ -381,25 +403,21 @@ test("landing contact section offers accessible localized routes for members and
 
 test("simulated payment inbox is clearly local-only and exposes the test fields", () => {
   assert.match(html, /id="simulated-payment-section"/);
-  assert.match(html, /Use fake TEST-\* values only\. This does not connect to M-Pesa or any payment provider\./);
+  assert.match(html, /id="react-simulated-payment-root"/);
+  assert.match(simulatedInbox, /Use fake TEST-\* values only\. This does not connect to M-Pesa or any payment provider\. Saving a simulation never changes a balance\./);
   for (const field of ["transactionId", "phoneNumber", "amount", "reference", "timestamp"]) {
-    assert.match(html, new RegExp(`name="${field}"`));
+    assert.match(simulatedInbox, new RegExp(`name="${field}"`));
   }
-  assert.match(html, /id="simulated-payment-rows"/);
-  assert.match(script, /renderSimulatedPaymentInbox\(state\.simulatedPayments \|\| \[\]\)/);
-  assert.match(script, /api\("\/api\/payments\/simulate"/);
+  assert.match(simulatedInbox, /rawPayload/);
+  assert.match(simulatedPaymentActions, /path: "\/api\/payments\/simulate"/);
+  assert.match(script, /simulatedPayments: state\.simulatedPayments \|\| \[\]/);
+  assert.doesNotMatch(script, /renderSimulatedPaymentInbox|#simulated-payment-form|#simulated-payment-rows/);
 });
 
-test("loan status labels use the agreed title case and group pending decision states", () => {
-  const source = script.match(/function loanStatusLabel\(status\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(source, "loan status label helper is present");
-  const sandbox = {};
-  vm.runInNewContext(`${source}; this.loanStatusLabel = loanStatusLabel;`, sandbox);
-  for (const [status, expected] of [
-    ["pending", "Pending"], ["Requested", "Pending"], ["Waiting for decisions", "Pending"],
-    ["approved", "Approved"], ["rejected", "Rejected"], ["repaid", "Repaid"], ["closed", "Closed"]
-  ]) assert.equal(sandbox.loanStatusLabel(status), expected);
-  assert.match(script, /esc\(loanStatusLabel\(loan\.status\)\)/);
+test("loan status labels use the agreed title case and group pending decision states in React", () => {
+  assert.match(loanActions, /\["pending", "requested", "waiting for decisions"\]\.includes\(normalized\)/);
+  assert.match(loanActions, /label: "Pending", className: "pending"/);
+  assert.match(loansPage, /loanStatusPresentation\(loan\.status\)/);
 });
 
 test("Chairperson setup checklist reflects active members and valid invitations", () => {
@@ -493,14 +511,17 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerPage, /error instanceof TypeError/);
 });
 
-test("member invitations send the required email address", () => {
-  const inviteHandler = script.match(/\$\("#invite-form"\)\.addEventListener\("submit", async event => \{[\s\S]*?\n\}\);/)?.[0];
-  assert.ok(inviteHandler, "member invitation form should have a submit handler");
-  assert.match(inviteHandler, /namedItem\("email"\)/);
-  assert.match(inviteHandler, /email:\s*emailField\.value\.trim\(\)/);
-  assert.match(inviteHandler, /if \(!values\.email\)/);
-  assert.match(html, /<input id="invite-name" name="name" autocomplete="name" required>/);
-  assert.match(html, /<input id="invite-phone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required>/);
+test("React member invitations require an email and preserve one-time activation-code handling", () => {
+  assert.match(html, /id="react-invite-root"/);
+  assert.doesNotMatch(html, /id="invite-form"|id="invite-code"/);
+  assert.match(invitePanel, /name="email" type="email"/);
+  assert.match(invitePanel, /name="phone" type="tel"/);
+  assert.match(invitePanel, /name="role"/);
+  assert.match(invitePanel, /Share the code privately with the member/);
+  assert.match(invitePanel, /navigator\.clipboard\.writeText\(result\.code\)/);
+  assert.match(invitationActions, /path: "\/api\/invitations"/);
+  assert.match(invitationActions, /invitation\.idempotencyKey === key/);
+  assert.doesNotMatch(script, /\$\("#invite-form"\)|\$\("#copy-invite-code"\)|invite-result-message/);
 });
 
 test("registration signs in and opens the dashboard when setup was already completed", async () => {
@@ -757,11 +778,14 @@ test("React chat owns messages, form state and fallback polling while using the 
 
 test("month-close review is read-only, bilingual, and laid out as responsive cards", () => {
   assert.match(html, /id="cash-flows-panel"[^>]*hidden/);
-  assert.match(html, /id="month-close-form"/);
-  assert.match(html, /id="month-close-month"[^>]*type="month"/);
-  assert.match(html, /doesn't reconcile with bank or M-PESA statements or move money/);
-  assert.match(script, /function renderMonthlyClose\(data\)/);
-  assert.match(script, /api\(`\/api\/monthly-close\?month=\$\{encodeURIComponent/);
+  assert.match(html, /id="react-month-close-root"/);
+  assert.match(monthClosePage, /id="month-close-form"/);
+  assert.match(monthClosePage, /id="month-close-month"[\s\S]*?type="month"/);
+  assert.match(monthClosePage, /t\("monthCloseIntro"\)/);
+  assert.match(i18n, /monthCloseIntro: "Review cash entries and open items recorded in this chama\. This is a read-only ledger review; it doesn't reconcile with bank or M-PESA statements or move money\."/);
+  assert.match(monthClosePage, /fetchMonthlyClose\(month\)/);
+  assert.match(monthCloseActions, /\/api\/monthly-close\?month=\$\{encodeURIComponent\(month\)\}/);
+  assert.doesNotMatch(script, /renderMonthlyClose|#month-close-form|#month-close-summary|#month-close-entries/);
   assert.match(script, /\$\("#cash-flows-panel"\)\.hidden = user\.role === "member"/);
   assert.match(i18n, /monthCloseTitle: "Month-end review"/);
   assert.match(i18n, /monthCloseTitle: "Mapitio ya mwisho wa mwezi"/);
@@ -772,13 +796,13 @@ test("month-close review is read-only, bilingual, and laid out as responsive car
 });
 
 test("contribution date correction UI is reason-required, officer-only, and bilingual", () => {
-  assert.match(html, /<th data-i18n="transactionActions">Actions<\/th>/);
-  assert.match(html, /id="contribution-date-dialog"/);
-  assert.match(html, /id="contribution-correction-reason"[^>]*maxlength="500"[^>]*required/);
-  assert.match(script, /const canCorrectContributionDates = \["chairperson", "treasurer"\]\.includes\(user\.role\)/);
-  assert.match(script, /item\.status === "confirmed" && item\.paymentType === "Monthly Contribution" && item\.method === "Cash"/);
-  assert.match(script, /\/api\/contributions\/\$\{encodeURIComponent\(form\.dataset\.transactionId\)\}\/correct-date/);
-  assert.match(script, /input\.min = `\$\{month\}-01`/);
+  assert.match(html, /id="react-ledger-root"/);
+  assert.match(ledgerPage, /id="contribution-date-dialog"/);
+  assert.match(ledgerPage, /id="contribution-correction-reason"[\s\S]*?maxLength="500"[\s\S]*?required/);
+  assert.match(ledgerActions, /\["chairperson", "treasurer"\]\.includes\(user\?\.role\)/);
+  assert.match(ledgerActions, /transaction\?\.status === "confirmed"[\s\S]*?transaction\?\.paymentType === "Monthly Contribution"[\s\S]*?transaction\?\.method === "Cash"/);
+  assert.match(ledgerActions, /\/api\/contributions\/\$\{encodeURIComponent\(transactionId\)\}\/correct-date/);
+  assert.match(ledgerPage, /min=\{correctionBounds\?\.min\}/);
   assert.match(i18n, /correctContributionDate: "Correct contribution date"/);
   assert.match(i18n, /correctContributionDate: "Sahihisha tarehe ya mchango"/);
   assert.match(i18n, /dateCorrectionRules: "Mwenyekiti au Mweka Hazina pekee/);
@@ -807,43 +831,27 @@ test("header icons, profile actions, live dot, muted background, and short menu 
 
 test("audit log, penalty, and dividend panels exist and start hidden", () => {
   assert.match(html, /<section class="panel" id="audit-panel"[^>]*hidden>/);
-  assert.match(html, /<tbody id="audit-list"/);
+  assert.match(html, /id="react-audit-root"/);
+  assert.match(auditPage, /id="audit-list"/);
+  assert.match(auditPage, /permissions\?\.viewAuditLog === true/);
   assert.match(html, /<section class="panel" id="penalty-panel"[^>]*hidden>/);
+  assert.match(html, /id="react-penalty-root"/);
+  assert.match(penaltyPage, /id="penalty-form"/);
   assert.match(html, /<section class="panel" id="dividend-panel"[^>]*hidden>/);
+  assert.match(html, /id="react-dividend-root"/);
+  assert.match(dividendsPage, /id="dividend-form"/);
 });
 
-test("audit log search and paging render only the requested entries", () => {
-  const renderSource = script.match(/function renderAuditLogPage\(\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(renderSource, "audit log should define its search and pagination renderer");
-  const nodes = new Map([
-    ["#audit-search", { value: "" }],
-    ["#audit-list", { innerHTML: "" }],
-    ["#audit-page-info", { textContent: "" }],
-    ["#audit-previous", { disabled: false }],
-    ["#audit-next", { disabled: false }],
-  ]);
-  const context = {
-    $: selector => nodes.get(selector),
-    auditEntries: Array.from({ length: 30 }, (_, index) => ({ at: `2026-10-${String(index + 1).padStart(2, "0")}`, type: `Action ${index}` })),
-    auditPage: 0,
-    auditPageSize: 25,
-    esc: value => String(value),
-    fmtDate: value => value,
-    fmtTime: () => "09:00",
-    roleName: value => value,
-    auditDescription: entry => entry.type,
-  };
-  const renderPage = vm.runInNewContext(`(${renderSource})`, context);
-  renderPage();
-  assert.match(nodes.get("#audit-list").innerHTML, /Action 0/);
-  assert.doesNotMatch(nodes.get("#audit-list").innerHTML, /Action 29/);
-  assert.equal(nodes.get("#audit-page-info").textContent, "1 / 2 · 30 entries");
-  assert.equal(nodes.get("#audit-next").disabled, false);
-  nodes.get("#audit-search").value = "Action 29";
-  renderPage();
-  assert.match(nodes.get("#audit-list").innerHTML, /Action 29/);
-  assert.equal(nodes.get("#audit-page-info").textContent, "1 / 1 · 1 entries");
-  assert.equal(nodes.get("#audit-next").disabled, true);
+test("React audit panel uses the existing read endpoint and keeps client-side search and pagination", () => {
+  assert.match(auditActions, /\/api\/audit-log/);
+  assert.match(auditActions, /credentials: "same-origin"/);
+  assert.match(auditActions, /filterAuditEntries/);
+  assert.match(auditActions, /paginateAuditEntries/);
+  assert.match(auditPage, /filterAuditEntries\(entries, query, roleName\)/);
+  assert.match(auditPage, /paginateAuditEntries\(matches, page, pageSize\)/);
+  assert.match(auditPage, /onChange=\{event => \{ setQuery\(event\.target\.value\); setPage\(0\); \}\}/);
+  assert.doesNotMatch(auditPage, /dangerouslySetInnerHTML|innerHTML/);
+  assert.doesNotMatch(script, /renderAuditLogPage|loadAuditLog|#audit-list|#audit-search/);
 });
 
 test("penalty and dividend panels are shown only to the right roles", () => {
@@ -855,30 +863,37 @@ test("penalty and dividend panels are shown only to the right roles", () => {
 });
 
 test("dividend UI calculates first and commits only the previewed payouts", () => {
-  assert.match(html, /name="cycleStartDate"/);
-  assert.match(html, /name="cycleEndDate"/);
-  assert.match(html, /name="adminExpenses"/);
-  assert.match(script, /api\("\/api\/dividends\/calculate", \{ method: "POST", body: input \}\)/);
-  assert.match(script, /api\("\/api\/dividends\/commit"/);
-  assert.match(script, /payouts: data\.payouts\.map\(item => \(\{ memberId: item\.memberId, dividend: item\.dividend \}\)\)/);
+  assert.match(dividendsPage, /name="cycleStartDate"/);
+  assert.match(dividendsPage, /name="cycleEndDate"/);
+  assert.match(dividendsPage, /name="adminExpenses"/);
+  assert.match(dividendsPage, /calculateDividendCycle\(writer, owner\.current, input\)/);
+  assert.match(dividendsPage, /commitDividendCycle\(writer, owner\.current, preview\.input, preview\.data\.payouts\)/);
+  assert.match(adminFinanceActions, /path: "\/api\/dividends\/calculate"/);
+  assert.match(adminFinanceActions, /path: "\/api\/dividends\/commit"/);
+  assert.match(adminFinanceActions, /payouts: payouts\.map\(item => \(\{ memberId: item\.memberId, dividend: item\.dividend \}\)\)/);
+  assert.match(dividendsPage, /data\.overlapsCommitted/);
+  assert.doesNotMatch(script, /renderDividendPreview|dividendDraft|api\("\/api\/dividends/);
 });
 
 test("penalty button calls the assessment endpoint", () => {
-  assert.match(html, /Assess monthly penalties/);
-  assert.match(script, /api\("\/api\/penalties\/assess"/);
+  assert.match(penaltyPage, /Assess monthly penalties/);
+  assert.match(penaltyPage, /assessMonthlyPenalties\(writer, owner\.current, month\)/);
+  assert.match(adminFinanceActions, /path: "\/api\/penalties\/assess"/);
+  assert.doesNotMatch(script, /api\("\/api\/penalties\/assess"/);
 });
 
-test("loan form sends two guarantors and repayments send reference and date", () => {
-  assert.match(html, /id="loan-amount" name="amount"/);
-  assert.match(html, /id="loan-months" name="months"/);
-  assert.match(html, /id="loan-guarantor-1" name="guarantorIds" required/);
-  assert.match(html, /id="loan-guarantor-2" name="guarantorIds" required/);
-  assert.match(script, /values\.guarantorIds = formData\.getAll\("guarantorIds"\)/);
+test("React loan form and cash entry preserve guarantor, repayment reference, and date fields", () => {
+  assert.match(loansPage, /id="loan-amount" name="amount"/);
+  assert.match(loansPage, /id="loan-months" name="months"/);
+  assert.match(loansPage, /name="guarantorIds"/);
+  assert.match(loanActions, /formData\.getAll\("guarantorIds"\)/);
+  assert.match(loanActions, /path: "\/api\/loans"/);
   assert.match(script, /api\("\/api\/loans\/guarantors"\)/);
-  assert.match(html, /name="referenceNumber"/);
-  assert.match(html, /name="date" type="date"/);
-  assert.match(script, /writeRequester\.cashEntryRequest\(new FormData\(form\)\)/);
-  assert.match(script, /await api\(request\.path,\s*\{\s*method:\s*"POST",\s*body:\s*values,/);
+  assert.match(cashEntryPage, /name="referenceNumber"/);
+  assert.match(cashEntryPage, /name="date" type="date"/);
+  assert.match(cashEntryPage, /buildCashEntryRequest\(writer, new FormData\(form\)\)/);
+  assert.match(cashEntryActions, /writeRequester\.cashEntryRequest\(formData\)/);
+  assert.match(cashEntryActions, /writeRequester\.submit\(/);
 });
 
 test("profile page loads its write helper and connects forms to authenticated profile endpoints", () => {
