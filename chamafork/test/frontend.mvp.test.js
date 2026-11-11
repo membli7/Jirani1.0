@@ -597,7 +597,7 @@ test("registration redirects to member sign-in when setup login requires a chama
 test("root page restores the dashboard for an existing authenticated session", async () => {
   const source = script.match(/async function restoreSession\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "root page should define its session restoration flow");
-  assert.match(html, /src="\/chama\.js\?v=20261111\.1" defer/);
+  assert.match(html, /src="\/chama\.js\?v=20261111\.2" defer/);
 
   const calls = [];
   const restoreSession = vm.runInNewContext(`(${source})`, {
@@ -635,7 +635,7 @@ test("root app tolerates the absence of standalone authentication forms", async 
   const normalizedScript = script.replace(/\r\n/g, "\n");
   const backendStart = normalizedScript.indexOf("async function checkBackendConnection(");
   const backendEnd = normalizedScript.indexOf("\nfunction setLoginNotice", backendStart);
-  const loginSource = script.split(/\r?\n/).find(line => line.startsWith("function showLogin()"));
+  const loginSource = script.split(/\r?\n/).find(line => /^function showLogin\(/.test(line));
   const backendSource = backendStart >= 0 && backendEnd > backendStart ? normalizedScript.slice(backendStart, backendEnd) : null;
   assert.ok(backendSource, "root page should define backend status handling");
   assert.ok(loginSource, "root page should define its signed-out state");
@@ -743,7 +743,7 @@ test("phone React financial views keep details readable and expose trend data by
   assert.match(html, /href="\/chama\.css\?v=20261110\.2"/);
   assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
   assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
-  assert.match(html, /src="\/chama\.js\?v=20261111\.1"/);
+  assert.match(html, /src="\/chama\.js\?v=20261111\.2"/);
   assert.match(financePage, /item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(financePage, /dangerouslySetInnerHTML|innerHTML/);
   assert.match(css, /\.trend-legend-item i\.is-green \{ background: #347c62; \}/);

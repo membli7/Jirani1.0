@@ -33,6 +33,18 @@ test("all existing interactive URLs have a built React mount and local JavaScrip
   }
 });
 
+test("legacy dashboard bootstrap does not signal that an active session ended", () => {
+  const controller = readSource("../chama.js");
+  assert.match(controller, /function showLogin\(\{ notifyReact = true \} = \{\}\)/);
+  assert.match(controller, /if \(notifyReact && typeof window !== "undefined"\) window\.dispatchEvent\(new Event\("chama:session-ended"\)\)/);
+  assert.match(controller, /async function restoreSession\(\) \{\s*showLogin\(\{ notifyReact: false \}\);/);
+});
+
+test("legacy controller uses a fresh immutable cache-busting URL", () => {
+  const dashboardHtml = readSource("../index.html");
+  assert.match(dashboardHtml, /<script src="\/chama\.js\?v=20261111\.2" defer><\/script>/);
+});
+
 test("auth forms stack on mobile widths and retain scrollability and 44px touch targets", () => {
   assert.match(frontendCss, /@media \(max-width: 760px\) \{\s*\.login-overlay \.login-content \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(frontendCss, /\.login-overlay\s*\{\s*overflow-y: auto;/);
