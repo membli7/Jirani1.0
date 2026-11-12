@@ -1,6 +1,6 @@
 # Jirani Chama Privacy Policy
 
-**Status: detailed working draft for review. Do not publish as final until the bracketed facts are verified and completed.** This draft describes the product and code reviewed on 11 November 2026. Production settings, contracts, providers, and data practices may differ and must be checked. This document is not legal advice and cannot guarantee an outcome in a complaint or court case.
+**Status: detailed working draft for review. Do not publish as final until the bracketed facts are verified and completed.** This draft describes the product and code reviewed on 12 November 2026. Production settings, contracts, providers, and data practices may differ and must be checked. This document is not legal advice and cannot guarantee an outcome in a complaint or court case.
 
 **Proposed operator:** [registered legal name and legal form]  
 **Address:** [postal and physical address]  
@@ -64,7 +64,7 @@ The categories below are based on the database schema and server behavior review
 | Membership and role | Chama membership, Chairperson/Secretary/Treasurer/Member role, invitation and membership status | Controls access to group features and records. The exact visibility of each record type by role must be verified against the current server permissions. |
 | Authentication and recovery | PIN used to sign in, stored PIN hash, temporary PIN-change status, invitation-code hash, password/PIN reset challenge data held in a session, and expiry timestamps | Verifies access, activates accounts, supports recovery, and reduces unauthorized use. The reviewed server derives a PIN hash with `scrypt`; confirm the production build and storage mode before stating this as a live control. The plain PIN should not be kept in readable form. |
 | Contributions and penalties | Member identifier, amount, contribution month/date, method, reference number, note, welfare/share-capital/penalty amounts, status, and the person recording the entry | Maintains the group’s record of amounts attributed to a Member and who entered or changed an entry. |
-| Loans, guarantors, and repayments | Borrower, principal, outstanding amount, term, interest model, approval decisions, repayment amounts, principal/interest allocation, repayment method and reference, and related dates | Supports group loan workflows and balances. Guarantor details may be held in flexible record fields and must be inventoried before publication. |
+| Loans, estimates, guarantors, automated decisions, and repayments | Requested amount and term; Chama-specific monthly rate; estimated interest, total payable, and installment amounts/due dates; applied rate and saved schedule; borrower, principal, outstanding amount, membership-start date/days, recorded share-capital contributions, Chama balance, existing principal, selected amount tier and policy version, guarantor identities and pledged/unpledged share-capital capacity, decision criteria/reasons, human-review request and response, repayments, principal/interest allocation, methods, references, and dates | Estimates and records a Chama loan request, explains an automated decision, and records later repayment or review. These may reveal a person’s financial circumstances; verify actual production fields and role access before publication. |
 | Transactions and ledger | Transaction type, amount, status, method, reference, related Member or loan, recording User, debit/credit account entries, descriptions, and timestamps | Supports group bookkeeping and summaries. These are App records, not external payment confirmations. |
 | Attendance and meeting registers | Member, meeting date, presence/absence, recorder, register revisions, and correction history | Keeps group participation records and shows who recorded or revised them. |
 | Messages | Message body, author, group, timestamp, and related record fields | Allows group communication and may contain personal or financial information that users include in messages. |
@@ -100,6 +100,7 @@ The controller must identify a lawful basis for each purpose before using person
 | Create, authenticate, and maintain accounts | Account details, phone/email, role, PIN verification, session and recovery data | **[Operator: identify controller/processor role and legal basis. Explain if an account cannot be created without a particular field.]** |
 | Maintain a Chama’s membership and administration | Membership, role, invitation, leadership, settings, attendance, messages | **[Chama/controller: record its lawful basis and member notice. Operator: document instructions if acting as processor.]** |
 | Record and review group financial activity | Contributions, transactions, loans, repayments, penalties, dividends, ledgers, and audit history | **[Chama/controller: identify the basis, group rule, and any law requiring records. Do not assume all Chamas have the same legal form.]** |
+| Estimate and explain loan costs, assess eligibility, and handle human review | Requested amount and term; Chama-specific monthly rate; estimated interest, total payable, installments and due dates; recorded membership duration and share-capital contributions; Chama-recorded balance; existing principal; configured amount tier; selected guarantors and available share capital; saved rate and schedule; policy version; decision, criteria, reasons, and review records | **[The relevant Chama/controller must identify the lawful basis, explain the estimate and rule-based decision and likely effects, verify the source records and group rules, and document the Operator’s role. Assess Data Protection Act section 35, General Regulations 22 and 49, and any credit-provider rules that apply to the actual entity and lending model.]** |
 | Keep the service secure and investigate misuse | Authentication, access/session events, role changes, and security/audit data actually collected | **[Identify the controller, specific security purpose, lawful basis, access restrictions, and retention period.]** |
 | Send account, activation, or recovery communications | Contact information and the minimum information needed for the requested message | **[Confirm which email/SMS channels work, which provider receives data, and the basis. Do not list SMS unless it is actually sent.]** |
 | Respond to a contact or support request | Contact details and the contents of the request | **[Confirm the support controller, purpose, provider, and retention period.]** |
@@ -113,7 +114,7 @@ Do not use group financial information for advertising, unrelated marketing, cre
 
 ### 6.1 Within a Chama
 
-A group officer or Member may see records according to the App’s current server permissions and the Chama’s rules. The App defines Chairperson, Secretary, Treasurer, and Member roles. The exact records visible to each role can change as features change, so the Operator must publish or link to a current role-access explanation after testing it against the server.
+A Member can see their own loan decisions and review records. Under the reviewed server permissions, Chairperson, Secretary, and Treasurer accounts can see the Chama’s loan records; the Chairperson can change the loan rules. New requests are decided automatically, without a Chairperson or Treasurer vote. A non-conflicted officer can act only after a borrower asks for human review. Verify these permissions against production before publication.
 
 A group officer must not share a Member’s record with people who have no legitimate group role or lawful need. Members should remember that a message or financial entry may be visible to other authorized people in the same Chama. Do not place a PIN, recovery code, identity document, or unnecessary sensitive detail in a shared record.
 
@@ -263,9 +264,27 @@ The session cookie is used for authentication and service security, not as a sta
 
 ## 14. Automated decisions and profiling
 
-The reviewed product description uses human role-based decisions for loan requests. It does not establish that the App makes a loan decision solely by automated processing or profiles a Member for creditworthiness. The Operator must verify the current code and integrations before publishing that statement.
+The reviewed application makes an immediate, rule-based automated decision on a new loan application when that Chama has configured loan rules. It records the application as approved or not approved automatically. Because this can affect a person’s access to a group loan, the controller should treat it as potentially significant and must not assume that a legal exception to automated-decision rights applies. No external credit-bureau score is an input in the reviewed code; production data flows and contracts still need to be checked.
 
-If the App later uses automated processing to make a decision with legal or similarly significant effects, the controller must explain the logic, significance, and likely consequences as required by law, provide the applicable rights, and offer a meaningful process for human review where required. A calculation of a balance or display of a workflow status is not automatically a solely automated decision, but its real effect must be assessed.
+### 14.1 What the decision uses
+
+The Chairperson configures each Chama’s thresholds; the App supplies no universal numeric eligibility values. The first configured amount tier that covers the requested principal sets that tier’s minimum active-membership period and minimum recorded share-capital contributions. The App also checks whether the amount is within both (a) the configured percentage of the Chama’s recorded balance and (b) the configured percentage of the borrower’s recorded share-capital contributions after subtracting existing principal exposure. The request must include two distinct active guarantors, and their combined unpledged share capital must cover the amount. If no rules exist, the App does not record an application. If every check passes it records an automatic approval; otherwise it records a rejection and the reason. The policy version and decision inputs are logged, and the borrower and authorized officers can see the explanation and recorded inputs.
+
+The calculation uses information recorded in the App, including membership-start dates, contribution and loan records, the group balance, and guarantor records. The controller must check those records for accuracy, explain the thresholds and likely consequences in advance, and protect the information from use for unrelated purposes. A recorded balance or contribution is not independent proof that money was received or remains available.
+
+Before submission, the member can request a server-generated estimate for the amount and term. It uses the Chama’s current monthly rate and the reducing-balance model and returns estimated interest, total payable, and installment amounts and due dates. An estimate does not submit an application, reserve funds, or confirm an off-App transfer. If the application is approved, the loan record stores the rate and schedule used for that decision. The App does not record or perform the actual disbursement, so the controller and actual lender must separately confirm the amount and date advanced and must not treat the projected schedule alone as proof that a loan was funded.
+
+### 14.2 Requesting human review
+
+The borrower can ask for a human review and provide an explanation. A Chairperson, Secretary, or Treasurer who is not the borrower or a guarantor can review the explanation and related records. The officer may confirm the recorded decision, reassess a rejected application against the original saved Chama rules using checked records, or withdraw an approval only after confirming that no money was disbursed outside the App. The officer’s action, reasons, and outcome are recorded. This is a review after the initial decision, not a vote required before an application is decided.
+
+The App does not set a response deadline or guarantee that an officer will see a request immediately. **Before real lending, the Chama/controller must set and communicate a practical response target, monitor incoming requests, provide an escalation route if a reviewer is unavailable or conflicted, and test that members can state their point of view and receive the result.** A human-review button by itself does not establish compliance.
+
+### 14.3 Kenyan safeguards and assessment
+
+Section 35 of the [Data Protection Act, 2019](https://kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31) provides rights relating to qualifying solely automated decisions, including notice and a request for reconsideration or a new decision that is not solely automated, subject to the section’s conditions and exceptions. Regulation 22 of the [Data Protection (General) Regulations, 2021](https://new.kenyalaw.org/akn/ke/act/ln/2021/263) addresses notice, meaningful information about logic, significance and likely consequences, fairness, error and bias safeguards, and human intervention. Regulation 49 lists certain significant automated or algorithmic decisions among high-risk processing for which a DPIA is required. The responsible controller must assess whether this workflow meets that test and complete any required DPIA before it is used for real members.
+
+The App does not move or disburse loan funds. A Chama or other actual lender must identify its legal form, lawful basis, authority to lend, applicable rules, and any required financial disclosures. The CBK Non-Deposit Taking Credit Providers Regulations, 2026 may apply to some providers and exclude specified entities; applicability cannot be decided from a recordkeeping app alone. See the [Kenyan legal research notes](kenyan-legal-research-notes.md) and obtain Kenyan legal advice before publication or real lending. This description is not a finding that the Operator, Chama, or workflow is compliant.
 
 ## 15. Policy updates and notice
 
@@ -273,7 +292,7 @@ This policy must display a version number and effective date. When the purpose, 
 
 The App currently has no stored Privacy Policy acknowledgment or Terms acceptance record in the reviewed source. If the Operator later asks users to acknowledge receipt of a new privacy notice, the App must distinguish that acknowledgment from consent to optional processing. The acceptance process must identify the version and record the user’s choice; a notice must not say a person accepted it when the App has no such record.
 
-See the [Terms and Conditions draft](terms-and-conditions-draft.md) for the separate proposed Terms acceptance workflow. The current public pages are linked from the landing-page footer; this expanded draft is not yet published.
+See the [Terms and Conditions draft](terms-and-conditions-draft.md) for the separate proposed Terms acceptance workflow. The public Terms and Privacy pages are linked from the landing-page footer and are marked as working drafts; neither records acceptance of a final policy.
 
 ## 16. Contact and complaints
 
@@ -317,7 +336,9 @@ Before publishing this policy, the Operator must:
 8. Verify the actual cookie inventory, session lifetime, email configuration, payment integrations, and any analytics or tracking.
 9. Decide whether children’s information may be processed and implement the required safeguards or an exclusion process.
 10. Provide a practical rights-request, identity-check, correction, restriction, complaint, and breach-response process.
-11. Verify ODPC registration or exemption status and any required DPIA, transfer assessment, and controller-processor documentation.
-12. Recheck current laws, regulations, and court decisions on the publication date and obtain Kenyan counsel’s review.
+11. Verify every Chama’s membership-start dates and loan-policy values, check input accuracy, and test that borrowers receive meaningful decision reasons and can obtain non-conflicted human review.
+12. Complete and document any required DPIA and establish an operational review response target and escalation route before automated lending decisions are used for real members.
+13. Verify ODPC registration or exemption status, transfer assessments, controller-processor documentation, and the actual credit-provider classification.
+14. Recheck current laws, regulations, and court decisions on the publication date and obtain Kenyan counsel’s review.
 
 A detailed policy is useful only if it matches how the service actually works. A statement that is specific but false can create more risk than an honest, clearly bounded statement.

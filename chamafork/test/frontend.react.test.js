@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 const { pathToFileURL } = require("node:url");
 const { test } = require("node:test");
 
@@ -31,6 +32,53 @@ test("all existing interactive URLs have a built React mount and local JavaScrip
       assert.ok(fs.existsSync(path.join(buildRoot, bundle.slice(1))), `missing built bundle: ${bundle}`);
     }
   }
+});
+
+test("the English/Kiswahili switch is reversible, persistent, mobile-visible, and keeps chat content intact", () => {
+  const localeSource = fs.readFileSync(path.join(sourceRoot, "..", "i18n.js"), "utf8");
+  const landing = readSource("src/pages/LandingPage.jsx");
+  const chat = readSource("src/components/ChatPanel.jsx");
+  const landingCss = fs.readFileSync(path.join(sourceRoot, "..", "landing-theme.css"), "utf8");
+  let savedLanguage = "en";
+  const events = [];
+  const documentElement = { lang: "en", querySelectorAll: () => [], matches: () => false };
+  const document = {
+    readyState: "loading",
+    title: "Jirani Chama",
+    documentElement,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    createTreeWalker: () => ({ nextNode: () => false }),
+    addEventListener: () => {},
+  };
+  const window = { dispatchEvent: event => events.push(event) };
+  const localStorage = {
+    getItem: () => savedLanguage,
+    setItem: (_key, value) => { savedLanguage = value; },
+  };
+  class CustomEvent {
+    constructor(type, init) { this.type = type; this.detail = init?.detail; }
+  }
+
+  vm.runInNewContext(localeSource, { window, document, localStorage, NodeFilter: { SHOW_TEXT: 4 }, CustomEvent });
+  const locale = window.jiraniI18n;
+  locale.setLanguage("sw");
+  assert.equal(locale.getLanguage(), "sw");
+  assert.equal(documentElement.lang, "sw");
+  assert.equal(savedLanguage, "sw");
+  assert.equal(locale.translateText("Features"), "Vipengele");
+  assert.equal(locale.translateText("No messages yet."), "Bado hakuna ujumbe.");
+  locale.setLanguage("en");
+  assert.equal(locale.translateText("Vipengele"), "Features");
+  assert.equal(documentElement.lang, "en");
+  assert.equal(savedLanguage, "en");
+  assert.equal(events.length, 2);
+
+  assert.match(landing, /id="landing-language-switch"/);
+  assert.match(landing, /option value="sw" data-i18n="swahili">Kiswahili/);
+  assert.match(landingCss, /\.landing-language-control select\s*\{[^}]*min-height:\s*44px/);
+  assert.match(localeSource, /new MutationObserver/);
+  assert.match(chat, /translate="no"/);
 });
 
 test("legacy dashboard bootstrap does not signal that an active session ended", () => {
@@ -101,6 +149,7 @@ test("React owns dashboard finance, attendance, cash entry, leadership, loans, l
   const dashboardTemplate = fs.readFileSync(path.join(sourceRoot, "..", "index.html"), "utf8");
   const profileMode = readSource("src/profileMode.mjs");
   const actions = readSource("src/registrationActions.mjs");
+  const translations = fs.readFileSync(path.join(sourceRoot, "..", "i18n.js"), "utf8");
   assert.match(main, /createRoot\(mountNode\)/);
   assert.match(main, /flushSync\(/);
   assert.match(main, /\.\.\/\.\.\/i18n\.js/);
@@ -176,10 +225,14 @@ test("React owns dashboard finance, attendance, cash entry, leadership, loans, l
   assert.match(dashboardTemplate, /id="react-leadership-root"/);
   assert.match(loans, /onSubmit=\{handleSubmit\}/);
   assert.match(loans, /name="guarantorIds"/);
-  assert.match(loans, /snapshot\.permissions\?\.decideLoans === true && loan\.canDecide === true/);
-  assert.match(loans, /recordLoanDecision\(/);
+  assert.match(loans, /requestLoanEstimate\(/);
+  assert.match(loans, /loan\.canRequestHumanReview/);
+  assert.match(loans, /loan\.canReview/);
+  assert.match(loans, /Projected repayment schedule/);
+  assert.doesNotMatch(loans, /recordLoanDecision|decideLoans/);
   assert.match(loanActions, /path: "\/api\/loans"/);
-  assert.match(loanActions, /\/api\/loans\/\$\{encodeURIComponent\(loanId\)\}\/decisions/);
+  assert.match(loanActions, /\/api\/loans\/estimate/);
+  assert.match(loanActions, /\/api\/loans\/\$\{encodeURIComponent\(loanId\)\}\/reviews/);
   assert.match(legacyDashboard, /chama:dashboard-refresh-requested/);
   assert.doesNotMatch(legacyDashboard, /\$\("#loan-form"\)|\$\("#loans"\)|loanStatusLabel|updateLoanRequestAccess/);
   assert.doesNotMatch(legacyDashboard, /transaction-copy|#transactions|export-csv|contribution-date-dialog|correct-contribution/);
@@ -283,11 +336,21 @@ test("React owns dashboard finance, attendance, cash entry, leadership, loans, l
   assert.match(profile, /`\/api\/profile\/photo\/\$\{size\}`/);
   assert.match(profileMode, /mode === "view"/);
   assert.match(profileMode, /mode === "edit"/);
+  const landingFallback = fs.readFileSync(path.join(sourceRoot, "..", "index.html"), "utf8");
   assert.match(landing, /id="features"/);
   assert.match(landing, /id="pricing"/);
   assert.match(landing, /id="contact"/);
   assert.match(landing, /href="\/member-login\.html\?activation=1"/);
   assert.match(landing, /selecting a plan will not start checkout, request payment, change subscription status, or affect existing access/i);
+  assert.match(landing, /eligible request is automatically approved without a Chairperson or Treasurer vote/i);
+  assert.match(landingFallback, /eligible request is automatically approved without a Chairperson or Treasurer vote/i);
+  assert.doesNotMatch(landing, /three distinct role decisions|Secretary fills that approval seat/i);
+  assert.doesNotMatch(landingFallback, /three distinct role decisions|Secretary fills that approval seat/i);
+  assert.doesNotMatch(translations, /three distinct role decisions|three role decisions|maamuzi matatu tofauti|majukumu matatu hukagua/i);
+  assert.match(translations, /faqLoanAnswer: .*automatically approved/);
+  assert.match(translations, /faqLoanAnswer: .*riba inayopungua/);
+  assert.match(translations, /monthClosePendingLoans: "Unresolved requests from the previous loan workflow"/);
+  assert.match(translations, /Maombi ambayo hayajatatuliwa kutoka utaratibu wa awali wa mikopo/);
   for (const controller of ["chama.js", "contact.js"]) {
     assert.ok(app.includes(`"${controller}"`), `missing compatibility controller ${controller}`);
   }
@@ -316,6 +379,25 @@ test("PIN change keeps the existing same-origin endpoint and confirms the server
   assert.equal(request.method, "POST");
   assert.deepEqual(request.body, { currentPin: "[current PIN]", newPin: "[new PIN]" });
   assert.equal(result.user.mustChangePin, false);
+});
+
+test("loan estimate helper uses an authenticated same-origin no-store GET and validates the quoted schedule", async () => {
+  const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "loanActions.mjs")).href;
+  const { requestLoanEstimate } = await import(helperUrl);
+  const estimate = { amount: 10000, months: 3, monthlyRatePercent: 5, interestModel: "reducing", totalPayable: 10834, totalInterest: 834, schedule: [{ no: 1, dueDate: "2026-12-12", principal: 3333, interest: 417, installment: 3750 }, { no: 2, dueDate: "2027-01-12", principal: 3333, interest: 278, installment: 3611 }, { no: 3, dueDate: "2027-02-12", principal: 3334, interest: 139, installment: 3473 }] };
+  let request;
+  const result = await requestLoanEstimate(estimate.amount, estimate.months, async (url, options) => {
+    request = { url, options };
+    return { ok: true, status: 200, json: async () => ({ data: estimate }) };
+  });
+  assert.equal(request.url, "/api/loans/estimate?amount=10000&months=3");
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.credentials, "same-origin");
+  assert.equal(request.options.cache, "no-store");
+  assert.equal(result, estimate);
+  await assert.rejects(() => requestLoanEstimate(10000, 3, async () => ({ ok: true, status: 200, json: async () => ({ data: { ...estimate, schedule: [] } }) })), /invalid repayment estimate/i);
+  await assert.rejects(() => requestLoanEstimate(10000, 3, async () => ({ ok: true, status: 200, json: async () => ({ data: { ...estimate, totalPayable: 10835 } }) })), /invalid repayment estimate/i);
+  await assert.rejects(() => requestLoanEstimate(10000, 4, async () => { throw new Error("must not fetch"); }), /supported repayment period/i);
 });
 
 test("simulated payment keeps TEST-only field normalization, idempotent write validation, and inbox response checks", async () => {
@@ -466,9 +548,9 @@ test("React chat helpers preserve the same-origin read and shared idempotent wri
   await assert.rejects(postChatMessage({ text: "  ", owner, writeRequester: { submit() {} } }), /1 to 500 characters/);
 });
 
-test("React loan helpers preserve supported terms, two distinct guarantors and idempotent API contracts", async () => {
+test("React loan helpers preserve supported terms and the automatic-decision, policy, and human-review API contracts", async () => {
   const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "loanActions.mjs")).href;
-  const { loanRequestFromForm, loanStatusPresentation, submitLoanRequest, recordLoanDecision } = await import(helperUrl);
+  const { loanRequestFromForm, loanStatusPresentation, submitLoanRequest, saveLoanPolicy, requestLoanHumanReview, respondToLoanHumanReview, cancelLegacyLoanRequest } = await import(helperUrl);
   const form = {
     get: name => ({ amount: "1200", months: "2" })[name],
     getAll: name => name === "guarantorIds" ? ["g1", "g2"] : [],
@@ -479,11 +561,13 @@ test("React loan helpers preserve supported terms, two distinct guarantors and i
   assert.throws(() => loanRequestFromForm({ ...form, get: name => name === "months" ? "4" : "1200" }), /1, 2, 3, or 6 months/);
   assert.deepEqual(loanStatusPresentation("Waiting for decisions"), { label: "Pending", className: "pending" });
   assert.deepEqual(loanStatusPresentation("approved"), { label: "Approved", className: "success" });
+  assert.deepEqual(loanStatusPresentation("cancelled"), { label: "Cancelled", className: "inactive" });
 
   const requestOwner = {};
   let request;
   const requestResult = { data: { id: "loan-1", amount: 1200, months: 2 } };
-  const writeRequester = { submit: async value => { request = value; return requestResult; } };
+  let responseResult = requestResult;
+  const writeRequester = { submit: async value => { request = value; return responseResult; } };
   assert.strictEqual(await submitLoanRequest(writeRequester, requestOwner, payload), requestResult);
   assert.strictEqual(request.owner, requestOwner);
   assert.equal(request.path, "/api/loans");
@@ -492,16 +576,37 @@ test("React loan helpers preserve supported terms, two distinct guarantors and i
   assert.equal(request.validate(requestResult), true);
   assert.equal(request.validate({ data: { id: "loan-1", amount: 1200, months: 3 } }), false);
 
-  const decisionOwner = {};
-  let decisionWrite;
-  const decisionResult = { data: { id: "loan/2" } };
-  const decisionWriter = { submit: async value => { decisionWrite = value; return decisionResult; } };
-  assert.strictEqual(await recordLoanDecision(decisionWriter, decisionOwner, "loan/2", "approve", "Reviewed and approved"), decisionResult);
-  assert.strictEqual(decisionWrite.owner, decisionOwner);
-  assert.equal(decisionWrite.path, "/api/loans/loan%2F2/decisions");
-  assert.deepEqual(decisionWrite.body, { decision: "approve", reason: "Reviewed and approved" });
-  assert.equal(decisionWrite.validate(decisionResult), true);
-  assert.throws(() => recordLoanDecision(decisionWriter, decisionOwner, "loan-1", "approve", "no"), /between 5 and 500/);
+  const policyOwner = {};
+  const policy = { maxGroupCashPercent: 40, maxMemberContributionPercent: 250, tiers: [{ maxAmountKsh: 10000, minActiveDays: 30, minShareContributionKsh: 2000 }] };
+  responseResult = { data: { tiers: policy.tiers } };
+  assert.strictEqual(await saveLoanPolicy(writeRequester, policyOwner, policy), responseResult);
+  assert.strictEqual(request.owner, policyOwner);
+  assert.equal(request.path, "/api/loans/policy");
+  assert.equal(request.method, "POST");
+  assert.deepEqual(request.body, policy);
+  assert.equal(request.validate(responseResult), true);
+
+  const reviewOwner = {};
+  const loanId = "loan/2";
+  responseResult = { data: { id: loanId, humanReview: { status: "requested" } } };
+  assert.strictEqual(await requestLoanHumanReview(writeRequester, reviewOwner, loanId, "Please check my contribution records."), responseResult);
+  assert.strictEqual(request.owner, reviewOwner);
+  assert.equal(request.path, "/api/loans/loan%2F2/review-requests");
+  assert.deepEqual(request.body, { reason: "Please check my contribution records." });
+  assert.equal(request.validate(responseResult), true);
+  assert.throws(() => requestLoanHumanReview(writeRequester, reviewOwner, loanId, "no"), /5 to 1,000/);
+
+  responseResult = { data: { id: loanId, humanReview: { status: "completed" } } };
+  assert.strictEqual(await respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { decision: "reassess", reason: "Checked the recorded receipt." }), responseResult);
+  assert.equal(request.path, "/api/loans/loan%2F2/reviews");
+  assert.deepEqual(request.body, { decision: "reassess", reason: "Checked the recorded receipt." });
+  assert.equal(request.validate(responseResult), true);
+
+  responseResult = { data: { id: loanId, status: "cancelled" } };
+  assert.strictEqual(await cancelLegacyLoanRequest(writeRequester, reviewOwner, loanId), responseResult);
+  assert.equal(request.path, "/api/loans/loan%2F2/cancel");
+  assert.deepEqual(request.body, {});
+  assert.equal(request.validate(responseResult), true);
 });
 
 test("React ledger helpers preserve correction eligibility, calendar bounds, and idempotent API contracts", async () => {

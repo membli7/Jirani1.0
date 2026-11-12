@@ -1,10 +1,10 @@
 # Kenyan legal research notes for Jirani Chama policies
 
-**Research checked:** 11 November 2026. This is a drafting aid, not legal advice, a compliance audit, or a statement that the app complies with every applicable law. Confirm the current law and case status again immediately before publication.
+**Research checked:** 12 November 2026. This is a drafting aid, not legal advice, a compliance audit, or a statement that the app complies with every applicable law. Confirm the current law and case status again immediately before publication.
 
 ## Product facts used
 
-The product context supplied for this review is that Jirani Chama stores chama/member accounts and records such as contributions, loans, approvals, attendance, messages, and activity history. The app does not disburse loans or move members’ money. Live payment processing and subscription billing are disabled. These facts must be checked against production behavior and contracts before they appear as public promises.
+The product context supplied for this review is that Jirani Chama stores chama/member accounts and records such as contributions, loans, attendance, messages, and activity history. The reviewed local code now makes immediate rule-based loan eligibility decisions using Chairperson-configured Chama thresholds; members may request post-decision human review, and authorized officers can inspect records but do not vote on new applications. No numeric loan thresholds were supplied, so no universal values were added. The app does not disburse loans or move members’ money. Live payment processing and subscription billing remain disabled. Local code behavior does not prove that a feature is enabled in production; verify deployment, contracts, operational review handling, and data flows before public promises or real lending.
 
 ## Main findings for drafting
 
@@ -67,6 +67,15 @@ The research identified 2026 judgments affecting specified cybercrime provisions
 - [Office of the Data Protection Commissioner](https://www.odpc.go.ke/)
 - [Central Bank of Kenya, National Payments System](https://www.centralbank.go.ke/national-payments-system/)
 
+## Automated loan-decision findings checked 12 November 2026
+
+- **Data Protection Act, 2019, section 35:** a data subject has a right not to be subject to a solely automated decision that has legal effects or significantly affects them, subject to the Act's stated exceptions. Where such a decision is made, the controller or processor must notify the person as soon as reasonably practicable. The person may request reconsideration or a new decision that is not solely automated; the request must be considered, relevant information taken into account, and the person told the steps and outcome within a reasonable period. [Kenya Law, Data Protection Act, section 35](https://kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31)
+- **Data Protection (General) Regulations, 2021, regulation 22:** requires notice that automated individual decision-making is used, meaningful information about the logic, explanation of significance and likely consequences, transparency and fairness, measures to prevent/correct errors and reduce bias, and a way for a person to obtain human intervention and express their point of view. [Kenya Law, regulation 22](https://kenyalaw.org/akn/ke/act/ln/2021/263)
+- **Regulation 49:** automated decisions with legal or similar significant effects using profiling or algorithmic means are among high-risk processing operations for which a DPIA is required before processing. The controller must assess whether this loan workflow meets that test and complete the assessment before enabling it for real members. [Kenya Law, regulation 49](https://kenyalaw.org/akn/ke/act/ln/2021/263)
+- **CBK Non-Deposit Taking Credit Providers Regulations, 2026, Legal Notice 191, regulation 3:** applies to non-deposit-taking credit business not regulated under another written law and excludes, among others, co-operative societies registered under the Co-operative Societies Act and licensed SACCO societies. Whether a Chama, platform operator, or other party is in scope depends on the actual legal entity and lending model; recording a group loan does not alone settle the question. Regulation 54 sets loan-agreement disclosures for providers within scope. [Kenya Law, Legal Notice 191 of 2026](https://kenyalaw.org/akn/ke/act/ln/2026/191/eng@2026-09-29)
+
+These extracts are drafting guidance, not a finding that the Chama, Operator, or automated workflow is compliant. Confirm lawful basis, controller/processor roles, DPIA, human-review operation, the group's legal form and lending model, and counsel's advice before real lending or publication.
+
 ## Required factual confirmations before publication
 
 1. Operator’s registered legal name, legal form, address, service contact, and privacy-request contact.
@@ -78,6 +87,8 @@ The research identified 2026 judgments affecting specified cybercrime provisions
 7. Retention periods or criteria for account data, financial records, messages, audit/security logs, and backups.
 8. Verified security controls, breach-response process, DPIA status, and rights-request operating procedure.
 9. Whether the service is completely free and whether any direct or indirect fees are charged or planned.
-10. Whether any production feature or contract handles payment instructions/data or originates, arranges, or services loans.
-11. Current legal status of the Community Groups Registration Act judgment and other time-sensitive appellate matters.
-12. The acceptance scope: new chama registration, invited-member activation, existing users at next login, and material policy updates.
+10. Whether any production feature or contract handles payment instructions/data or originates, arranges, funds, approves, services, or collects loans; the relevant legal entity and group form; and the actual CBK credit-provider classification.
+11. Whether the production loan policy, membership-start dates, criteria inputs, reason display, and borrower human-review route match the reviewed code; who monitors requests, the response target, escalation route, and how conflicts are handled.
+12. Current legal status of the Community Groups Registration Act judgment and other time-sensitive appellate matters.
+13. The acceptance scope: new chama registration, invited-member activation, existing users at next login, and material policy updates.
+14. Whether loan interest, total payable, repayment dates, fees, guarantor obligations, and default consequences are disclosed and agreed before any external disbursement.

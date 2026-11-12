@@ -2,7 +2,7 @@
 
 **Status: working draft for review. Do not publish as final or rely on it as evidence of acceptance.** The bracketed items require the operator’s confirmation. Product statements must be checked against the live deployment and current contracts. This draft is not a legal opinion and cannot guarantee that a dispute or claim will not arise.
 
-**Draft date:** 11 November 2026  
+**Draft date:** 12 November 2026
 **Proposed operator:** [registered legal name, legal form, and country of establishment]  
 **Registered or principal address:** [postal and physical address]  
 **Legal notices and complaints:** 09elim3@gmail.com, currently shown on the public website. Confirm that this inbox is monitored and provide any required postal contact.
@@ -73,7 +73,7 @@ The App provides digital tools for group administration and recordkeeping. Based
 
 - member accounts, roles, invitations, and membership status;
 - contribution and related group-fund entries, transaction records, and ledger views;
-- loan requests, role-based decisions, repayment records, and outstanding-balance records;
+- loan requests, Chama-configured automatic eligibility decisions, human-review records, repayment records, and outstanding-balance records;
 - attendance registers and meeting dates;
 - group messages and in-app activity history;
 - officer changes and election workflows;
@@ -83,9 +83,13 @@ The App applies server-side role and workflow rules to some actions. The App’s
 
 ### 4.1 Loan workflow recorded in the App
 
-The current recorded product decisions support loan terms of 1, 2, 3, or 6 months. A request requires three distinct role decisions, and a borrower cannot decide their own request. If the borrower is the Chairperson or Treasurer, the Secretary fills the otherwise unavailable approval seat. A repayment is applied to interest before principal under the current product rule.
+The Chairperson configures each Chama’s eligibility policy; the App supplies no universal numeric thresholds. When rules are configured, each application is assessed immediately without a Chairperson or Treasurer vote. The first configured amount tier that covers the requested principal sets that tier’s minimum active-membership period and minimum recorded share-capital contributions. The requested amount must also fit within both (a) the configured percentage of the Chama’s recorded balance and (b) the configured percentage of the borrower’s recorded share-capital contributions after existing principal exposure is deducted. The borrower must select exactly two distinct active guarantors, whose combined unpledged share capital must cover the request. A request passing every check is recorded as approved; otherwise it is rejected with reasons. The decision record stores the policy version and eligibility inputs. Chairperson, Secretary, and Treasurer accounts can inspect the Chama’s loan records, but this access is not a vote or approval step for a new request. The reviewed App allows only the Chairperson to change the eligibility policy.
 
-These rules describe the App workflow. They do not mean the Operator lends money, approves credit as a lender, guarantees repayment, verifies that funds were disbursed, or decides whether the Chama’s underlying loan is valid. The Chama must make and document its own decisions under its rules and applicable law. Confirm this wording against the live server rules before publication.
+The borrower may ask for one human review and give an explanation. A non-conflicted Chairperson, Secretary, or Treasurer may confirm the recorded decision, reassess a rejected application against the original saved policy after checking the relevant records, or withdraw an approval only after confirming that no money was disbursed outside the App. The officer’s action, reasons, and outcome are recorded. The App has no configured response deadline or guaranteed alert to a reviewer; the Chama must set and communicate a practical response target and escalation route before real lending.
+
+For a new application, the App supports loan terms of 1, 2, 3, or 6 months and uses a reducing-balance monthly-interest model. Each Chama’s monthly rate is stored separately and is included in a server-generated estimate shown before submission, including estimated interest, total payable, and the installment amounts and due dates. The estimate uses the amount, term, current Chama rate, and current server calculation; it is not a binding offer, does not reserve funds, and does not confirm an external transfer. An approved record stores the rate and repayment schedule used for that decision. Repayments are applied to interest before principal under the reviewed product rule. This build has no officer/member screen for changing the rate after Chama setup. Before any rate is changed outside setup, the Chama must authorize it and the product must provide a controlled, auditable change process; otherwise new applications should not be made on a rate that has changed without notice. Because the App neither transfers funds nor records the actual off-app disbursement date, do not treat the approval record or projected schedule alone as proof that a loan was advanced or as a complete loan agreement. Before money is advanced, the actual lender must confirm the amount and date advanced, rate and method, total amount payable, due dates, fees, guarantor obligations and release, and consequences of late payment or default.
+
+These statements describe the reviewed App workflow; they do not establish whether the Operator or a Chama is legally a lender or credit provider. Regulation 3 of the [CBK Non-Deposit Taking Credit Providers Regulations, 2026](https://kenyalaw.org/akn/ke/act/ln/2026/191/eng@2026-09-29) defines scope and exclusions, and regulation 54 sets disclosures for providers within scope. The actual legal entity, group form, and lending model must be assessed; do not assume that every Chama is covered or exempt. The responsible controller must also assess the automated-decision rights and safeguards under section 35 of the [Data Protection Act, 2019](https://kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31) and regulations 22 and 49 of the [Data Protection (General) Regulations, 2021](https://new.kenyalaw.org/akn/ke/act/ln/2021/263/eng@2022-12-31). This is not legal advice or a finding of compliance. Confirm all product behavior against production and obtain Kenyan counsel’s review before publication or real lending.
 
 ### 4.2 Records and calculations
 
@@ -172,7 +176,7 @@ The Privacy Policy describes the information handled by the App, the purposes an
 
 For group records, the Chama may determine the purposes and means of processing and the Operator may act on the Chama’s documented instructions. The Operator may have a separate role for account administration, platform security, or support. The actual role must be determined for each purpose, not selected simply by wording in this agreement.
 
-Read the [Privacy Policy draft](privacy-policy-draft.md). The current public Privacy page is linked from the landing-page footer, but this expanded draft is not yet published.
+Read the [Privacy Policy draft](privacy-policy-draft.md). A public Privacy page is linked from the landing-page footer and is explicitly marked as a working draft. It does not complete the missing facts or record acceptance of a final notice.
 
 ## 11. Acceptable use and security
 
@@ -252,7 +256,7 @@ The currently published email address is **09elim3@gmail.com**. Confirm whether 
 
 ## Publication checklist
 
-This draft is not publication-ready until the Operator’s identity and contracting parties are confirmed; the service, fees, exports, notices, correction process, complaint procedure, and account-closure behavior are checked against production; the acceptance workflow and evidence storage are implemented if mandatory assent is required; and a Kenyan lawyer has reviewed the final text. The Privacy Policy’s data map, transfer details, retention schedule, contact routes, and security statements must also be completed.
+This draft is not publication-ready until the Operator’s identity and contracting parties are confirmed; the service, fees, exports, notices, correction process, complaint procedure, loan-interest disclosure, guarantor terms, and account-closure behavior are checked against production; the configured loan thresholds and recorded membership dates are verified; the automated-decision DPIA and human-review process are complete where required; the acceptance workflow and evidence storage are implemented if mandatory assent is required; and a Kenyan lawyer has reviewed the final text. The Privacy Policy’s data map, transfer details, retention schedule, contact routes, and security statements must also be completed.
 
 ## Legal references for the reviewer
 

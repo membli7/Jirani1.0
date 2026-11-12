@@ -22,8 +22,12 @@ All JSON write requests require `X-Requested-With: chama`. Authenticated state-c
 - `POST /api/contributions/:id/correct-date` accepts `{ date, reason }` for a confirmed cash contribution. Only the Chairperson or Treasurer may use it. The server requires a non-empty reason, keeps the date within the original month and the existing on-time/late classification, and changes no other transaction fields; it appends an audit event with actor, time, old/new dates, and reason.
 - `GET /api/monthly-close?month=YYYY-MM` is a read-only monthly summary available to Chairperson, Secretary, and Treasurer. It summarizes recorded cash activity, tracked open loan balances, and review items; it does not verify bank/M-PESA settlement or move money.
 - `GET /api/messages` and `POST /api/messages` provide in-app group chat. `GET /api/events/stream` is an authenticated event stream for message, loan, member, and financial updates; it does not process payments.
-- `POST /api/loans` is bound to the signed-in user and accepts `{ amount, months }`.
-- `POST /api/loans/:id/decisions` accepts `{ decision: "approve" | "reject", reason }`. Each request needs three role decisions with reasons; a borrower cannot decide their own request. Normally the required roles are Chairperson, Treasurer, and Member. If the borrower is the Chairperson or Treasurer, the Secretary takes that role's approval seat. Duplicate decisions are rejected. Loan terms are 1, 2, 3, or 6 months. Approval records a ledger obligation only; money is not transferred or disbursed by this app.
+- `GET /api/loans` returns Chama-scoped records: a Member sees their own loans; Chairperson, Secretary, and Treasurer accounts can inspect group records. `GET /api/loans/guarantors` lists other active members of that Chama.
+- `GET /api/loans/estimate?amount=<KES>&months=<1|2|3|6>` is authenticated and read-only. It uses the Chama's saved monthly rate and reducing-balance formula, returns `Cache-Control: no-store`, and is limited to 60 requests per minute per Chama member.
+- `POST /api/loans/policy` accepts `{ maxGroupCashPercent, maxMemberContributionPercent, tiers: [{ maxAmountKsh, minActiveDays, minShareContributionKsh }] }`. Only the Chairperson can change the policy. It has no prefilled universal numeric thresholds and applies saved rules to future requests.
+- `POST /api/loans` accepts `{ amount, months, guarantorIds }`. It requires a saved policy and exactly two distinct active same-Chama guarantors. The server immediately records an automatic approval or rejection, reasons, criteria inputs, and policy version; new applications never wait for an officer vote. If no policy is configured, no application is recorded. Supported terms are 1, 2, 3, or 6 months.
+- `POST /api/loans/:id/review-requests` accepts `{ reason }` from the borrower; each decision can receive one human-review request. `POST /api/loans/:id/reviews` accepts `{ decision: "confirm" | "reassess" | "withdraw", reason }` from a non-conflicted Chairperson, Secretary, or Treasurer after a request. Actions and reasons are recorded.
+- `POST /api/loans/:id/cancel` lets a borrower cancel a still-pending request created by the previous role-vote workflow so they can apply under the current rules. The retired `POST /api/loans/:id/decisions` endpoint returns HTTP 409 and accepts no new votes.
 - `GET/POST /api/leadership-elections` supports post-setup officer elections. The Chairperson or Secretary schedules candidates and a date; eligible active chama accounts vote once by secret ballot, and ties can be resolved through a scheduled runoff.
 
 ## Kept feature scope
@@ -34,13 +38,13 @@ The authenticated `GET /api/export.csv` downloads the transaction ledger and att
 
 ### Loan requests
 
-Any signed-in role can request a 1-, 2-, 3-, or 6-month loan. Each request requires three distinct role decisions, and no borrower can decide their own loan. The Secretary fills a Chairperson's or Treasurer's approval seat when that officer is the borrower. Each decision and reason is retained in the approval history. Requests can be rejected, approved, and later repaid through a Treasurer-recorded cash ledger entry. This feature tracks requests and balances only: it does not transfer or disburse money; only the listed terms are supported.
+Each Chama configures its own eligibility thresholds and amount tiers. A new request is assessed immediately against membership duration, recorded share capital, the group-balance and member-contribution caps, existing principal, and two guarantors' available share capital. Eligible requests are recorded as approved; others are rejected with reasons. A borrower can ask a non-conflicted officer for one post-decision human review. Chairperson, Secretary, and Treasurer accounts can inspect group records, but none votes on a new request. A pending request left from the previous workflow can only be cancelled by its borrower and resubmitted under current rules. The App records reducing-balance schedules and Treasurer-entered cash repayments; it does not transfer or disburse loan funds.
 
 ### Group chat and month-end review
 
 Active accounts can use in-app group chat within their chama. The event stream delivers updates when available; the client polls during stream outages, reconciles periodically after reconnecting, and attempts to reconnect when the device comes online. External WhatsApp/SMS broadcasts and chat by email are not included.
 
-The officer-only month-end close is a read-only review of cash contributions and repayments already recorded, tracked open loan balances, and review items such as pending loan decisions or incomplete cash references. It is not bank/M-PESA reconciliation and does not move funds.
+The officer-only month-end close is a read-only review of cash contributions and repayments already recorded, tracked open loan balances, and review items such as unresolved requests from the previous loan workflow or incomplete cash references. New loan applications are decided immediately under their Chama's configured rules. It is not bank/M-PESA reconciliation and does not move funds.
 
 ### Audit and corrections
 

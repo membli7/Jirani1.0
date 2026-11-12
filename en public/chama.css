@@ -229,6 +229,24 @@ td { padding: 12px 13px; border-top: 1px solid #f0f2ef; font-size: 10px; white-s
 .loan-decision label { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 650; }
 .loan-decision textarea { display: block; width: 100%; min-height: 54px; margin-bottom: 8px; font-size: 11px; }
 .loan-decision-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.loan-policy-summary, .loan-policy-editor, .loan-auto-decision, .loan-human-review, .loan-review-actions { display: grid; gap: 9px; min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.loan-policy-summary h3, .loan-policy-editor h3, .loan-auto-decision h4, .loan-human-review h4 { margin: 0; font-size: 14px; }
+.loan-policy-summary p, .loan-policy-editor p, .loan-auto-decision p, .loan-human-review p, .loan-review-actions p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.loan-policy-tier-summary { margin: 0; padding-left: 22px; display: grid; gap: 6px; line-height: 1.45; }
+.loan-policy-percentages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.loan-policy-tier-list, .loan-policy-tier { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; }
+.loan-policy-tier-list > legend, .loan-policy-tier > legend { padding: 0 5px; font-size: 12px; font-weight: 700; }
+.loan-review-actions textarea, .loan-review-actions select { width: 100%; min-height: 38px; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font: inherit; }
+.loan-review-actions textarea { min-height: 72px; resize: vertical; }
+.loan-review-actions label { font-size: 12px; font-weight: 650; }
+.loan-review-confirmation { display: flex; align-items: flex-start; gap: 8px; font-weight: 500 !important; }
+.loan-review-confirmation input { flex: 0 0 auto; width: 18px; min-height: 18px; margin: 0; accent-color: var(--green); }
+.loan-review-result { display: grid; gap: 7px; padding-top: 8px; border-top: 1px solid var(--line); }
+.loan-cost-preview, .loan-recorded-schedule { display: grid; gap: 9px; min-width: 0; padding: 13px; border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 10px; background: var(--paper); }
+.loan-cost-preview h3, .loan-recorded-schedule h4 { margin: 0; font-size: 14px; }
+.loan-cost-preview p, .loan-recorded-schedule p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.loan-estimate-schedule { display: grid; gap: 6px; margin: 0; padding-left: 22px; line-height: 1.45; }
+.loan-estimate-schedule li { min-width: 0; overflow-wrap: anywhere; }
 .field { display: grid; flex: 1; gap: 6px; min-width: 0; }
 .field label { color: #59675e; font-size: 10px; font-weight: 650; }
 .field input, .field select { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; outline: none; color: var(--ink); background: #fff; font-size: 11px; }
@@ -384,6 +402,9 @@ textarea { width: 100%; font: inherit; color: var(--ink); background: #fff; }
   .loan-approval-trail { grid-template-columns: minmax(0, 1fr); }
   .loan-card-heading { flex-direction: column; }
   .loan-panel-body { padding-right: 12px; padding-left: 12px; }
+  .loan-policy-percentages { grid-template-columns: minmax(0, 1fr); }
+  .loan-policy-summary, .loan-policy-editor, .loan-auto-decision, .loan-human-review, .loan-review-actions { padding: 11px; }
+  .loan-cost-preview, .loan-recorded-schedule { padding: 11px; }
   .topbar { min-height: 0; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 12px; }
   .top-actions { width: 100%; justify-content: flex-start; gap: 8px; }
   .language-control { flex: 0 0 auto; }

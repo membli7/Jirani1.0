@@ -19,11 +19,12 @@ This README describes the state at the end of the sprint. Anything not listed un
 - `POST /api/settings/meeting-date` (Chairperson or Secretary) sets a different deadline for one month.
 - `POST /api/penalties/assess` (Chairperson or Secretary) runs after a month's deadline. It gives an outstanding KES 200 penalty to each active member who paid less than KES 500 by then. Each member is penalised once per month, and members with a late-payment penalty for that month are skipped.
 
-**Loans** (`POST /api/loans`, `POST /api/loans/:id/decisions`, `POST /api/loans/repay`)
-- Limit: up to 3 times the borrower's share capital.
-- Guarantors: exactly two different active members, not the borrower. Their unpledged share capital must cover the principal. Pledges are locked until the loan is repaid or rejected.
-- Interest: 5% a month. Reducing balance is the default; flat rate can be requested. The schedule is created on approval. Terms are 1, 2, 3, or 6 months.
-- Approval needs three distinct role decisions; borrowers cannot decide their own request, and the Secretary fills the Chairperson or Treasurer seat when that officer is the borrower. The repayment form records cash only. The app records the schedule and balances; it does not move or disburse money.
+**Loans** (`POST /api/loans`, `POST /api/loans/policy`, `GET /api/loans/estimate`, `POST /api/loans/:id/review-requests`, `POST /api/loans/:id/reviews`, `POST /api/loans/repay`)
+- Eligibility is configured per Chama by its Chairperson. A policy sets the maximum share of recorded group balance, the maximum share of each borrower's recorded share-capital contributions, and amount tiers with minimum active-membership days and share-capital contributions. No universal numeric thresholds are prefilled; a Chama without a saved policy cannot submit a loan application.
+- An application is assessed immediately against those rules and records an automatic approval or rejection with its reasons, criteria inputs, and policy version. Chairperson, Secretary, and Treasurer accounts can inspect group records but do not vote on new applications. A borrower may request one post-decision human review from a non-conflicted officer.
+- Guarantors: exactly two different active members of the same Chama, not the borrower. Their combined unpledged share capital must cover the principal. Pledges are locked for approved loans until principal is repaid.
+- Interest: the Chama's saved monthly rate, with a reducing-balance model only. The authenticated, read-only estimate endpoint returns estimated interest, total payable, and each installment before submission; an approved record snapshots the rate and schedule. New terms are 1, 2, 3, or 6 months. The current UI does not support changing the rate after setup.
+- The app records schedules and Treasurer-entered cash repayments but does not transfer or disburse money or verify an off-app advance. Confirm the actual amount/date advanced and final written terms before treating a projected schedule as funded debt.
 - Repayments pay interest first on the earliest installment, then principal. Guarantor pledges are released as principal falls.
 
 **Dividends** (`POST /api/dividends/calculate`, `POST /api/dividends/commit`; Chairperson or Treasurer)

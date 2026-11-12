@@ -6,7 +6,7 @@
         <title>Jirani Chama</title>
         <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
         <link rel="stylesheet" href="/chama.css?v=20261110.2">
-        <link rel="stylesheet" href="/landing-theme.css?v=20261110.1">
+        <link rel="stylesheet" href="/landing-theme.css?v=20261112.1">
     </head>
 <body class="landing-mode">
  <header class="topbar">
@@ -391,7 +391,7 @@
                                     <circle cx="12" cy="12" r="4"/>
                                 </svg>
                             </div>
-                            <div class="security-text"><strong data-i18n="landingDecisionsTitle">Decisions with clear roles.</strong> <span data-i18n="landingDecisionsCopy">Loans need three distinct role decisions. After setup, officer seats follow a scheduled secret-ballot election.</span></div>
+                            <div class="security-text"><strong data-i18n="landingDecisionsTitle">Decisions with clear roles.</strong> <span data-i18n="landingDecisionsCopy">Loan decisions use thresholds configured for each Chama; authorized officers can inspect records, and borrowers can request a human review. After setup, officer seats follow a scheduled secret-ballot election.</span></div>
                         </li>
                         <li class="security-card">
                             <div class="security-icon" aria-hidden="true">
@@ -492,12 +492,12 @@
                         <details>
                             <summary data-i18n="faqLoanQuestion">How does the platform handle loan approvals and repayments?</summary>
                             <div class="faq-answer">
-                                <p data-i18n="faqLoanAnswer">A loan needs three distinct role decisions, and borrowers cannot decide their own request. When the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. Supported terms are 1, 2, 3, or 6 months; repayments clear interest before principal. The app records the obligation and cash repayment but does not disburse funds.</p>
+                                <p data-i18n="faqLoanAnswer">Each Chama sets its own thresholds. The app immediately checks active-membership period, recorded share-capital contributions, the amount tier, the requested amount against the Chama balance and the member’s existing loan exposure, and two guarantors’ available share capital. An eligible request is automatically approved without a Chairperson or Treasurer vote; authorized officers can inspect loan records, and the borrower may request a human review. Members can see the reducing-balance repayment estimate before submitting. The app records repayments but does not transfer or disburse funds.</p>
                             </div>
                         </details>
 
                         <details><summary data-i18n="faqPenaltyQuestion">How are late-payment penalties assessed?</summary><div class="faq-answer"><p data-i18n="faqPenaltyAnswer">A late-dated contribution can create the configured late penalty when the Treasurer records it. Separately, the Chairperson or Secretary must run the monthly assessment for eligible members who have not met the welfare threshold. That assessment is manual, not automatic.</p></div></details>
-                        <details><summary data-i18n="faqMonthCloseQuestion">What does the month-end close review show?</summary><div class="faq-answer"><p data-i18n="faqMonthCloseAnswer">It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to review, such as pending loan requests or missing references. It is read-only and does not reconcile bank or M-PESA statements or move money.</p></div></details>
+                        <details><summary data-i18n="faqMonthCloseQuestion">What does the month-end close review show?</summary><div class="faq-answer"><p data-i18n="faqMonthCloseAnswer">It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to follow up, such as requests left open under the previous loan workflow or missing references. New loan applications are decided immediately under each Chama’s configured rules. It is read-only and does not reconcile bank or M-PESA statements or move money.</p></div></details>
                         <details><summary data-i18n="faqChatQuestion">Can our group chat inside the app?</summary><div class="faq-answer"><p data-i18n="faqChatAnswer">Yes. Active accounts can use the chama's in-app group chat. It refreshes through the event stream with polling and reconnection support. WhatsApp/SMS broadcasts and chat by email are not included.</p></div></details>
                         <details><summary data-i18n="faqCorrectionQuestion">Can we correct a contribution date after recording it?</summary><div class="faq-answer"><p data-i18n="faqCorrectionAnswer">Only the Chairperson or Treasurer can correct the date of a confirmed cash contribution, and a non-empty reason is required. The new date must be valid, not future-dated, stay in the original month, and preserve whether the contribution was on time or late. Amount, member, and other transaction fields are unchanged. An audit event records the actor, time, old and new dates, and reason; the audit store is not tamper-evident.</p></div></details>
                         <details><summary data-i18n="faqMoneyQuestion">Does Jirani Chama receive, verify, or move our money?</summary><div class="faq-answer"><p data-i18n="faqMoneyAnswer">No. It records cash already received or paid outside the app. It does not collect or disburse funds, and bank/M-PESA settlement matching is not enabled.</p></div></details>
@@ -604,7 +604,7 @@
     </footer>
 </section>
 <div id="react-pin-change-root"></div>
- <script src="/i18n.js?v=20261108.3" defer></script>
+ <script src="/i18n.js?v=20261112.1" defer></script>
  <script src="/write-requests.js?v=20261110.1" defer></script>
  <script src="/chama.js?v=20261111.2" defer></script>
  <script src="/contact.js?v=20261106.1" defer></script>

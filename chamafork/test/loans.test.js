@@ -13,6 +13,7 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-loans-test-"));
 const dataFile = path.join(tempDir, "data.json");
 let serverProcess;
 let baseUrl;
+let primaryLoanId;
 const cookies = {};
 
 function pinHash(pin) {
@@ -30,16 +31,28 @@ const people = [
   { id: "g2", name: "Guarantor Two", phone: "+254711000007", role: "member", pin: "789012", shareCapital: 1000 },
   { id: "g3", name: "Guarantor Three", phone: "+254711000008", role: "member", pin: "890123", shareCapital: 300 },
   { id: "g4", name: "Guarantor Four", phone: "+254711000009", role: "member", pin: "901234", shareCapital: 300 },
+  { id: "rate-b", name: "Other Chama Member", phone: "+254711000010", role: "member", pin: "012345", shareCapital: 0, chamaId: "other-chama" },
 ];
 
 // A fixed cash balance, so approvals are never blocked by group funds.
 const seedTransaction = { id: "seed-cash", at: "2026-09-01T08:00:00.000Z", memberId: "chair", memberName: "Test Chair", amount: 100000, method: "Cash", paymentType: "Monthly Contribution", note: "Opening cash", status: "confirmed", source: "manual-cash", recordedBy: "treasurer", loanId: null, welfareAmount: 0, shareCapitalAmount: 0, penaltyAmount: 0, contributionMonth: "2026-09", referenceNumber: "CROSS-TYPE-3000" };
+const baselineLoanPolicy = {
+  maxGroupCashPercent: 100,
+  maxMemberContributionPercent: 300,
+  tiers: [
+    { maxAmountKsh: 500, minActiveDays: 0, minShareContributionKsh: 0 },
+    { maxAmountKsh: 10000, minActiveDays: 30, minShareContributionKsh: 500 },
+  ],
+};
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
-  chamas: [{ id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() }],
-  users: people.map(person => ({ id: person.id, name: person.name, phone: person.phone, role: person.role, status: "active", pinHash: pinHash(person.pin), mustChangePin: false, shareCapital: person.shareCapital })),
-  transactions: [seedTransaction],
+  chamas: [
+    { id: "test-chama", name: "Test Chama", subscription: require("./active-subscription-fixture").activeSubscription() },
+    { id: "other-chama", name: "Other Chama", settings: { loanMonthlyRatePercent: 2.5 }, subscription: require("./active-subscription-fixture").activeSubscription() },
+  ],
+  users: people.map(person => ({ id: person.id, name: person.name, phone: person.phone, role: person.role, status: "active", pinHash: pinHash(person.pin), mustChangePin: false, shareCapital: person.shareCapital, chamaId: person.chamaId || "test-chama", createdAt: "2026-09-01T08:00:00.000Z" })),
+  transactions: [seedTransaction, ...people.filter(person => person.shareCapital > 0).map((person, index) => ({ id: `seed-share-${person.id}`, at: "2026-09-01T08:00:00.000Z", memberId: person.id, memberName: person.name, amount: person.shareCapital, method: "Cash", paymentType: "Monthly Contribution", note: "Seed share capital", status: "confirmed", source: "manual-cash", recordedBy: "treasurer", loanId: null, welfareAmount: 0, shareCapitalAmount: person.shareCapital, penaltyAmount: 0, contributionMonth: "2026-09", referenceNumber: `TEST-SHARE-${index + 1}` }))],
   loans: [],
   payouts: [],
   invitations: [],
@@ -79,6 +92,12 @@ function requestLoan(cookie, body) {
   return post("/api/loans", cookie, body);
 }
 
+async function setLoanPolicy(policy) {
+  const response = await post("/api/loans/policy", cookies.chair, policy);
+  assert.equal(response.status, 200);
+  return (await response.json()).data;
+}
+
 test("guarantor choices expose only active same-group member names", async () => {
   const response = await fetch(`${baseUrl}/api/loans/guarantors`, { headers: { Cookie: cookies.borrower, "X-Requested-With": "chama" } });
   assert.equal(response.status, 200);
@@ -87,16 +106,42 @@ test("guarantor choices expose only active same-group member names", async () =>
   assert.ok(!ids.includes("borrower"));
 });
 
+test("repayment estimates require a session, use the caller's Chama rate, and reject hidden model overrides", async () => {
+  const a = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`, { headers: { Cookie: cookies.borrower } });
+  assert.equal(a.status, 200);
+  assert.equal(a.headers.get("cache-control"), "no-store");
+  const estimateA = (await a.json()).data;
+  assert.equal(estimateA.monthlyRatePercent, 7.5);
+  assert.equal(estimateA.interestModel, "reducing");
+  assert.equal(estimateA.schedule.length, 3);
+  assert.equal(estimateA.totalPayable, estimateA.schedule.reduce((sum, row) => sum + row.installment, 0));
+  assert.ok(estimateA.totalInterest > 0);
+
+  const b = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`, { headers: { Cookie: cookies["rate-b"] } });
+  assert.equal(b.status, 200);
+  assert.equal((await b.json()).data.monthlyRatePercent, 2.5);
+
+  const unauthenticated = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`);
+  assert.equal(unauthenticated.status, 401);
+  const invalid = await fetch(`${baseUrl}/api/loans/estimate?amount=0&months=3`, { headers: { Cookie: cookies.borrower } });
+  assert.equal(invalid.status, 400);
+
+  const existingCount = persistedState().loans.length;
+  const hiddenModel = await requestLoan(cookies.borrower, { amount: 100, months: 1, guarantorIds: ["g1", "g2"], interestModel: "flat" });
+  assert.equal(hiddenModel.status, 400);
+  assert.equal(persistedState().loans.length, existingCount);
+  for (let index = 0; index < 58; index += 1) {
+    const repeated = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`, { headers: { Cookie: cookies.borrower } });
+    assert.equal(repeated.status, 200);
+  }
+  const throttled = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`, { headers: { Cookie: cookies.borrower } });
+  assert.equal(throttled.status, 429);
+  const otherMemberStillAllowed = await fetch(`${baseUrl}/api/loans/estimate?amount=10000&months=3`, { headers: { Cookie: cookies["rate-b"] } });
+  assert.equal(otherMemberStillAllowed.status, 200);
+});
+
 function decide(loanId, cookie, decision) {
   return post(`/api/loans/${loanId}/decisions`, cookie, { decision, reason: "Reviewed against the savings and guarantors" });
-}
-
-async function approveLoan(loanId) {
-  for (const officer of ["chair", "treasurer", "g4"]) {
-    const response = await decide(loanId, cookies[officer], "approve");
-    assert.equal(response.status, 200);
-  }
-  return persistedState().loans.find(item => item.id === loanId);
 }
 
 function loanById(id) {
@@ -155,6 +200,7 @@ before(async () => {
     serverProcess.once("exit", code => { clearTimeout(timeout); clearInterval(check); reject(new Error(`Server exited with code ${code}. Output: ${output}`)); });
   });
   for (const person of people) cookies[person.id] = await login(person);
+  await setLoanPolicy(baselineLoanPolicy);
 });
 
 after(async () => {
@@ -165,12 +211,16 @@ after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("reducing balance: KES 1,000 over 2 months at the configured 7.5% a month", async () => {
+test("reducing balance: eligible KES 1,000 request is decided automatically under the configured rules", async () => {
   const response = await requestLoan(cookies.borrower, { amount: 1000, months: 2, interestModel: "reducing", guarantorIds: ["g1", "g2"] });
   assert.equal(response.status, 201);
-  const loan = await approveLoan((await response.json()).data.id);
+  const loan = (await response.json()).data;
+  primaryLoanId = loan.id;
   assert.equal(loan.status, "approved");
-  assert.deepEqual(loan.guarantors, [{ memberId: "g1", pledged: 1000, held: 1000 }, { memberId: "g2", pledged: 0, held: 0 }]);
+  assert.equal(loan.approvalCount, 0);
+  assert.equal(loan.requiredApprovals, 0);
+  assert.equal(loan.automatedDecision.decision, "approve");
+  assert.deepEqual(loanById(loan.id).guarantors, [{ memberId: "g1", pledged: 1000, held: 1000 }, { memberId: "g2", pledged: 0, held: 0 }]);
   // At 7.5%, each equal installment is KES 557 after rounding.
   assert.deepEqual(loan.schedule.map(row => row.installment), [557, 557]);
   assert.deepEqual(loan.schedule.map(row => row.interest), [75, 39]);
@@ -179,26 +229,34 @@ test("reducing balance: KES 1,000 over 2 months at the configured 7.5% a month",
   assert.equal(loan.outstanding, 1114);
 });
 
-test("flat rate: KES 1,000 over 2 months uses the configured 7.5% each month", async () => {
-  const response = await requestLoan(cookies.richer, { amount: 1000, months: 2, interestModel: "flat", guarantorIds: ["g2", "g3"] });
+test("new loans use the disclosed reducing model and preserve the Chama rate snapshot", async () => {
+  const response = await requestLoan(cookies.richer, { amount: 1000, months: 2, guarantorIds: ["g2", "g3"] });
   assert.equal(response.status, 201);
-  const loan = await approveLoan((await response.json()).data.id);
-  assert.deepEqual(loan.schedule.map(row => row.interest), [75, 75]);
-  assert.deepEqual(loan.schedule.map(row => row.principal), [500, 500]);
-  assert.deepEqual(loan.schedule.map(row => row.installment), [575, 575]);
-  assert.equal(loan.totalPayable, 1150, "total interest is P × r × t = 1000 × 0.075 × 2 = 150");
+  const loan = (await response.json()).data;
+  assert.equal(loan.status, "approved");
+  assert.equal(loan.interestModel, "reducing");
+  assert.equal(loan.monthlyRatePercent, 7.5);
+  assert.deepEqual(loan.schedule.map(row => row.interest), [75, 39]);
+  assert.deepEqual(loan.schedule.map(row => row.principal), [482, 518]);
+  assert.deepEqual(loan.schedule.map(row => row.installment), [557, 557]);
+  assert.equal(loan.totalPayable, 1114);
+  assert.equal(loanById(loan.id).monthlyRatePercent, 7.5);
 });
 
-test("borrowing above three times share capital is rejected", async () => {
-  const response = await requestLoan(cookies.borrower, { amount: 3001, months: 1, guarantorIds: ["g3", "g4"] });
-  assert.equal(response.status, 400);
-  assert.match((await response.json()).message, /KES 3000/);
+test("member contribution limits are configurable and reduce by existing principal", async () => {
+  const response = await requestLoan(cookies.borrower, { amount: 2001, months: 1, guarantorIds: ["g3", "g4"] });
+  assert.equal(response.status, 201);
+  const loan = (await response.json()).data;
+  assert.equal(loan.status, "rejected");
+  assert.match(loan.automatedDecision.reason, /remaining member-contribution limit is KES 2000/);
 });
 
-test("a request at the limit still needs guarantors that cover the principal", async () => {
-  const response = await requestLoan(cookies.borrower, { amount: 3000, months: 1, guarantorIds: ["g3", "g4"] });
-  assert.equal(response.status, 409, "limit passes, but g3 and g4 have only KES 600 unpledged");
-  assert.match((await response.json()).message, /does not cover/);
+test("a request at the member limit still needs guarantors that cover the principal", async () => {
+  const response = await requestLoan(cookies.borrower, { amount: 2000, months: 1, guarantorIds: ["g3", "g4"] });
+  assert.equal(response.status, 201);
+  const loan = (await response.json()).data;
+  assert.equal(loan.status, "rejected", "g3 and g4 have only KES 600 combined unpledged share capital");
+  assert.match(loan.automatedDecision.reason, /does not cover/);
 });
 
 test("a loan needs exactly two different guarantors who are not the borrower", async () => {
@@ -208,32 +266,47 @@ test("a loan needs exactly two different guarantors who are not the borrower", a
   assert.equal((await requestLoan(cookies.borrower, { amount: 500, months: 1, guarantorIds: ["g3", "nobody"] })).status, 400);
 });
 
-test("guarantors' combined unpledged share capital must cover the principal", async () => {
+test("insufficient guarantor capacity produces a visible automatic rejection", async () => {
   const response = await requestLoan(cookies.borrower, { amount: 1000, months: 1, guarantorIds: ["g3", "g4"] });
-  assert.equal(response.status, 409);
+  assert.equal(response.status, 201);
+  const loan = (await response.json()).data;
+  assert.equal(loan.status, "rejected");
+  assert.match(loan.automatedDecision.reason, /does not cover/);
 });
 
 test("pledged share capital stays locked for other loans until repaid", async () => {
-  // g1's KES 1,000 is pledged to the approved loan above, so g1 has nothing left to back KES 500.
+  // g1's KES 1,000 is pledged to the first approved loan above, so g1 has nothing left to back KES 500.
   assert.equal(unpledged("g1"), 0);
   const response = await requestLoan(cookies.richer, { amount: 500, months: 1, guarantorIds: ["g1", "g3"] });
-  assert.equal(response.status, 409);
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).data.status, "rejected");
 });
 
-test("rejecting a request releases its pledges", async () => {
-  const response = await requestLoan(cookies.borrower, { amount: 600, months: 1, guarantorIds: ["g3", "g4"] });
+test("human review can reassess an automated rejection against its original rules and updated records", async () => {
+  await setLoanPolicy({ ...baselineLoanPolicy, tiers: [baselineLoanPolicy.tiers[0], { ...baselineLoanPolicy.tiers[1], minShareContributionKsh: 5000 }] });
+  const response = await requestLoan(cookies.borrower, { amount: 1200, months: 1, guarantorIds: ["richer", "g4"] });
   assert.equal(response.status, 201);
-  const loanId = (await response.json()).data.id;
-  assert.equal(unpledged("g3"), 0);
-  const rejected = await decide(loanId, cookies.chair, "reject");
-  assert.equal(rejected.status, 200);
-  assert.equal(loanById(loanId).status, "rejected");
-  assert.equal(unpledged("g3"), 300);
-  assert.equal(unpledged("g4"), 300);
+  const rejected = (await response.json()).data;
+  assert.equal(rejected.status, "rejected");
+  assert.match(rejected.automatedDecision.reason, /requires KES 5000 in recorded share-capital contributions/);
+  assert.equal(memberHeld(loanById(rejected.id), "g4"), 0, "rejected applications must not hold guarantor shares");
+
+  const reviewRequest = await post(`/api/loans/${rejected.id}/review-requests`, cookies.borrower, { reason: "Please recheck my recorded contribution receipts." });
+  assert.equal(reviewRequest.status, 201);
+  assert.equal((await decide(rejected.id, cookies.chair, "approve")).status, 409, "role votes are no longer available");
+
+  const contribution = await post("/api/contributions", cookies.treasurer, { memberId: "borrower", amount: 5000, method: "Cash", paymentType: "Monthly Contribution", note: "Additional recorded share capital", referenceNumber: "RCPT-HUMAN-REASSESS-01", date: "2026-11-01" });
+  assert.equal(contribution.status, 201);
+  const review = await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { decision: "reassess", reason: "Checked the new share-capital receipt against the original tier." });
+  assert.equal(review.status, 200);
+  const reassessed = (await review.json()).data;
+  assert.equal(reassessed.status, "approved");
+  assert.equal(reassessed.humanReview.response.decision, "reassess");
+  assert.deepEqual(reassessed.humanReview.response.reassessmentReasons, []);
 });
 
 test("repayments split interest first, then release pledges as principal falls", async () => {
-  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const loanId = primaryLoanId;
   const first = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 538, method: "Cash", note: "First installment", referenceNumber: "RCPT-3001", date: todayInNairobi() });
   assert.equal(first.status, 201);
   const transaction = (await first.json()).data;
@@ -251,7 +324,7 @@ test("repayments split interest first, then release pledges as principal falls",
 });
 
 test("repayment dates reject impossible calendar values and future dates without changing the loan", async () => {
-  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const loanId = primaryLoanId;
   const before = persistedState();
   const beforeLoan = loanById(loanId);
   for (const [index, date] of ["2026-02-30", "2025-02-29", "2026-2-09"].entries()) {
@@ -269,7 +342,7 @@ test("repayment dates reject impossible calendar values and future dates without
 });
 
 test("a contribution receipt cannot be reused for a loan repayment after trimming and case-folding", async () => {
-  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const loanId = primaryLoanId;
   const outstanding = loanById(loanId).outstanding;
   const transactionCount = persistedState().transactions.length;
   const response = await post("/api/loans/repay", cookies.treasurer, {
@@ -281,14 +354,14 @@ test("a contribution receipt cannot be reused for a loan repayment after trimmin
 });
 
 test("overpaying a loan is rejected", async () => {
-  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const loanId = primaryLoanId;
   const response = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 600, method: "Cash", note: "Too much", referenceNumber: "RCPT-3002", date: "2026-10-05" });
   assert.equal(response.status, 400);
   assert.equal(loanById(loanId).outstanding, 576);
 });
 
 test("the final repayment closes the loan and releases every pledge", async () => {
-  const loanId = persistedState().loans.find(item => item.memberId === "borrower" && item.status === "approved").id;
+  const loanId = primaryLoanId;
   const response = await post("/api/loans/repay", cookies.treasurer, { loanId, amount: 576, method: "Cash", note: "Final installment", referenceNumber: "RCPT-3003", date: "2026-11-05" });
   assert.equal(response.status, 201);
   const loan = loanById(loanId);
@@ -300,13 +373,15 @@ test("the final repayment closes the loan and releases every pledge", async () =
 
 test("loan requests, decisions, repayments, and releases are audited", async () => {
   const saved = persistedState();
-  const loanId = saved.loans.find(item => item.memberId === "borrower" && item.status === "repaid").id;
+  const loanId = primaryLoanId;
   const types = saved.auditLog.filter(item => item.entityId === loanId || item.loanId === loanId).map(item => item.type);
   assert.ok(types.includes("loan.requested"));
-  assert.ok(types.filter(type => type === "loan.decided").length >= 3);
+  assert.equal(types.filter(type => type === "loan.decided").length, 1);
   assert.equal(types.filter(type => type === "loan.repaid").length, 2);
   assert.ok(types.includes("pledge.released"));
   const requested = saved.auditLog.find(item => item.type === "loan.requested" && item.entityId === loanId);
   assert.equal(requested.by.id, "borrower");
   assert.equal(requested.interestModel, "reducing");
+  assert.equal(saved.loans.find(item => item.id === loanId).approvals.map(item => item.role).join(","), "automated");
+  assert.equal(saved.auditLog.find(item => item.type === "loan.decided" && item.entityId === loanId).decisionSource, "automated");
 });

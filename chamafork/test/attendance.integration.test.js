@@ -119,7 +119,7 @@ before(async () => {
     ["secretary", "Test Secretary", "0700000002", "secretary", "234567"],
     ["treasurer", "Test Treasurer", "0700000003", "treasurer", "345678"],
     ["member", "Test Member", "0700000004", "member", "456789"],
-  ].map(([id, name, phone, role, pin]) => ({ id, name, phone: `+254${phone.slice(1)}`, email: `${id}@example.test`, role, status: "active", chamaId, pinHash: pinHash(pin), mustChangePin: false, shareCapital: 0 }));
+  ].map(([id, name, phone, role, pin]) => ({ id, name, phone: `+254${phone.slice(1)}`, email: `${id}@example.test`, role, status: "active", chamaId, pinHash: pinHash(pin), mustChangePin: false, shareCapital: 0, createdAt: new Date(Date.now() - 90 * 86400000).toISOString() }));
   fs.writeFileSync(dataFile(), JSON.stringify({ version: 2, chamas: [{ id: chamaId, name: "Test Chama", createdAt: new Date().toISOString(), subscription: require("./active-subscription-fixture").activeSubscription() }], users, transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [], welfareReserve: 0, penalties: [], settings: { defaultDeadlineDay: 5, welfareMonthlyFee: 500, lateContributionPenalty: 200, loanMonthlyRatePercent: 5, meetingDates: {} }, dividendCycles: [], messages: [] }));
   server = execFile(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
@@ -166,7 +166,7 @@ after(async () => {
 });
 
 describe("attendance registers", () => {
-  test("audits attendance edits and verifies three-party loan approval workflows", async () => {
+  test("audits attendance edits and verifies automatic loan decisions and scoped record access", async () => {
     const chairCookie = await login("0700000001", "123456");
     const secretaryCookie = await login("0700000002", "234567");
     const treasurerCookie = await login("0700000003", "345678");
@@ -264,19 +264,19 @@ describe("attendance registers", () => {
     assert.match(attendanceSource, /expectedRevision: register\?\.revision \?\? null/);
     assert.doesNotMatch(attendanceSource, /dangerouslySetInnerHTML|innerHTML/);
     assert.match(dashboardTemplate, /id="react-loans-root"/);
-    assert.match(bundle, /Loan requests/);
-    assert.match(bundle, /Three-role review/);
+    assert.match(bundle, /Loan records/);
+    assert.match(bundle, /Automatic eligibility/);
     const loansSource = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "react", "src", "components", "LoansPanel.jsx"), "utf8");
     assert.match(loansSource, /loan-approval-trail/);
-    assert.match(loansSource, /borrowers cannot decide their own requests/i);
-    assert.match(loansSource, /does not transfer loan funds/i);
+    assert.match(loansSource, /they do not vote on new applications/i);
+    assert.match(loansSource, /does not transfer or disburse loan funds/i);
     const clientSource = fs.readFileSync(path.join(__dirname, "..", "..", "en public", "chama.js"), "utf8");
     assert.doesNotMatch(clientSource, /loan-approval-trail|loanStatusLabel|updateLoanRequestAccess|\$\("#loan-form"\)|\$\("#loans"\)/);
     assert.doesNotMatch(clientSource, /renderAttendance|updateAttendanceCount|attendance-date|attendance-save/);
     assert.match(attendanceSource, /Last edited by/);
     assert.match(attendanceSource, /removed from present/);
-    assert.match(`${dashboardTemplate}\n${loansSource}`, /borrowers cannot decide their own requests/i);
-    assert.match(`${dashboardTemplate}\n${loansSource}`, /does not transfer loan funds/);
+    assert.match(`${dashboardTemplate}\n${loansSource}`, /they do not vote on new applications/i);
+    assert.match(`${dashboardTemplate}\n${loansSource}`, /does not transfer or disburse loan funds/);
     assert.doesNotMatch(`${dashboardTemplate}\n${clientSource}`, /broadcast-panel|vote-fields|M-Pesa Paybill payments appear automatically/);
     assert.doesNotMatch(clientSource, /leadership-type|payments\/mpesa|M-Pesa payment received/);
 
@@ -325,6 +325,10 @@ describe("attendance registers", () => {
       const credit = await request("/api/contributions", { cookie: treasurerCookie, method: "POST", write: true, body: JSON.stringify({ memberId: creditId, amount: 5000, method: "Cash", note: "Share capital for loan tests", referenceNumber: reference, date: "2026-10-05" }) });
       assert.equal(credit.status, 201);
     }
+    const policyResponse = await request("/api/loans/policy", { cookie: chairCookie, method: "POST", write: true, body: JSON.stringify({ maxGroupCashPercent: 100, maxMemberContributionPercent: 100, tiers: [{ maxAmountKsh: 1000, minActiveDays: 0, minShareContributionKsh: 0 }, { maxAmountKsh: 50000, minActiveDays: 0, minShareContributionKsh: 1000 }] }) });
+    assert.equal(policyResponse.status, 200);
+    const anotherMemberId = await createAccount(chairCookie, "Another Member", "0700000006", "678901");
+    const anotherMemberCookie = await login("0700000006", "678901");
 
     const streamResponse = await request("/api/events/stream", { cookie: memberCookie });
     assert.equal(streamResponse.status, 200);
@@ -337,81 +341,76 @@ describe("attendance registers", () => {
       initialEvent += decoder.decode(chunk.value, { stream: true });
     }
 
-    const rejectionRequestEvent = nextSseEvent(reader, "loans-updated");
-    const rejectionRequest = await request("/api/loans", {
-      cookie: memberCookie,
+    const rejectedRequestEvent = nextSseEvent(reader, "loans-updated");
+    const rejectedRequest = await request("/api/loans", {
+      cookie: anotherMemberCookie,
       method: "POST",
       write: true,
       body: JSON.stringify({ amount: 1200, months: 2, guarantorIds: [treasurerId, independentId] })
     });
-    assert.equal(rejectionRequest.status, 201);
-    const rejectionRequestBody = await body(rejectionRequest);
-    const rejectedLoanId = rejectionRequestBody.data.id;
-    assert.equal(rejectionRequestBody.data.status, "Requested");
-    assert.equal(rejectionRequestBody.data.memberId, memberId);
-    assert.equal(rejectionRequestBody.data.amount, 1200);
-    assert.equal(rejectionRequestBody.data.months, 2);
-    assert.ok(rejectionRequestBody.data.createdAt);
-    assert.match(rejectionRequestBody.message, /waiting for approval/i);
-    assert.match(await rejectionRequestEvent, new RegExp(`"id":"${rejectedLoanId}"`));
+    assert.equal(rejectedRequest.status, 201);
+    const rejectedRequestBody = await body(rejectedRequest);
+    const rejectedLoanId = rejectedRequestBody.data.id;
+    assert.equal(rejectedRequestBody.data.status, "rejected");
+    assert.equal(rejectedRequestBody.data.memberId, anotherMemberId);
+    assert.equal(rejectedRequestBody.data.amount, 1200);
+    assert.equal(rejectedRequestBody.data.months, 2);
+    assert.ok(rejectedRequestBody.data.createdAt);
+    assert.equal(rejectedRequestBody.data.approvalCount, 0);
+    assert.match(rejectedRequestBody.data.automatedDecision.reason, /requires KES 1000 in recorded share-capital contributions/);
+    assert.match(rejectedRequestBody.message, /not approved automatically/i);
+    assert.match(await rejectedRequestEvent, new RegExp(`"id":"${rejectedLoanId}"`));
 
     const chairDashboard = await body(await request("/api/dashboard", { cookie: chairCookie }));
     const treasurerDashboard = await body(await request("/api/dashboard", { cookie: treasurerCookie }));
+    const borrowerDashboard = await body(await request("/api/dashboard", { cookie: anotherMemberCookie }));
     const independentDashboard = await body(await request("/api/dashboard", { cookie: independentCookie }));
     assert.ok(chairDashboard.loans.some(loan => loan.id === rejectedLoanId));
     assert.ok(treasurerDashboard.loans.some(loan => loan.id === rejectedLoanId));
-    assert.ok(independentDashboard.approvalQueue.some(loan => loan.id === rejectedLoanId));
+    assert.ok(borrowerDashboard.loans.some(loan => loan.id === rejectedLoanId));
+    assert.equal(independentDashboard.loans.some(loan => loan.id === rejectedLoanId), false, "an unrelated member cannot read another borrower’s decision record");
+    assert.equal(independentDashboard.approvalQueue.length, 0, "new applications are not waiting for member votes");
+    assert.deepEqual(chairDashboard.loanPolicy.tiers.map(tier => tier.maxAmountKsh), [1000, 50000]);
 
-    const selfDecision = await request(`/api/loans/${rejectedLoanId}/decisions`, {
-      cookie: memberCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "I approve my own request" })
-    });
-    assert.equal(selfDecision.status, 403);
-
-    const chairDecisionEvent = nextSseEvent(reader, "loans-updated");
-    const chairDecision = await request(`/api/loans/${rejectedLoanId}/decisions`, {
+    const obsoleteVote = await request(`/api/loans/${rejectedLoanId}/decisions`, {
       cookie: chairCookie,
       method: "POST",
       write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Private chair approval note" })
+      body: JSON.stringify({ decision: "approve", reason: "This role vote is obsolete" })
     });
-    assert.equal(chairDecision.status, 200);
-    assert.match(await chairDecisionEvent, new RegExp(`"id":"${rejectedLoanId}"`));
-    const chairDecisionBody = await body(chairDecision);
-    assert.equal(chairDecisionBody.data.approvalCount, 1);
-    assert.equal(chairDecisionBody.data.approvalSteps[0].status, "approve");
-    assert.equal(chairDecisionBody.data.approvalSteps[1].status, "awaiting");
-    assert.ok(chairDecisionBody.data.approvalSteps[0].at);
-    assert.equal(chairDecisionBody.data.approvalSteps[0].reason, "Private chair approval note");
-    const borrowerPending = await body(await request("/api/dashboard", { cookie: memberCookie }));
-    const borrowerPendingLoan = borrowerPending.loans.find(loan => loan.id === rejectedLoanId);
-    assert.match(borrowerPendingLoan.progressMessage, /1 of 3 required approvals complete — waiting for Treasurer/);
-    assert.equal(borrowerPendingLoan.history[0].reason, null);
-    assert.doesNotMatch(JSON.stringify(borrowerPendingLoan), /Private chair approval note/);
+    assert.equal(obsoleteVote.status, 409);
 
-    const rejectEvent = nextSseEvent(reader, "loans-updated");
-    const treasurerDecision = await request(`/api/loans/${rejectedLoanId}/decisions`, {
-      cookie: treasurerCookie,
+    const reviewRequestEvent = nextSseEvent(reader, "loans-updated");
+    const humanReviewRequest = await request(`/api/loans/${rejectedLoanId}/review-requests`, {
+      cookie: anotherMemberCookie,
       method: "POST",
       write: true,
-      body: JSON.stringify({ decision: "reject", reason: "Treasurer declines after review" })
+      body: JSON.stringify({ reason: "Please check my share-capital records for this tier." })
     });
-    assert.equal(treasurerDecision.status, 200);
-    assert.match(await rejectEvent, new RegExp(`"id":"${rejectedLoanId}"`));
-    const rejected = await body(treasurerDecision);
-    assert.equal(rejected.data.status, "rejected");
-    assert.equal(rejected.data.approvalCount, 2);
-    assert.equal(rejected.data.approvalSteps[1].status, "reject");
-    assert.ok(rejected.data.approvalSteps[1].at);
-    const borrowerRejected = await body(await request("/api/dashboard", { cookie: memberCookie }));
-    const borrowerRejectedLoan = borrowerRejected.loans.find(loan => loan.id === rejectedLoanId);
-    assert.equal(borrowerRejectedLoan.history[0].reason, null);
-    assert.equal(borrowerRejectedLoan.history[1].reason, "Treasurer declines after review");
-    assert.doesNotMatch(JSON.stringify(borrowerRejectedLoan), /Private chair approval note/);
-    assert.match(borrowerRejectedLoan.progressMessage, /Loan rejected/);
+    assert.equal(humanReviewRequest.status, 201);
+    assert.match(await reviewRequestEvent, new RegExp(`"id":"${rejectedLoanId}"`));
+    const reviewableLoan = (await body(await request("/api/dashboard", { cookie: chairCookie }))).loans.find(loan => loan.id === rejectedLoanId);
+    assert.equal(reviewableLoan.canReview, true);
 
+    const reviewCompletionEvent = nextSseEvent(reader, "loans-updated");
+    const confirmedReview = await request(`/api/loans/${rejectedLoanId}/reviews`, {
+      cookie: chairCookie,
+      method: "POST",
+      write: true,
+      body: JSON.stringify({ decision: "confirm", reason: "Checked the available records; the configured tier is not met." })
+    });
+    assert.equal(confirmedReview.status, 200);
+    assert.match(await reviewCompletionEvent, new RegExp(`"id":"${rejectedLoanId}"`));
+    const confirmedReviewBody = await body(confirmedReview);
+    assert.equal(confirmedReviewBody.data.status, "rejected");
+    assert.equal(confirmedReviewBody.data.humanReview.response.reviewerRole, "chairperson");
+    assert.equal(confirmedReviewBody.data.humanReview.response.decision, "confirm");
+    const borrowerRejected = await body(await request("/api/dashboard", { cookie: anotherMemberCookie }));
+    const borrowerRejectedLoan = borrowerRejected.loans.find(loan => loan.id === rejectedLoanId);
+    assert.equal(borrowerRejectedLoan.history[0].role, "automated");
+    assert.equal(borrowerRejectedLoan.humanReview.response.reason, "Checked the available records; the configured tier is not met.");
+
+    const approvedRequestEvent = nextSseEvent(reader, "loans-updated");
     const approvedRequest = await request("/api/loans", {
       cookie: memberCookie,
       method: "POST",
@@ -419,49 +418,17 @@ describe("attendance registers", () => {
       body: JSON.stringify({ amount: 2000, months: 6, guarantorIds: [treasurerId, independentId] })
     });
     assert.equal(approvedRequest.status, 201);
-    const approvedLoanId = (await body(approvedRequest)).data.id;
-    const chairApproval = await request(`/api/loans/${approvedLoanId}/decisions`, {
-      cookie: chairCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Purpose and repayment plan reviewed" })
-    });
-    assert.equal(chairApproval.status, 200);
-    const treasurerApproval = await request(`/api/loans/${approvedLoanId}/decisions`, {
-      cookie: treasurerCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Group funds are available" })
-    });
-    assert.equal(treasurerApproval.status, 200);
-    const twoApprovals = await body(await request("/api/dashboard", { cookie: independentCookie }));
-    const pendingApproval = twoApprovals.approvalQueue.find(loan => loan.id === approvedLoanId);
-    assert.equal(pendingApproval.approvalCount, 2);
-    assert.match(pendingApproval.progressMessage, /2 of 3 required approvals complete — waiting for Member/);
-    assert.deepEqual(pendingApproval.approvalSteps.map(step => step.status), ["approve", "approve", "awaiting"]);
-    const anotherMemberId = await createAccount(chairCookie, "Another Member", "0700000006", "678901");
-    const anotherMemberCookie = await login("0700000006", "678901");
-    assert.ok(anotherMemberId);
-    const independentDecision = await request(`/api/loans/${approvedLoanId}/decisions`, {
-      cookie: independentCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Independent review supports approval" })
-    });
-    assert.equal(independentDecision.status, 200);
-    const approved = await body(independentDecision);
-    assert.equal(approved.data.status, "approved");
-    assert.equal(approved.data.approvalCount, 3);
-    assert.equal(approved.data.outstanding, 2365, "principal plus six months of 5% reducing-balance interest");
-    assert.equal(approved.message, "Loan approved. Any disbursement happens outside this app.");
-    assert.ok(approved.data.approvalSteps.every(step => step.at && step.approverName && step.reason));
-    const borrowerApproved = await body(await request("/api/dashboard", { cookie: memberCookie }));
-    const borrowerApprovedLoan = borrowerApproved.loans.find(loan => loan.id === approvedLoanId);
-    assert.equal(borrowerApprovedLoan.approvalCount, 3);
-    assert.equal(borrowerApprovedLoan.progressMessage, "Loan approved. Any disbursement happens outside this app.");
-    assert.equal(borrowerApprovedLoan.history[0].reason, null);
-    assert.equal(borrowerApprovedLoan.history[1].reason, null);
-    assert.equal(borrowerApprovedLoan.history[2].reason, null);
+    const approvedRequestBody = await body(approvedRequest);
+    const approvedLoanId = approvedRequestBody.data.id;
+    assert.equal(approvedRequestBody.data.status, "approved");
+    assert.equal(approvedRequestBody.data.approvalCount, 0);
+    assert.equal(approvedRequestBody.data.requiredApprovals, 0);
+    assert.equal(approvedRequestBody.data.automatedDecision.decision, "approve");
+    assert.equal(approvedRequestBody.data.approvalSteps.length, 0);
+    assert.match(approvedRequestBody.message, /approved automatically/i);
+    assert.match(await approvedRequestEvent, new RegExp(`"id":"${approvedLoanId}"`));
+    const officerRecords = await body(await request("/api/dashboard", { cookie: treasurerCookie }));
+    assert.ok(officerRecords.loans.some(loan => loan.id === approvedLoanId));
 
     const repayment = await request("/api/loan-repayment", {
       cookie: treasurerCookie,
@@ -482,123 +449,6 @@ describe("attendance registers", () => {
     const repaidLoan = borrowerRepaid.loans.find(loan => loan.id === approvedLoanId);
     assert.equal(repaidLoan.status, "repaid");
     assert.equal(repaidLoan.progressMessage, "Loan repaid.");
-
-    const duplicateSlotRequest = await request("/api/loans", {
-      cookie: memberCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ amount: 1500, months: 1, guarantorIds: [treasurerId, independentId] })
-    });
-    assert.equal(duplicateSlotRequest.status, 201);
-    const duplicateSlotLoanId = (await body(duplicateSlotRequest)).data.id;
-    const slotChairApproval = await request(`/api/loans/${duplicateSlotLoanId}/decisions`, {
-      cookie: chairCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Reviewed by the chairperson" })
-    });
-    assert.equal(slotChairApproval.status, 200);
-    const slotMemberApproval = await request(`/api/loans/${duplicateSlotLoanId}/decisions`, {
-      cookie: independentCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Independent member review completed" })
-    });
-    assert.equal(slotMemberApproval.status, 200);
-    const duplicateRoleDecision = await request(`/api/loans/${duplicateSlotLoanId}/decisions`, {
-      cookie: anotherMemberCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Second Member decision" })
-    });
-    assert.equal(duplicateRoleDecision.status, 409);
-
-    const secretaryLoanRequest = await request("/api/loans", {
-      cookie: secretaryCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ amount: 1000, months: 3, guarantorIds: [treasurerId, independentId] })
-    });
-    assert.equal(secretaryLoanRequest.status, 201);
-    const secretaryLoanId = (await body(secretaryLoanRequest)).data.id;
-    const secretarySelfDecision = await request(`/api/loans/${secretaryLoanId}/decisions`, {
-      cookie: secretaryCookie,
-      method: "POST",
-      write: true,
-      body: JSON.stringify({ decision: "approve", reason: "Secretary requests own loan" })
-    });
-    assert.equal(secretarySelfDecision.status, 403);
-    for (const [cookie, reason] of [
-      [chairCookie, "Chairperson reviewed secretary request"],
-      [treasurerCookie, "Treasurer reviewed secretary request"],
-      [independentCookie, "Independent member reviewed secretary request"]
-    ]) {
-      const decision = await request(`/api/loans/${secretaryLoanId}/decisions`, {
-        cookie,
-        method: "POST",
-        write: true,
-        body: JSON.stringify({ decision: "approve", reason })
-      });
-      assert.equal(decision.status, 200);
-    }
-    const secretaryDashboard = await body(await request("/api/dashboard", { cookie: secretaryCookie }));
-    assert.equal(secretaryDashboard.loans.find(loan => loan.id === secretaryLoanId).status, "approved");
-
-    const officerLoanCases = [
-      {
-        cookie: chairCookie,
-        expectedRoles: ["secretary", "treasurer", "member"],
-        reviewers: [
-          [secretaryCookie, "Secretary replaces the Chairperson borrower"],
-          [treasurerCookie, "Treasurer reviewed the Chairperson loan"],
-          [independentCookie, "Member reviewed the Chairperson loan"]
-        ]
-      },
-      {
-        cookie: treasurerCookie,
-        expectedRoles: ["chairperson", "secretary", "member"],
-        reviewers: [
-          [chairCookie, "Chairperson reviewed the Treasurer loan"],
-          [secretaryCookie, "Secretary replaces the Treasurer borrower"],
-          [independentCookie, "Member reviewed the Treasurer loan"]
-        ]
-      }
-    ];
-    for (const loanCase of officerLoanCases) {
-      const requester = (await body(await request("/api/dashboard", { cookie: loanCase.cookie }))).user;
-      const requestResponse = await request("/api/loans", {
-        cookie: loanCase.cookie,
-        method: "POST",
-        write: true,
-        body: JSON.stringify({ amount: 1000, months: 1, guarantorIds: [treasurerId, independentId, secretaryId].filter(id => id !== requester.id).slice(0, 2) })
-      });
-      assert.equal(requestResponse.status, 201);
-      const loanId = (await body(requestResponse)).data.id;
-      const secretaryQueue = await body(await request("/api/dashboard", { cookie: secretaryCookie }));
-      assert.ok(secretaryQueue.approvalQueue.some(loan => loan.id === loanId));
-      const borrowerDecision = await request(`/api/loans/${loanId}/decisions`, {
-        cookie: loanCase.cookie,
-        method: "POST",
-        write: true,
-        body: JSON.stringify({ decision: "approve", reason: "Borrower self-approval attempt" })
-      });
-      assert.equal(borrowerDecision.status, 403);
-      for (const [cookie, reason] of loanCase.reviewers) {
-        const decision = await request(`/api/loans/${loanId}/decisions`, {
-          cookie,
-          method: "POST",
-          write: true,
-          body: JSON.stringify({ decision: "approve", reason })
-        });
-        assert.equal(decision.status, 200);
-      }
-      const borrowerDashboard = await body(await request("/api/dashboard", { cookie: loanCase.cookie }));
-      const approvedLoan = borrowerDashboard.loans.find(loan => loan.id === loanId);
-      assert.equal(approvedLoan.memberId, requester.id);
-      assert.equal(approvedLoan.status, "approved");
-      assert.deepEqual(approvedLoan.approvalSteps.map(step => step.role), loanCase.expectedRoles);
-      assert.ok(approvedLoan.approvalSteps.every(step => step.status === "approve"));
-    }
 
     const secondMemberContribution = await request("/api/contributions", {
       cookie: treasurerCookie,
@@ -638,16 +488,14 @@ describe("attendance registers", () => {
     assert.equal(persisted.registers[0].revision, 3);
     assert.deepEqual(persisted.auditLog.filter(item => item.type.startsWith("attendance.")).map(item => item.type), ["attendance.created", "attendance.edited", "attendance.edited"]);
     const savedRejectedLoan = persisted.loans.find(loan => loan.id === rejectedLoanId);
-    assert.equal(savedRejectedLoan.memberId, memberId);
+    assert.equal(savedRejectedLoan.memberId, anotherMemberId);
     assert.equal(savedRejectedLoan.status, "rejected");
-    assert.deepEqual(savedRejectedLoan.approvals.map(item => [item.role, item.decision, item.reason]), [
-      ["chairperson", "approve", "Private chair approval note"],
-      ["treasurer", "reject", "Treasurer declines after review"]
-    ]);
+    assert.deepEqual(savedRejectedLoan.approvals.map(item => [item.role, item.decision]), [["automated", "reject"]]);
     assert.ok(savedRejectedLoan.approvals.every(item => item.approverId && item.approverName && item.at));
+    assert.equal(persisted.auditLog.find(item => item.type === "loan.review.completed" && item.entityId === rejectedLoanId).by.id, "chair");
     const savedApprovedLoan = persisted.loans.find(loan => loan.id === approvedLoanId);
     assert.equal(savedApprovedLoan.status, "repaid");
-    assert.deepEqual(savedApprovedLoan.approvals.map(item => item.role), ["chairperson", "treasurer", "member"]);
+    assert.deepEqual(savedApprovedLoan.approvals.map(item => item.role), ["automated"]);
     assert.ok(savedApprovedLoan.approvals.every(item => item.decision === "approve" && item.reason && item.approverId && item.at));
   });
 });

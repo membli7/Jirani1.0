@@ -8,11 +8,16 @@
 - [x] (c) Minimum PIN length  
   Answer: **6 digits**
 
-## Feature scope decision (2026-10-11)
+## Feature scope decision (2026-10-11; loan workflow superseded 2026-11-12)
 - [x] Keep CSV export: transaction and attendance records, scoped for Member accounts.
-- [x] Keep loan requests: 1, 2, 3, and 6 month terms with three role decisions; Secretary substitutes when the borrower is Chairperson or Treasurer. No money is disbursed by the app.
+- [x] Historical loan decision: 1, 2, 3, and 6 month terms with three role decisions; Secretary substituted when the borrower was Chairperson or Treasurer. **Superseded by the current automatic policy below.** No money is disbursed by the app.
 - [x] Use the leadership-election workflow below for officer changes after initial setup; direct assignment remains limited to initial bootstrap.
 - [x] Defer WhatsApp/SMS broadcasts, Paybill processing/matching, and loan terms outside 1, 2, 3, and 6 months. In-app group chat is in scope.
+
+## Loan workflow update (2026-11-12; current)
+- [x] New applications receive an immediate server-side decision under each Chama's Chairperson-configured group-balance/member-contribution caps and amount tiers for minimum active-membership days and share-capital contributions. No universal eligibility thresholds are prefilled.
+- [x] Borrowers see decision reasons and the reducing-balance repayment estimate and can request one human review. Chairperson, Secretary, and Treasurer can inspect group records but do not vote on new applications; a conflicted officer cannot review their own or guaranteed loan.
+- [x] Loan requests retain two active guarantors and 1-, 2-, 3-, or 6-month terms. The app records schedules and cash repayments but does not disburse money; legal, DPIA, human-review-operation, and actual-off-app-disbursement dependencies remain before real lending.
 
 ## Leadership election decisions (2026-10-20)
 - Secretary proposes 2-20 active ordinary Members for Chairperson, Secretary, or Treasurer; Chairperson accepts the proposal and manually closes voting.

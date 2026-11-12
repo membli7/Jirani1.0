@@ -132,7 +132,7 @@ export default function ChatPanel() {
         {loading && messages.length === 0 ? <p className="empty-state" role="status">Loading messages…</p> : null}
         {!loading && messages.length === 0 ? <p className="empty-state">No messages yet.</p> : null}
         {messages.map(message => (
-          <article className="chat-message" key={message.id}>
+          <article className="chat-message" key={message.id} translate="no">
             <strong>{message.authorName}</strong>
             <p>{message.text}</p>
             <time dateTime={message.at}>{messageTime(message.at)}</time>

@@ -200,7 +200,7 @@ test("landing page uses muted color backgrounds without photos", () => {
 
 test("public landing design system is scoped to signed-out mode and has a distinct responsive hierarchy", () => {
   assert.match(html, /<body class="landing-mode">/);
-  assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261112\.1"/);
   assert.match(landingTheme, /body\.landing-mode\s*\{[\s\S]*?--forest:\s*#153d33/);
   assert.match(landingTheme, /body\.landing-mode \.topbar\s*\{[\s\S]*?background:\s*var\(--forest\)/);
   assert.match(landingTheme, /body\.landing-mode \.login-brand\s*\{[\s\S]*?background:\s*transparent/);
@@ -340,7 +340,9 @@ test("React loan UI remains available while officer-role revocation stays protec
   assert.match(html, /id="react-loan-request-root"/);
   assert.match(html, /id="react-loans-root"/);
   assert.match(loansPage, /id="loan-submit" className="button-primary" type="submit"/);
-  assert.match(loansPage, /snapshot\.permissions\?\.decideLoans === true && loan\.canDecide === true/);
+  assert.match(loansPage, /requestLoanEstimate\(/);
+  assert.match(loansPage, /loan\.canRequestHumanReview/);
+  assert.doesNotMatch(loansPage, /recordLoanDecision|decideLoans/);
   assert.doesNotMatch(script, /updateLoanRequestAccess|\$\("#loan-form"\)|\$\("#loans"\)/);
   assert.match(script, /chama:dashboard-refresh-requested/);
   assert.match(server, /app\.post\("\/api\/loans", requireAuth, requirePinChanged, requireActiveSubscription/);
@@ -741,8 +743,8 @@ test("phone React financial views keep details readable and expose trend data by
   assert.match(css, /body\s*\*\s*\{\s*font-size:\s*max\(14px,\s*1em\)\s*!important/);
   assert.match(css, /max-height:\s*calc\(100dvh - 64px - env\(safe-area-inset-bottom\)\)/);
   assert.match(html, /href="\/chama\.css\?v=20261110\.2"/);
-  assert.match(html, /href="\/landing-theme\.css\?v=20261110\.1"/);
-  assert.match(html, /src="\/i18n\.js\?v=20261108\.3"/);
+  assert.match(html, /href="\/landing-theme\.css\?v=20261112\.1"/);
+  assert.match(html, /src="\/i18n\.js\?v=20261112\.1"/);
   assert.match(html, /src="\/chama\.js\?v=20261111\.2"/);
   assert.match(financePage, /item\.color === "#bd7b35" \? "is-ochre" : "is-green"/);
   assert.doesNotMatch(financePage, /dangerouslySetInnerHTML|innerHTML/);

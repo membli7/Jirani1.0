@@ -71,7 +71,7 @@ export default function RegisterPage() {
           <span className="brand-mark" aria-hidden="true"><img src="/brand-mark.svg" alt="" /></span>
           <span>Jirani Chama <small>GROUP SAVINGS</small></span>
         </a>
-        <label className="language-control" htmlFor="language-switch">Language
+        <label className="language-control" htmlFor="language-switch" data-i18n="language">Language
           <select id="language-switch" aria-label="Language" data-i18n-aria-label="language" defaultValue="en">
             <option value="en" data-i18n="englishOption">English</option>
             <option value="sw" data-i18n="swahili">Kiswahili</option>

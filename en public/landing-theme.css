@@ -100,6 +100,25 @@ body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(
 body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
 body.landing-mode .landing-menu-toggle[aria-expanded="true"] .ham-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 body.landing-mode .landing-mobile-nav { display: none; }
+body.landing-mode .landing-language-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: 12px;
+  color: rgba(255, 254, 250, .8);
+}
+body.landing-mode .landing-language-control select {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  border-radius: 10px;
+  color: var(--paper);
+  background: rgba(255, 255, 255, .08);
+  font-size: 12px;
+}
+body.landing-mode .landing-language-control select:focus-visible { outline-color: var(--gold); }
+body.landing-mode .landing-language-control option { color: var(--ink); background: var(--paper); }
 
 /* Editorial hero: open typography on one side, a clear action panel on the other. */
 body.landing-mode #login.login-overlay {
@@ -671,8 +690,11 @@ body.landing-mode #pricing-modal .dialog-actions > * { min-height: 46px; }
   body.landing-mode #pricing-copy-reference { width: 100%; }
   body.landing-mode #pricing-modal { padding: 16px; }
   body.landing-mode .topbar { padding-inline: 12px; }
-  body.landing-mode .topbar .brand { gap: 8px; font-size: 13px; }
+  body.landing-mode .topbar .brand { gap: 5px; font-size: 12px; }
+  body.landing-mode .topbar .brand small { display: none; }
   body.landing-mode .brand-mark { width: 36px; height: 36px; flex-basis: 36px; }
+  body.landing-mode .landing-language-control { margin-right: 8px; }
+  body.landing-mode .landing-language-control select { min-width: 92px; padding-inline: 6px; font-size: 11px; }
   body.landing-mode .landing-menu-toggle { min-width: 44px; }
 }
 

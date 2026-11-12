@@ -53,7 +53,7 @@
       monthCloseOpenLoans: "Open loan balance tracked (not disbursed)",
       monthCloseItemsTitle: "Items to review",
       monthCloseNoContribution: "Active members with no contribution entry",
-      monthClosePendingLoans: "Loan requests awaiting decisions",
+      monthClosePendingLoans: "Unresolved requests from the previous loan workflow",
       monthCloseUnpaidPenalties: "Outstanding unpaid penalties",
       monthCloseIncompleteReferences: "Cash entries missing a reference or recorder",
       monthCloseEntriesTitle: "Cash ledger entries for this month",
@@ -73,7 +73,7 @@
       landingChatTitle: "Group chat, in context",
       landingChatCopy: "Active chama members can discuss within their group. Messages refresh through live updates with polling recovery when the connection drops; this is not a WhatsApp or SMS broadcast.",
       landingDecisionsTitle: "Decisions with clear roles.",
-      landingDecisionsCopy: "Loans need three distinct role decisions. After setup, officer seats follow a scheduled secret-ballot election.",
+      landingDecisionsCopy: "Loan decisions use thresholds configured for each Chama; authorized officers can inspect records, and borrowers can request a human review. After setup, officer seats follow a scheduled secret-ballot election.",
       landingAuditCopy: "PIN-protected, role-scoped access and an application audit log support review. The log is not tamper-evident, so keep source receipts and backups.",
       faqGettingStartedQuestion: "How do I get my group started?",
       faqFinancialQuestion: "Can we track individual contributions and balances?",
@@ -85,10 +85,10 @@
       faqFinancialAnswer: "Members and officers can review recorded contributions, balances, loans, and repayments. The app records what the group entered; cash is received or paid outside it.",
       faqSecurityAnswer: "Access is role-scoped and key actions are recorded in an application audit log. The log is not tamper-evident; compare records with receipts and keep backups.",
       faqContributionSplitAnswer: "The Chairperson sets the monthly welfare amount during setup. A contribution first settles outstanding penalties, then covers the member's welfare amount once per month; any remainder goes to share capital.",
-      faqLoanAnswer: "A loan needs three distinct role decisions, and borrowers cannot decide their own request. When the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. Supported terms are 1, 2, 3, or 6 months; repayments clear interest before principal. The app records the obligation and cash repayment but does not disburse funds.",
+      faqLoanAnswer: "Each Chama sets its own thresholds. The app immediately checks active-membership period, recorded share-capital contributions, the amount tier, the requested amount against the Chama balance and the member’s existing loan exposure, and two guarantors’ available share capital. An eligible request is automatically approved without a Chairperson or Treasurer vote; authorized officers can inspect loan records, and the borrower may request a human review. Members can see the reducing-balance repayment estimate before submitting. The app records repayments but does not transfer or disburse funds.",
       faqPenaltyAnswer: "A late-dated contribution can create the configured late penalty when the Treasurer records it. Separately, the Chairperson or Secretary must run the monthly assessment for eligible members who have not met the welfare threshold. That assessment is manual, not automatic.",
       faqMonthCloseQuestion: "What does the month-end close review show?",
-      faqMonthCloseAnswer: "It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to review, such as pending loan requests or missing references. It is read-only and does not reconcile bank or M-PESA statements or move money.",
+      faqMonthCloseAnswer: "It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to follow up, such as requests left open under the previous loan workflow or missing references. New loan applications are decided immediately under each Chama’s configured rules. It is read-only and does not reconcile bank or M-PESA statements or move money.",
       faqChatQuestion: "Can our group chat inside the app?",
       faqChatAnswer: "Yes. Active accounts can use the chama's in-app group chat. It refreshes through the event stream with polling and reconnection support. WhatsApp/SMS broadcasts and chat by email are not included.",
       faqCorrectionQuestion: "Can we correct a contribution date after recording it?",
@@ -190,7 +190,7 @@
       monthCloseOpenLoans: "Salio la mikopo iliyo wazi linalofuatiliwa (halijatolewa)",
       monthCloseItemsTitle: "Mambo ya kukagua",
       monthCloseNoContribution: "Wanachama hai wasio na rekodi ya mchango",
-      monthClosePendingLoans: "Maombi ya mkopo yanayosubiri maamuzi",
+      monthClosePendingLoans: "Maombi ambayo hayajatatuliwa kutoka utaratibu wa awali wa mikopo",
       monthCloseUnpaidPenalties: "Faini ambazo hazijalipwa",
       monthCloseIncompleteReferences: "Rekodi za pesa taslimu zisizo na kumbukumbu au mwandishi",
       monthCloseEntriesTitle: "Rekodi za daftari la pesa taslimu za mwezi huu",
@@ -210,7 +210,7 @@
       landingChatTitle: "Gumzo la kikundi mahali pake",
       landingChatCopy: "Wanachama hai wa chama wanaweza kujadiliana ndani ya kikundi chao. Ujumbe husasishwa kwa matukio ya moja kwa moja na huchunguzwa tena kwa kura za mara kwa mara muunganisho unapokatika; huu si utumaji wa matangazo kwa WhatsApp au SMS.",
       landingDecisionsTitle: "Maamuzi yenye majukumu wazi.",
-      landingDecisionsCopy: "Mkopo unahitaji maamuzi matatu tofauti ya majukumu. Baada ya usanidi, nafasi za maafisa hupigiwa kura ya siri kwa tarehe iliyopangwa.",
+      landingDecisionsCopy: "Maamuzi ya mikopo hutumia vigezo vilivyowekwa kwa kila Chama; maafisa walioidhinishwa wanaweza kuona kumbukumbu, na wakopaji wanaweza kuomba mapitio ya kibinadamu. Baada ya usanidi, nafasi za maafisa hufuata uchaguzi wa kura ya siri uliopangwa.",
       landingAuditCopy: "Ufikiaji uliolindwa kwa PIN na kuwekwa kulingana na majukumu pamoja na kumbukumbu ya ukaguzi ya programu husaidia ukaguzi. Kumbukumbu hiyo haizuii kubadilishwa; hifadhi risiti za awali na nakala rudufu.",
       faqGettingStartedQuestion: "Nitaanzishaje kikundi changu?",
       faqFinancialQuestion: "Je, tunaweza kufuatilia michango na salio la kila mwanachama?",
@@ -222,10 +222,10 @@
       faqFinancialAnswer: "Wanachama na maafisa wanaweza kukagua michango, salio, mikopo na marejesho yaliyorekodiwa. Programu huweka rekodi zilizoingizwa na chama; pesa taslimu hupokelewa au kulipwa nje ya programu.",
       faqSecurityAnswer: "Ufikiaji hutegemea jukumu na vitendo muhimu huwekwa kwenye kumbukumbu ya ukaguzi ya programu. Kumbukumbu hii haizuii kubadilishwa; linganisha rekodi na risiti na uhifadhi nakala rudufu.",
       faqContributionSplitAnswer: "Mwenyekiti huweka kiasi cha ustawi cha mwezi wakati wa usanidi. Mchango kwanza hulipa faini ambazo hazijalipwa, kisha kiasi cha ustawi cha mwanachama mara moja kwa mwezi; salio huenda kwenye mtaji wa hisa.",
-      faqLoanAnswer: "Mkopo unahitaji maamuzi matatu tofauti ya majukumu, na mkopaji hawezi kuamua ombi lake mwenyewe. Mkopaji akiwa Mwenyekiti au Mweka Hazina, Katibu hujaza nafasi hiyo ya uamuzi. Muda unaoruhusiwa ni miezi 1, 2, 3 au 6; marejesho hulipa riba kabla ya mtaji. Programu hurekodi deni na marejesho ya pesa taslimu lakini haitoi pesa.",
+      faqLoanAnswer: "Kila Chama huweka vigezo vyake. Programu hukagua mara moja muda wa uanachama hai, michango ya mtaji wa hisa iliyorekodiwa, kiwango cha kiasi cha mkopo, uwiano wa kiasi kinachoombwa na salio la Chama pamoja na deni la sasa la mwanachama, na mtaji wa hisa usiofungwa wa wadhamini wawili. Ombi linalotimiza vigezo huidhinishwa kiotomatiki bila kura ya Mwenyekiti au Mweka Hazina; maafisa walioidhinishwa wanaweza kuona kumbukumbu, na mkopaji anaweza kuomba mapitio ya kibinadamu. Wanachama wanaweza kuona makadirio ya marejesho yanayotumia riba inayopungua kabla ya kutuma ombi. Programu hurekodi marejesho lakini haihamishi wala haitoi fedha.",
       faqPenaltyAnswer: "Mweka Hazina anaporekodi mchango uliowekwa tarehe baada ya mwisho, faini ya kuchelewa iliyosanidiwa inaweza kurekodiwa. Tofauti na hilo, Mwenyekiti au Katibu lazima aendeshe tathmini ya kila mwezi kwa wanachama wanaostahili ambao hawajafikisha kiwango cha ustawi. Tathmini hiyo hufanywa kwa mkono, si moja kwa moja.",
       faqMonthCloseQuestion: "Mapitio ya mwisho wa mwezi yanaonyesha nini?",
-      faqMonthCloseAnswer: "Hufupisha michango na marejesho ya pesa taslimu yaliyorekodiwa, salio la mikopo iliyo wazi linalofuatiliwa na mambo ambayo maafisa wanaweza kukagua, kama maombi ya mkopo yanayosubiri au kumbukumbu zinazokosekana. Ni ya kusoma tu; hailinganishi taarifa za benki au M-PESA wala kuhamisha pesa.",
+      faqMonthCloseAnswer: "Hufupisha michango na marejesho ya pesa taslimu yaliyorekodiwa, salio la mikopo iliyo wazi linalofuatiliwa, na mambo ambayo maafisa wanaweza kufuatilia, kama maombi yaliyoachwa wazi chini ya utaratibu wa awali wa mikopo au kumbukumbu zinazokosekana. Maombi mapya ya mkopo huamuliwa mara moja kulingana na kanuni zilizowekwa na kila Chama. Ni ya kusoma tu; hailinganishi taarifa za benki au M-PESA wala kuhamisha pesa.",
       faqChatQuestion: "Je, kikundi chetu kinaweza kuzungumza ndani ya programu?",
       faqChatAnswer: "Ndiyo. Akaunti hai zinaweza kutumia gumzo la chama ndani ya programu. Husasishwa kupitia mtiririko wa matukio na lina usaidizi wa kura za mara kwa mara na kuunganisha tena. Matangazo ya WhatsApp/SMS na gumzo kwa barua pepe hayajajumuishwa.",
       faqCorrectionQuestion: "Je, tunaweza kusahihisha tarehe ya mchango baada ya kuirekodi?",
@@ -305,9 +305,9 @@
     "Outstanding loans": "Mikopo ambayo haijalipwa",
 
     // Sections & forms
-    "Three-role review": "Ukaguzi wa majukumu matatu",
+    "Automatic loan decisions": "Maamuzi ya mikopo kiotomatiki",
     "Loan requests": "Maombi ya mkopo",
-    "A loan needs three role decisions; borrowers cannot decide their own requests. If the borrower is Chairperson or Treasurer, the Secretary fills that approval seat. This app records the decision; it does not transfer loan funds.": "Mkopo unahitaji maamuzi ya majukumu matatu; wakopaji hawawezi kujiamulia maombi yao. Ikiwa mkopaji ni Mwenyekiti au Mweka Hazina, Katibu huchukua nafasi hiyo ya kuidhinisha. Programu hii hurekodi uamuzi; haihamishi pesa.",
+    "Eligible loan applications are assessed automatically under Chama rules; the borrower can request a human review.": "Maombi ya mkopo yanayostahili hutathminiwa kiotomatiki kwa kufuata vigezo vya Chama; mkopaji anaweza kuomba mapitio ya kibinadamu.",
     "Transactions": "Miamala",
     "Export transactions & attendance CSV": "Hamisha miamala na mahudhurio (CSV)",
     "Only your confirmed entries are shown.": "Maingizo yako yaliyothibitishwa pekee ndiyo yanaonyeshwa.",
@@ -484,8 +484,8 @@
     "Could not check whether this instance is ready for setup.": "Imeshindikana kuthibitisha kama mfumo huu uko tayari kusanidiwa.",
     "Only your confirmed entries are shown.": "Maingizo yako yaliyothibitishwa pekee ndiyo yanaonyeshwa.",
     "All confirmed group entries.": "Maingizo yote yaliyothibitishwa ya kikundi.",
-    "Your requests and eligible independent approvals.": "Maombi yako na maamuzi huru ya kuidhinisha unayostahili kufanya.",
-    "Three roles review each request; the Secretary fills a Chairperson or Treasurer borrower’s approval seat.": "Majukumu matatu hukagua kila ombi; Katibu huchukua nafasi ya Mwenyekiti au Mweka Hazina anapokuwa mkopaji.",
+    "Your loan requests and automatic eligibility decisions.": "Maombi yako ya mkopo na maamuzi ya moja kwa moja kuhusu ustahiki.",
+    "Eligible applications are assessed under Chama rules; borrowers can ask for human review.": "Maombi yanayostahili hutathminiwa kwa kufuata vigezo vya Chama; wakopaji wanaweza kuomba mapitio ya kibinadamu.",
     "Decision not yet recorded": "Uamuzi bado haujarekodiwa",
     "Reason (required)": "Sababu (inahitajika)",
     "No active members to record.": "Hakuna wanachama hai wa kurekodi.",
@@ -557,6 +557,418 @@
     "Invitation revoked": "Mwaliko umebatilishwa",
     "Copy": "Nakili"
   };
+
+  // Supplement the shared phrase map with the public pages and live dashboard
+  // panels so plain React text, status updates, and accessible labels switch too.
+  Object.assign(textPairs, {
+    "GROUP SAVINGS": "AKIBA YA KIKUNDI",
+    "Features": "Vipengele",
+    "How it works": "Jinsi inavyofanya kazi",
+    "How It Works": "Jinsi inavyofanya kazi",
+    "Pricing": "Bei",
+    "Security": "Usalama",
+    "FAQ": "Maswali",
+    "Contact": "Mawasiliano",
+    "Capabilities": "Uwezo",
+    "What Your Chama Can Do": "Mambo Ambayo Chama Chako Kinaweza Kufanya",
+    "Modern financial management designed for Kenyan table-banking and savings groups.": "Usimamizi wa kisasa wa fedha ulioundwa kwa vikundi vya mzunguko wa fedha na akiba nchini Kenya.",
+    "Getting Started": "Kuanza",
+    "Get your group operational in four easy steps.": "Anzisha shughuli za kikundi chako kwa hatua nne rahisi.",
+    "Built for Trust and Accountability": "Imeundwa kwa Uaminifu na Uwajibikaji",
+    "The platform keeps sensitive treasury and member data visible only where it is needed.": "Mfumo huu huonyesha taarifa nyeti za hazina na wanachama kwa watu wanaohitaji kuziona pekee.",
+    "Simple pricing for every chama": "Bei rahisi kwa kila chama",
+    "Choose the billing schedule that works best for your group.": "Chagua ratiba ya malipo inayofaa zaidi kwa kikundi chako.",
+    "Clear contribution records": "Rekodi wazi za michango",
+    "Record contributions and keep each member’s balance visible alongside the group’s shared records.": "Rekodi michango na uonyeshe salio la kila mwanachama pamoja na rekodi za pamoja za kikundi.",
+    "Savings and loan records": "Rekodi za akiba na mikopo",
+    "Keep contribution schedules, loan requests, repayments, and outstanding balances organized together.": "Panga ratiba za michango, maombi ya mikopo, marejesho na salio ambalo bado halijalipwa pamoja.",
+    "Digital Governance": "Utawala wa Kidijitali",
+    "Support group decisions with meeting attendance, officer roles, loan approvals, and recorded rules.": "Saidia maamuzi ya kikundi kwa kurekodi mahudhurio ya mikutano, majukumu ya maafisa, idhini za mikopo na kanuni zilizowekwa.",
+    "Security & Transparency": "Usalama na Uwazi",
+    "PIN-protected, role-scoped access and an application audit log support review. The log is not tamper-evident, so keep source receipts and backups.": "Ufikiaji unaolindwa kwa PIN na kuwekwa kulingana na majukumu, pamoja na kumbukumbu ya ukaguzi ya programu, hurahisisha mapitio. Kumbukumbu hiyo haizuii ubadilishaji, kwa hiyo hifadhi risiti za awali na nakala rudufu.",
+    "A clearer month-end close": "Muhtasari wazi zaidi wa mwisho wa mwezi",
+    "Bring recorded cash contributions, repayments, open loan balances, and items needing attention into one read-only monthly view. Compare it with receipts and statements yourself; the app does not verify settlement or move funds.": "Tazama katika muhtasari mmoja wa mwezi usioweza kuhaririwa michango ya pesa taslimu iliyorekodiwa, marejesho, salio la mikopo iliyo wazi na mambo yanayohitaji uangalizi. Linganisha taarifa hizi mwenyewe na risiti na taarifa za akaunti; programu hii haithibitishi malipo wala kuhamisha pesa.",
+    "Group chat, in context": "Gumzo la kikundi, ndani ya mfumo",
+    "Active chama members can discuss within their group. Messages refresh through live updates with polling recovery when the connection drops; this is not a WhatsApp or SMS broadcast.": "Wanachama hai wa chama wanaweza kujadiliana ndani ya kikundi chao. Ujumbe husasishwa moja kwa moja, na mfumo hukagua tena pale muunganisho unapokatika; huu si utangazaji wa WhatsApp au SMS.",
+    "Register Profile": "Sajili wasifu",
+    "Provide your name, phone number, and establish a private 6–12 digit security PIN.": "Weka jina na nambari yako ya simu, kisha uunde PIN ya usalama ya siri yenye tarakimu 6–12.",
+    "Invite Members": "Alika wanachama",
+    "Send direct invitation codes for members, officers, and role-based access approvals.": "Tuma misimbo ya mwaliko kwa wanachama na maafisa, na misimbo ya kuidhinisha ufikiaji kulingana na majukumu.",
+    "Track Records": "Fuatilia rekodi",
+    "Record contributions, payments, meetings, and loan decisions with a shared audit trail.": "Rekodi michango, malipo, mikutano na maamuzi ya mikopo katika kumbukumbu ya pamoja ya ukaguzi.",
+    "Review & Report": "Kagua na toa ripoti",
+    "Monitor balances, review committee decisions, and prepare exports when you need a snapshot.": "Fuatilia salio, kagua maamuzi ya kamati na utoe taarifa unapotaka muhtasari.",
+    "Role-scoped access.": "Ufikiaji kulingana na majukumu.",
+    "Officers and members can see only the parts of the chama they are meant to manage.": "Maafisa na wanachama huona sehemu za chama wanazopaswa kusimamia pekee.",
+    "Decisions with clear roles.": "Maamuzi yenye majukumu yaliyo wazi.",
+    "Loan decisions use thresholds configured for each Chama; authorized officers can inspect records, and borrowers can request a human review. After setup, officer seats follow a scheduled secret-ballot election.": "Maamuzi ya mikopo hutumia vigezo vilivyowekwa kwa kila Chama; maafisa walioidhinishwa wanaweza kuona kumbukumbu, na wakopaji wanaweza kuomba mapitio ya kibinadamu. Baada ya usanidi, nafasi za maafisa hufuata uchaguzi wa kura ya siri uliopangwa.",
+    "Audit history.": "Historia ya ukaguzi.",
+    "Frequently Asked Questions": "Maswali Yanayoulizwa Mara kwa Mara",
+    "What is Jirani Chama?": "Jirani Chama ni nini?",
+    "A modern financial management platform designed for Kenyan table-banking and savings groups to keep contributions, loans, and decisions in one secure space.": "Ni mfumo wa kisasa wa usimamizi wa fedha kwa vikundi vya akiba na mzunguko wa fedha nchini Kenya, unaoweka michango, mikopo na maamuzi pamoja katika sehemu salama.",
+    "How do I get my group started?": "Ninaanzishaje kikundi changu?",
+    "Create your profile, invite members with one-time codes, and use scheduled secret-ballot elections for post-setup officer seats.": "Unda wasifu wako, alika wanachama kwa misimbo ya matumizi ya mara moja, na tumia uchaguzi wa kura ya siri uliopangwa kujaza nafasi za maafisa baada ya usanidi.",
+    "Can we track individual contributions and balances?": "Je, tunaweza kufuatilia michango na salio la kila mtu?",
+    "Members and officers can review recorded contributions, balances, loans, and repayments. The app records what the group entered; cash is received or paid outside it.": "Wanachama na maafisa wanaweza kukagua michango, salio, mikopo na marejesho yaliyorekodiwa. Programu huhifadhi taarifa ambazo kikundi kimeingiza; pesa hupokelewa au kulipwa nje ya programu.",
+    "Are our group's money and data secure?": "Je, pesa na taarifa za kikundi chetu ziko salama?",
+    "Access is role-scoped and key actions are recorded in an application audit log. The log is not tamper-evident; compare records with receipts and keep backups.": "Ufikiaji hupangwa kulingana na majukumu na hatua muhimu huandikwa kwenye kumbukumbu ya ukaguzi ya programu. Kumbukumbu hiyo haizuii ubadilishaji; linganisha rekodi na risiti na uhifadhi nakala rudufu.",
+    "How are monthly contributions split between welfare and share capital?": "Michango ya kila mwezi hugawanywaje kati ya ustawi na mtaji wa hisa?",
+    "The Chairperson sets the monthly welfare amount during setup. A contribution first settles outstanding penalties, then covers the member's welfare amount once per month; any remainder goes to share capital.": "Mwenyekiti huweka kiasi cha ustawi cha kila mwezi wakati wa usanidi. Mchango hulipa kwanza faini ambazo hazijalipwa, kisha hutosheleza kiasi cha ustawi cha mwanachama mara moja kwa mwezi; salio lolote huongezwa kwenye mtaji wa hisa.",
+    "How does the platform handle loan approvals and repayments?": "Mfumo hushughulikiaje idhini na marejesho ya mikopo?",
+    "Each Chama sets its own thresholds. The app immediately checks active-membership period, recorded share-capital contributions, the amount tier, the requested amount against the Chama balance and the member’s existing loan exposure, and two guarantors’ available share capital. An eligible request is automatically approved without a Chairperson or Treasurer vote; authorized officers can inspect loan records, and the borrower may request a human review. Members can see the reducing-balance repayment estimate before submitting. The app records repayments but does not transfer or disburse funds.": "Kila Chama huweka vigezo vyake. Programu hukagua mara moja muda wa uanachama hai, michango ya mtaji wa hisa iliyorekodiwa, kiwango cha kiasi cha mkopo, uwiano wa kiasi kinachoombwa na salio la Chama pamoja na deni la sasa la mwanachama, na mtaji wa hisa usiofungwa wa wadhamini wawili. Ombi linalotimiza vigezo huidhinishwa kiotomatiki bila kura ya Mwenyekiti au Mweka Hazina; maafisa walioidhinishwa wanaweza kuona kumbukumbu, na mkopaji anaweza kuomba mapitio ya kibinadamu. Wanachama wanaweza kuona makadirio ya marejesho yanayotumia riba inayopungua kabla ya kutuma ombi. Programu hurekodi marejesho lakini haihamishi wala haitoi fedha.",
+    "How are late-payment penalties assessed?": "Faini za malipo yaliyochelewa huhesabiwaje?",
+    "A late-dated contribution can create the configured late penalty when the Treasurer records it. Separately, the Chairperson or Secretary must run the monthly assessment for eligible members who have not met the welfare threshold. That assessment is manual, not automatic.": "Mweka Hazina anaporekodi mchango wa tarehe ya kuchelewa, faini ya kuchelewa iliyowekwa inaweza kutozwa. Kando na hilo, Mwenyekiti au Katibu lazima afanye tathmini ya kila mwezi kwa wanachama wanaostahili ambao hawajafikisha kiwango cha ustawi. Tathmini hiyo hufanywa kwa mkono, si kiotomatiki.",
+    "What does the month-end close review show?": "Mapitio ya mwisho wa mwezi huonyesha nini?",
+    "It summarizes recorded cash contributions and repayments, tracked open loan balances, and items officers may need to follow up, such as requests left open under the previous loan workflow or missing references. New loan applications are decided immediately under each Chama’s configured rules. It is read-only and does not reconcile bank or M-PESA statements or move money.": "Hutoa muhtasari wa michango na marejesho ya pesa taslimu yaliyorekodiwa, salio la mikopo iliyo wazi linalofuatiliwa, na mambo ambayo maafisa wanaweza kufuatilia, kama maombi yaliyoachwa wazi chini ya utaratibu wa awali wa mikopo au kumbukumbu zinazokosekana. Maombi mapya ya mkopo huamuliwa mara moja kulingana na kanuni zilizowekwa na kila Chama. Ni ya kusoma tu; hailinganishi taarifa za benki au M-PESA wala kuhamisha pesa.",
+    "Can our group chat inside the app?": "Je, kikundi chetu kinaweza kuwasiliana kwa gumzo ndani ya programu?",
+    "Yes. Active accounts can use the chama's in-app group chat. It refreshes through the event stream with polling and reconnection support. WhatsApp/SMS broadcasts and chat by email are not included.": "Ndiyo. Akaunti hai zinaweza kutumia gumzo la kikundi ndani ya programu ya chama. Ujumbe husasishwa kupitia mtiririko wa matukio, ukaguzi wa mara kwa mara na muunganisho upya. Matangazo ya WhatsApp/SMS na gumzo kwa barua pepe havijajumuishwa.",
+    "Can we correct a contribution date after recording it?": "Je, tunaweza kusahihisha tarehe ya mchango baada ya kuurekodi?",
+    "Only the Chairperson or Treasurer can correct the date of a confirmed cash contribution, and a non-empty reason is required. The new date must be valid, not future-dated, stay in the original month, and preserve whether the contribution was on time or late. Amount, member, and other transaction fields are unchanged. An audit event records the actor, time, old and new dates, and reason; the audit store is not tamper-evident.": "Mwenyekiti au Mweka Hazina pekee ndiye anayeweza kusahihisha tarehe ya mchango wa pesa taslimu uliothibitishwa, na lazima atoe sababu. Tarehe mpya lazima iwe halali, isiwe ya baadaye, ibaki ndani ya mwezi wa awali na isibadilishe hali ya kulipwa kwa wakati au kuchelewa. Kiasi, mwanachama na sehemu nyingine za muamala hazibadilishwi. Tukio la ukaguzi hurekodi aliyefanya mabadiliko, muda, tarehe za awali na mpya, pamoja na sababu; kumbukumbu ya ukaguzi haizuii ubadilishaji.",
+    "Does Jirani Chama receive, verify, or move our money?": "Je, Jirani Chama hupokea, huthibitisha au kuhamisha pesa zetu?",
+    "No. It records cash already received or paid outside the app. It does not collect or disburse funds, and bank/M-PESA settlement matching is not enabled.": "Hapana. Hurekodi pesa taslimu ambazo tayari zimepokelewa au kulipwa nje ya programu. Haikusanyi wala kutoa fedha, na ulinganishaji wa malipo ya benki/M-PESA haujawashwa.",
+    "Which plan fits our group?": "Ni mpango gani unaofaa kikundi chetu?",
+    "Basic supports up to 10 members. Growth Chama supports up to 30 members. Enterprise / Investment is for groups above 30 members and is arranged with sales. Member limits are enforced by the server when members are invited or activated.": "Mpango wa Msingi unaruhusu hadi wanachama 10. Mpango wa Ukuaji wa Chama unaruhusu hadi wanachama 30. Mpango wa Biashara/Uwekezaji ni wa vikundi vyenye zaidi ya wanachama 30 na hupangwa kupitia timu ya mauzo. Seva hutekeleza vikomo vya wanachama wakati wa kuwaalika au kuwawezesha.",
+    "How does the annual discount work?": "Punguzo la malipo ya mwaka hufanyaje kazi?",
+    "Basic is KSh 2,880 per year instead of KSh 3,600, saving KSh 720. Growth Chama is KSh 5,760 per year instead of KSh 7,200, saving KSh 1,440. Both annual options are 20% off the equivalent monthly total.": "Mpango wa Msingi hugharimu KSh 2,880 kwa mwaka badala ya KSh 3,600, hivyo unaokoa KSh 720. Mpango wa Ukuaji wa Chama hugharimu KSh 5,760 kwa mwaka badala ya KSh 7,200, hivyo unaokoa KSh 1,440. Chaguo zote mbili za mwaka zina punguzo la 20% ikilinganishwa na jumla ya malipo ya kila mwezi.",
+    "When does payment confirm our subscription?": "Malipo yanathibitishaje usajili wetu?",
+    "A subscription becomes active only after the server verifies a real provider transaction for the expected KES amount and the group’s reference. Clicking a plan or reporting that you paid never activates access. Online payment collection is not enabled yet.": "Usajili huwashwa tu baada ya seva kuthibitisha muamala halisi wa mtoa huduma kwa kiasi kinachotarajiwa cha KES na kumbukumbu ya kikundi. Kubofya mpango au kusema kuwa umelipa hakuanzishi ufikiaji. Ukusanyaji wa malipo mtandaoni bado haujawashwa.",
+    "What happens when a subscription expires?": "Nini hutokea usajili unapoisha?",
+    "Your financial history remains available to view and export. New financial records, member invitations, loan decisions, and other subscription-gated actions are blocked for unpaid or expired groups. Online payments are not enabled yet; contact us about pricing and renewal.": "Historia yako ya fedha itaendelea kupatikana kwa kutazama na kutoa. Rekodi mpya za fedha, mialiko ya wanachama, maamuzi ya mikopo na hatua nyingine zinazohitaji usajili zitazuiwa kwa vikundi ambavyo havijalipa au usajili wake umeisha. Malipo mtandaoni bado hayajawashwa; wasiliana nasi kuhusu bei na kufanya upya usajili.",
+    "Basic": "Msingi",
+    "Growth Chama": "Ukuaji wa Chama",
+    "Enterprise / Investment": "Biashara / Uwekezaji",
+    "Up to 10 members": "Hadi wanachama 10",
+    "Up to 30 members": "Hadi wanachama 30",
+    "KSh 300/month": "KSh 300 kwa mwezi",
+    "KSh 600/month": "KSh 600 kwa mwezi",
+    "KSh 2,880/year": "KSh 2,880 kwa mwaka",
+    "KSh 5,760/year": "KSh 5,760 kwa mwaka",
+    "Save KSh 720 · KSh 240/month equivalent": "Okoa KSh 720 · sawa na KSh 240 kwa mwezi",
+    "Save KSh 1,440 · KSh 480/month equivalent": "Okoa KSh 1,440 · sawa na KSh 480 kwa mwezi",
+    "Annual: KSh 2,880/year — save KSh 720 (KSh 240/month equivalent).": "Kwa mwaka: KSh 2,880 — okoa KSh 720 (sawa na KSh 240 kwa mwezi).",
+    "Annual: KSh 5,760/year — save KSh 1,440 (KSh 480/month equivalent).": "Kwa mwaka: KSh 5,760 — okoa KSh 1,440 (sawa na KSh 480 kwa mwezi).",
+    "Flexible month-to-month access for your chama.": "Ufikiaji wa kila mwezi unaoweza kubadilika kulingana na mahitaji ya chama chako.",
+    "More room for a larger chama to manage its records together.": "Nafasi zaidi kwa chama kikubwa kusimamia rekodi zake kwa pamoja.",
+    "Growing groups": "Vikundi vinavyokua",
+    "Choose monthly": "Chagua malipo ya kila mwezi",
+    "Choose annual · Save 20%": "Chagua malipo ya mwaka · Okoa 20%",
+    "No annual discount": "Hakuna punguzo la mwaka",
+    "Custom member caps for groups above 30 members": "Kikomo maalum cha wanachama kwa vikundi vyenye zaidi ya wanachama 30",
+    "Custom pricing": "Bei maalum",
+    "Custom pricing — Contact sales": "Bei maalum — Wasiliana na timu ya mauzo",
+    "Agreed with sales": "Kama ilivyokubaliwa na timu ya mauzo",
+    "Tailored plan": "Mpango uliobinafsishwa",
+    "Tailored for scale and the added administration of contribution tracking and loan approvals.": "Umeundwa kwa vikundi vikubwa vinavyohitaji usimamizi zaidi wa ufuatiliaji wa michango na idhini za mikopo.",
+    "Contact us for pricing": "Wasiliana nasi kuhusu bei",
+    "Built for Kenyan savings groups.": "Imeundwa kwa vikundi vya akiba nchini Kenya.",
+    "© 2026 Jirani Chama. All rights reserved.": "© 2026 Jirani Chama. Haki zote zimehifadhiwa.",
+    "Privacy": "Faragha",
+    "Terms": "Masharti",
+    "Review your plan": "Kagua mpango wako",
+    "Tier": "Kiwango",
+    "Member cap": "Kikomo cha wanachama",
+    "Billing": "Muda wa malipo",
+    "Total": "Jumla",
+    "Annual saving": "Akiba ya mwaka",
+    "Monthly": "Kila mwezi",
+    "Annual": "Kila mwaka",
+    "Custom": "Maalum",
+    "Online subscription payments are temporarily paused. Prices remain available for review, but selecting a plan will not start checkout, request payment, change subscription status, or affect existing access. Contact us for updates.": "Malipo ya usajili mtandaoni yamesitishwa kwa muda. Bei bado zinaweza kukaguliwa, lakini kuchagua mpango hakutaanzisha malipo, kuomba malipo, kubadilisha hali ya usajili au kuathiri ufikiaji uliopo. Wasiliana nasi kwa taarifa mpya.",
+    "Not now": "Si sasa",
+    "Contact us about this plan": "Wasiliana nasi kuhusu mpango huu",
+    "Landing Page Navigation": "Urambazaji wa ukurasa wa mwanzo",
+    "Landing page navigation": "Urambazaji wa ukurasa wa mwanzo",
+    "Footer links": "Viungo vya sehemu ya chini ya ukurasa",
+    "Jirani Chama home": "Ukurasa wa mwanzo wa Jirani Chama",
+    "Jirani Chama — group savings, together": "Jirani Chama — akiba ya kikundi, pamoja",
+    "Language": "Lugha",
+    "Open group messages": "Fungua ujumbe wa kikundi",
+    "Messages": "Ujumbe",
+    "Profile": "Wasifu",
+    "Open navigation menu": "Fungua menyu ya urambazaji",
+    "Close navigation menu": "Funga menyu ya urambazaji",
+    "Close landing navigation": "Funga urambazaji wa ukurasa wa mwanzo",
+    "Sign in to Jirani Chama": "Ingia kwenye Jirani Chama",
+    "Sign in to this instance": "Ingia kwenye mfumo huu",
+    "A page controller could not be loaded.": "Kidhibiti cha ukurasa hakikuweza kupakiwa.",
+    "This page could not finish loading. Reload and try again.": "Ukurasa huu haukuweza kupakiwa kikamilifu. Pakia upya kisha ujaribu tena.",
+    "Loading Jirani Chama…": "Inapakia Jirani Chama…",
+    "The React frontend mount point is missing.": "Sehemu ya kupachika kiolesura cha React haipo.",
+    "Start a new chama": "Anzisha chama kipya",
+    "Register your group and create the chairperson account. You will be signed in when setup is complete.": "Sajili kikundi chako na uunde akaunti ya mwenyekiti. Utaingia baada ya usanidi kukamilika.",
+    "This instance is already set up": "Mfumo huu tayari umesanidiwa",
+    "To create a separate chama, open this app on a separate instance connected to an empty database. This instance’s existing records will remain unchanged.": "Ili kuunda chama tofauti, fungua programu hii kwenye mfumo tofauti uliounganishwa na hifadhidata tupu. Rekodi zilizopo kwenye mfumo huu hazitabadilishwa.",
+    "Chama and chairperson details": "Maelezo ya chama na mwenyekiti",
+    "Member login | Jirani Chama": "Kuingia kwa mwanachama | Jirani Chama",
+    "Member login": "Kuingia kwa mwanachama",
+    "Register a new chama | Jirani Chama": "Sajili chama kipya | Jirani Chama",
+    "Profile | Jirani Chama": "Wasifu | Jirani Chama",
+    "Switch chama": "Badilisha chama",
+    "Keep contributions, loans, and group decisions together in one secure place.": "Weka michango, mikopo na maamuzi ya kikundi pamoja katika sehemu moja salama.",
+    "Choose a chama": "Chagua chama",
+    "Sign in again to choose a chama linked to your phone number.": "Ingia tena ili kuchagua chama kilichounganishwa na nambari yako ya simu.",
+    "Welcome back": "Karibu tena",
+    "Sign in with your Kenyan mobile number and PIN.": "Ingia kwa kutumia nambari yako ya simu ya Kenya na PIN.",
+    "Phone number": "Nambari ya simu",
+    "PIN": "PIN",
+    "Show PIN": "Onyesha PIN",
+    "Hide PIN": "Ficha PIN",
+    "Signing in…": "Inaingia…",
+    "Forgot PIN?": "Umesahau PIN?",
+    "Send reset code": "Tuma msimbo wa kuweka upya",
+    "Reset PIN": "Weka upya PIN",
+    "Enter the email address saved on your account. If it matches an active account, we will send a PIN reset code.": "Weka anwani ya barua pepe iliyohifadhiwa kwenye akaunti yako. Ikiwa inalingana na akaunti hai, tutakutumia msimbo wa kuweka upya PIN.",
+    "Reset code": "Msimbo wa kuweka upya",
+    "New 6–12 digit PIN": "PIN mpya yenye tarakimu 6–12",
+    "Starting a new group?": "Unaanzisha kikundi kipya?",
+    "Register a new chama": "Sajili chama kipya",
+    "Enter Invite Code": "Weka msimbo wa mwaliko",
+    "Your session has expired. Sign in again to edit your profile.": "Kipindi chako cha kuingia kimeisha. Ingia tena ili kuhariri wasifu wako.",
+    "This browser cannot prepare the profile photo.": "Kivinjari hiki hakiwezi kuandaa picha ya wasifu.",
+    "The browser could not convert the selected image.": "Kivinjari hakikuweza kubadilisha picha iliyochaguliwa.",
+    "The server did not return profile details.": "Seva haikurudisha maelezo ya wasifu.",
+    "The profile request helper is unavailable.": "Kipengele cha kutuma ombi la wasifu hakipatikani.",
+    "Choose an image smaller than 10 MB.": "Chagua picha yenye ukubwa chini ya MB 10.",
+    "Dashboard": "Dashibodi",
+    "Ledger": "Leja",
+    "Contributions": "Michango",
+    "Record a cash payment": "Rekodi malipo ya pesa taslimu",
+    "Loans": "Mikopo",
+    "Request loan": "Omba mkopo",
+    "Loan": "Mkopo",
+    "Members": "Wanachama",
+    "Attendance": "Mahudhurio",
+    "Admin": "Usimamizi",
+    "Officers": "Maafisa",
+    "Elections": "Chaguzi",
+    "Penalties": "Faini",
+    "Audit log": "Kumbukumbu ya ukaguzi",
+    "Dividends": "Mgao wa faida",
+    "Monthly close": "Muhtasari wa mwezi",
+    "Invite": "Alika",
+    "Invite a member": "Alika mwanachama",
+    "Group chat": "Gumzo la kikundi",
+    "Sign out": "Toka",
+    "View profile": "Tazama wasifu",
+    "Edit profile": "Hariri wasifu",
+    "Create new chama": "Unda chama kipya",
+    "Switch chama": "Badilisha chama",
+    "Group chat": "Gumzo la kikundi",
+    "Visible to all active members. Messages cannot be edited or deleted. Showing the latest 100.": "Huonekana kwa wanachama wote walio hai. Ujumbe hauwezi kuhaririwa au kufutwa. Inaonyesha ujumbe 100 ya hivi karibuni.",
+    "Loading messages…": "Inapakia ujumbe…",
+    "No messages yet.": "Bado hakuna ujumbe.",
+    "Message": "Ujumbe",
+    "Sending…": "Inatuma…",
+    "Send": "Tuma",
+    "Messages could not be loaded.": "Ujumbe haukuweza kupakiwa.",
+    "Message sent.": "Ujumbe umetumwa.",
+    "The message could not be sent. Try again.": "Ujumbe haukuweza kutumwa. Jaribu tena.",
+    "The server response did not include chat messages.": "Jibu la seva halikuwa na ujumbe wa gumzo.",
+    "Enter a message of 1 to 500 characters.": "Weka ujumbe wenye herufi 1 hadi 500.",
+    "The secure write service is unavailable.": "Huduma salama ya kuhifadhi taarifa haipatikani.",
+    "Cannot reach the server. Check that it is running, then try again.": "Haiwezi kuunganishwa na seva. Hakikisha inafanya kazi, kisha ujaribu tena.",
+    "Request a loan": "Omba mkopo",
+    "For your own account": "Kwa akaunti yako mwenyewe",
+    "Amount (KES)": "Kiasi (KES)",
+    "Repayment period": "Kipindi cha marejesho",
+    "1 month": "Mwezi 1",
+    "2 months": "Miezi 2",
+    "3 months": "Miezi 3",
+    "6 months": "Miezi 6",
+    "First guarantor": "Mdhamini wa kwanza",
+    "Second guarantor": "Mdhamini wa pili",
+    "Select a guarantor": "Chagua mdhamini",
+    "Loading active guarantors…": "Inapakia wadhamini walio hai…",
+    "At least two other active members are needed to choose guarantors.": "Unahitaji angalau wanachama wengine wawili walio hai ili kuchagua wadhamini.",
+    "Submit request": "Wasilisha ombi",
+    "Submitting…": "Inawasilisha…",
+    "Loan request submitted.": "Ombi la mkopo limewasilishwa.",
+    "The loan request could not be submitted.": "Ombi la mkopo halikuweza kuwasilishwa.",
+    "Loan requests": "Maombi ya mikopo",
+    "Your loan requests and automatic eligibility decisions.": "Maombi yako ya mkopo na maamuzi ya moja kwa moja kuhusu ustahiki.",
+    "Eligible applications are assessed under Chama rules; borrowers can ask for human review.": "Maombi yanayostahili hutathminiwa kwa kufuata vigezo vya Chama; wakopaji wanaweza kuomba mapitio ya kibinadamu.",
+    "Automatic loan decisions": "Maamuzi ya mikopo kiotomatiki",
+    "Eligible loan applications are assessed automatically under Chama rules; the borrower can request a human review.": "Maombi ya mkopo yanayostahili hutathminiwa kiotomatiki kwa kufuata vigezo vya Chama; mkopaji anaweza kuomba mapitio ya kibinadamu.",
+    "Loan decision recorded.": "Uamuzi wa mkopo umerekodiwa.",
+    "The loan decision could not be recorded.": "Uamuzi wa mkopo haukuweza kurekodiwa.",
+    "Decision not yet recorded": "Uamuzi bado haujarekodiwa",
+    "Reason: ": "Sababu: ",
+    "Decision reason": "Sababu ya uamuzi",
+    "Reason for loan decision": "Sababu ya uamuzi wa mkopo",
+    "Reason (required)": "Sababu (inahitajika)",
+    "Approve": "Idhinisha",
+    "Reject": "Kataa",
+    "Approved": "Imeidhinishwa",
+    "Rejected": "Imekataliwa",
+    "Awaiting": "Inasubiri",
+    "Awaiting approval": "Inasubiri idhini",
+    "Pending": "Inasubiri",
+    "No loans available.": "Hakuna mikopo inayopatikana.",
+    "Loading loan requests…": "Inapakia maombi ya mikopo…",
+    "Loan repayments": "Marejesho ya mikopo",
+    "No contributions recorded.": "Hakuna michango iliyorekodiwa.",
+    "No fines recorded.": "Hakuna faini zilizorekodiwa.",
+    "No loans recorded.": "Hakuna mikopo iliyorekodiwa.",
+    "No arrears recorded.": "Hakuna madeni yaliyorekodiwa.",
+    "No monthly data available.": "Hakuna data ya kila mwezi inayopatikana.",
+    "Financial records could not load.": "Rekodi za fedha hazikuweza kupakiwa.",
+    "Group financial data could not load.": "Taarifa za fedha za kikundi hazikuweza kupakiwa.",
+    "Group financial totals": "Jumla za fedha za kikundi",
+    "Group balance": "Salio la kikundi",
+    "Active members": "Wanachama hai",
+    "This month’s contributions": "Michango ya mwezi huu",
+    "Outstanding loans": "Mikopo ambayo haijalipwa",
+    "Monthly financial trend data. Scroll horizontally to view all series.": "Data ya mwenendo wa fedha wa kila mwezi. Sogeza mlalo ili kuona mfululizo wote.",
+    "Monthly financial trends for the last six months": "Mwenendo wa fedha wa kila mwezi kwa miezi sita iliyopita",
+    "Your monthly financial trends (KES)": "Mwenendo wa fedha zako wa kila mwezi (KES)",
+    "Group monthly financial trends (KES)": "Mwenendo wa fedha wa kikundi kwa mwezi (KES)",
+    "Monthly contribution": "Mchango wa kila mwezi",
+    "Unpaid fines": "Faini ambazo hazijalipwa",
+    "Meeting date": "Tarehe ya mkutano",
+    "Meetings · attendance register": "Mikutano · rejesta ya mahudhurio",
+    "Choose a meeting date to record attendance or review meeting history.": "Chagua tarehe ya mkutano ili kurekodi mahudhurio au kukagua historia ya mikutano.",
+    "View-only for non-Secretary": "Kutazama pekee kwa wasiokuwa Katibu",
+    "Mark all present": "Weka wote kuwa wamehudhuria",
+    "Mark all absent": "Weka wote kuwa hawakuhudhuria",
+    "Present": "Amekuwepo",
+    "Absent": "Hakuwepo",
+    "Loading meeting attendance…": "Inapakia mahudhurio ya mkutano…",
+    "No attendance register for this date.": "Hakuna rejesta ya mahudhurio ya tarehe hii.",
+    "Loading attendance…": "Inapakia mahudhurio…",
+    "The attendance register could not be loaded.": "Rejesta ya mahudhurio haikuweza kupakiwa.",
+    "Saving attendance register…": "Inahifadhi rejesta ya mahudhurio…",
+    "Attendance register saved.": "Rejesta ya mahudhurio imehifadhiwa.",
+    "The register was saved, but the latest meeting history could not be loaded. Reload before making another edit.": "Rejesta imehifadhiwa, lakini historia ya hivi karibuni ya mikutano haikuweza kupakiwa. Pakia upya kabla ya kufanya mabadiliko mengine.",
+    "This meeting already has a register. Saving will replace its attendance and record the changes.": "Mkutano huu tayari una rejesta. Kuhifadhi kutabadilisha mahudhurio yake na kurekodi mabadiliko hayo.",
+    "Record attendance": "Rekodi mahudhurio",
+    "Confirm": "Thibitisha",
+    "Cancel": "Ghairi",
+    "The attendance response could not be confirmed.": "Jibu la mahudhurio halikuweza kuthibitishwa.",
+    "The shared write requester is unavailable.": "Huduma ya pamoja ya kutuma taarifa haipatikani.",
+    "Loading…": "Inapakia…",
+    "Loading": "Inapakia",
+    "The audit log response could not be confirmed.": "Jibu la kumbukumbu ya ukaguzi halikuweza kuthibitishwa.",
+    "Payments, loan decisions, and officer changes, newest first. Filter and page through entries; audit records cannot be edited or deleted.": "Malipo, maamuzi ya mikopo na mabadiliko ya maafisa, kuanzia mapya zaidi. Chuja na pitia rekodi; rekodi za ukaguzi haziwezi kuhaririwa au kufutwa.",
+    "Filter audit entries": "Chuja rekodi za ukaguzi",
+    "Name, action, or date": "Jina, kitendo au tarehe",
+    "Audit log pages": "Kurasa za kumbukumbu ya ukaguzi",
+    "Audit log entries. Scroll within this area to review older entries.": "Rekodi za ukaguzi. Sogeza ndani ya sehemu hii ili kukagua rekodi za zamani.",
+    "Cash flow entries in the audit log. Scroll within this area to review entries.": "Rekodi za mtiririko wa pesa katika kumbukumbu ya ukaguzi. Sogeza ndani ya sehemu hii ili kuzikagua.",
+    "The cash entry is invalid.": "Rekodi ya pesa taslimu si halali.",
+    "The cash payment could not be confirmed.": "Malipo ya pesa taslimu hayakuweza kuthibitishwa.",
+    "Dates can be backdated up to 30 days.": "Tarehe inaweza kurudishwa nyuma hadi siku 30.",
+    "Record cash": "Rekodi pesa taslimu",
+    "Selected member": "Mwanachama aliyechaguliwa",
+    "Dividend preview. Nothing has been paid out yet.": "Muhtasari wa mgao. Bado hakuna malipo yaliyotolewa.",
+    "and penalties": "na faini",
+    "less admin expenses": "ukiondoa gharama za utawala",
+    "leave a pool of": "huacha jumla ya",
+    "Total share capital:": "Jumla ya mtaji wa hisa:",
+    "Awaiting Chairperson acceptance": "Inasubiri kukubaliwa na Mwenyekiti",
+    "The election action could not be confirmed.": "Kitendo cha uchaguzi hakikuweza kuthibitishwa.",
+    "Choose 2 to 20 active Members as candidates.": "Chagua wanachama hai 2 hadi 20 kama wagombea.",
+    "Accept these candidates and open voting?": "Kubali wagombea hawa na ufungue upigaji kura?",
+    "Decline this proposal? The Secretary can submit a new one.": "Kataa pendekezo hili? Katibu anaweza kuwasilisha pendekezo jipya.",
+    "Close voting now? Members will no longer be able to vote.": "Funga upigaji kura sasa? Wanachama hawataweza tena kupiga kura.",
+    "Verify the displayed election result?": "Thibitisha matokeo ya uchaguzi yaliyoonyeshwa?",
+    "Election updated.": "Uchaguzi umesasishwa.",
+    "Leadership elections": "Chaguzi za uongozi",
+    "Candidates (choose at least two active Members)": "Wagombea (chagua angalau wanachama hai wawili)",
+    "Election notices": "Taarifa za uchaguzi",
+    "Election update": "Taarifa ya uchaguzi",
+    "No election notices yet.": "Bado hakuna taarifa za uchaguzi.",
+    "Ballots and results": "Kura na matokeo",
+    "Loading elections…": "Inapakia chaguzi…",
+    "Accept candidates and open voting": "Kubali wagombea na ufungue upigaji kura",
+    "Decline proposal": "Kataa pendekezo",
+    "Close voting": "Funga upigaji kura",
+    "Verify result": "Thibitisha matokeo",
+    "eligible members": "wanachama wanaostahili",
+    "Runoff ballot for the tied candidates.": "Kura ya marudio kwa wagombea waliofungana.",
+    "Choose one candidate": "Chagua mgombea mmoja",
+    "Select a candidate": "Chagua mgombea",
+    "Cast secret vote": "Piga kura ya siri",
+    "Your secret vote is recorded.": "Kura yako ya siri imerekodiwa.",
+    "No leadership elections are active.": "Hakuna uchaguzi wa uongozi unaoendelea.",
+    "Leadership election": "Uchaguzi wa uongozi",
+    "The invitation could not be confirmed.": "Mwaliko haukuweza kuthibitishwa.",
+    "Creating invitation…": "Inaunda mwaliko…",
+    "Unknown role": "Jukumu lisilojulikana",
+    "The officer assignment could not be confirmed.": "Mgawo wa afisa haukuweza kuthibitishwa.",
+    "Unknown member": "Mwanachama asiyejulikana",
+    "Officer assignment proposed by": "Mgawo wa afisa uliopendekezwa na",
+    "The contribution date could not be corrected.": "Tarehe ya mchango haikuweza kusahihishwa.",
+    "Only Chairpersons and Treasurers can correct a recorded cash contribution. The change requires a reason, must stay in the same month and cannot change whether the contribution was on time or late.": "Mwenyekiti au Mweka Hazina pekee ndiye anayeweza kusahihisha mchango wa pesa taslimu uliorekodiwa. Mabadiliko yanahitaji sababu, lazima yabaki ndani ya mwezi uleule na hayawezi kubadilisha hali ya kulipwa kwa wakati au kuchelewa.",
+    "The loan request could not be submitted.": "Ombi la mkopo halikuweza kuwasilishwa.",
+    "Why are you revoking this invitation?": "Kwa nini unabatilisha mwaliko huu?",
+    "Why are you revoking this role?": "Kwa nini unabatilisha jukumu hili?",
+    "Revoke this role": "Batilisha jukumu hili",
+    "This invitation was revoked by": "Mwaliko huu ulifutwa na",
+    "Activated on": "Ilianzishwa tarehe",
+    "Monthly penalties assessed.": "Faini za kila mwezi zimehesabiwa.",
+    "The PIN could not be changed. Please try again.": "PIN haikuweza kubadilishwa. Tafadhali jaribu tena.",
+    "The simulated payment could not be saved.": "Malipo ya majaribio hayakuweza kuhifadhiwa.",
+    "Enter the month as YYYY-MM.": "Weka mwezi kwa muundo wa YYYY-MM.",
+    "Enter valid cycle dates and admin expenses as whole KES.": "Weka tarehe halali za kipindi na gharama za utawala kama kiasi kizima cha KES.",
+    "Calculate a valid dividend preview before committing.": "Kokotoa muhtasari halali wa mgao kabla ya kuuthibitisha.",
+    "The attendance register could not be loaded.": "Rejesta ya mahudhurio haikuweza kupakiwa.",
+    "The request could not be completed. Please try again.": "Ombi halikuweza kukamilishwa. Tafadhali jaribu tena.",
+    "The cash-entry request helper is unavailable.": "Kipengele cha kutuma ombi la pesa taslimu hakipatikani.",
+    "A valid cash-entry request is required.": "Ombi halali la kurekodi pesa taslimu linahitajika.",
+    "Enter a message of 1 to 500 characters.": "Weka ujumbe wenye herufi 1 hadi 500.",
+    "Enter the member's name.": "Weka jina la mwanachama.",
+    "Enter the member's Kenyan phone number.": "Weka nambari ya simu ya mwanachama ya Kenya.",
+    "Enter the member's email address.": "Weka anwani ya barua pepe ya mwanachama.",
+    "Choose a member role.": "Chagua jukumu la mwanachama.",
+    "Choose a valid officer role.": "Chagua jukumu halali la afisa.",
+    "Choose an active incoming official.": "Chagua afisa mpya aliye hai.",
+    "Choose a valid effective date.": "Chagua tarehe halali ya kuanza kutumika.",
+    "Provide an officer role, member, and effective date.": "Weka jukumu la afisa, mwanachama na tarehe ya kuanza kutumika.",
+    "Choose a pending officer assignment.": "Chagua mgawo wa afisa unaosubiri.",
+    "Enter a valid date and a reason of up to 500 characters.": "Weka tarehe halali na sababu yenye hadi herufi 500.",
+    "Enter a whole loan amount greater than zero.": "Weka kiasi kizima cha mkopo kinachozidi sifuri.",
+    "Choose a repayment period of 1, 2, 3, or 6 months.": "Chagua kipindi cha marejesho cha mwezi 1, 2, 3 au 6.",
+    "Choose exactly two different active members to guarantee this loan.": "Chagua wanachama hai wawili tofauti hasa ili kudhamini mkopo huu.",
+    "Choose a valid loan decision.": "Chagua uamuzi halali wa mkopo.",
+    "Enter a reason between 5 and 500 characters.": "Weka sababu yenye herufi 5 hadi 500.",
+    "Choose a valid review month.": "Chagua mwezi halali wa mapitio.",
+    "The month-end review response could not be confirmed.": "Jibu la mapitio ya mwisho wa mwezi halikuweza kuthibitishwa.",
+    "Choose an office, election date, and 2 to 20 different active Member candidates.": "Chagua wadhifa, tarehe ya uchaguzi na wagombea wanachama hai 2 hadi 20 tofauti.",
+    "Choose one active candidate.": "Chagua mgombea mmoja aliye hai.",
+    "Choose a valid election action.": "Chagua kitendo halali cha uchaguzi.",
+    "Choose a valid runoff date.": "Chagua tarehe halali ya kura ya marudio.",
+    "waiting for decisions": "inasubiri maamuzi",
+    "Confirm payment": "Thibitisha malipo",
+    "No attendance records yet.": "Bado hakuna rekodi za mahudhurio.",
+    "Choose a date": "Chagua tarehe",
+    "Register attendance": "Rekodi mahudhurio",
+    "Attendance history": "Historia ya mahudhurio",
+    "Your own records are shown here.": "Rekodi zako pekee ndizo zinazoonyeshwa hapa.",
+    "No records found.": "Hakuna rekodi zilizopatikana.",
+    "Previous": "Iliyotangulia",
+    "Next": "Inayofuata",
+    "Search members": "Tafuta wanachama",
+    "No members found.": "Hakuna wanachama waliopatikana.",
+    "No invitations yet.": "Bado hakuna mialiko.",
+    "Invitation history": "Historia ya mialiko",
+    "Account history": "Historia ya akaunti",
+    "Active members": "Wanachama hai",
+    "Recent cash flows": "Mtiririko wa pesa wa hivi karibuni",
+    "Payment": "Malipo",
+    "Cash": "Pesa taslimu",
+    "Online": "Mtandaoni",
+    "Date": "Tarehe",
+    "Status": "Hali",
+    "Name": "Jina",
+    "Email address": "Anwani ya barua pepe",
+    "Subject": "Mada",
+    "Save details": "Hifadhi maelezo",
+    "Loading profile…": "Inapakia wasifu…",
+    "Your profile": "Wasifu wako",
+    "New chama registration": "Usajili wa chama kipya",
+    "One-time activation code": "Msimbo wa kuwezesha wa matumizi ya mara moja",
+    "Do not change your phone settings to use Kiswahili. Use the language selector in the app.": "Usibadilishe mipangilio ya simu yako ili kutumia Kiswahili. Tumia kichagua lugha ndani ya programu."
+  });
 
   const keyedTranslations = {
     youTab: ["You", "Wewe"], groupTab: ["Group", "Kikundi"], englishOption: ["English", "Kiingereza"],
@@ -690,7 +1102,16 @@
     swToEn[swahili] = english;
   }
 
-  let language = localStorage.getItem("jirani-language") || "en";
+  const enToSw = {};
+  for (const [english, swahili] of Object.entries(textPairs)) enToSw[english] = swahili;
+  for (const [key, [english, swahili]] of Object.entries(keyedTranslations)) enToSw[english] = swahili;
+
+  let language = "en";
+  try {
+    language = localStorage.getItem("jirani-language") || "en";
+  } catch {
+    // The in-memory language preference still works when storage is unavailable.
+  }
 
   function getLang() {
     return language === "sw" ? "sw" : "en";
@@ -711,36 +1132,69 @@
     return role[0].toUpperCase() + role.slice(1);
   }
 
+  function queryAll(root, selector) {
+    const elements = [...root.querySelectorAll(selector)];
+    if (root.matches?.(selector)) elements.unshift(root);
+    return elements;
+  }
+
+  function applyAttribute(element, attribute, l) {
+    const current = element.getAttribute(attribute);
+    if (!current) return;
+    const suffix = attribute.replace(/(^|-)([a-z])/g, (_, _dash, char) => char.toUpperCase());
+    const originalKey = `i18nOriginal${suffix}`;
+    const appliedKey = `i18nApplied${suffix}`;
+    const translationKey = element.getAttribute(`data-i18n-${attribute}`);
+    if (element.dataset[originalKey] === undefined || current !== element.dataset[appliedKey]) {
+      element.dataset[originalKey] = swToEn[current] || current;
+    }
+    const original = element.dataset[originalKey];
+    const translated = l === "sw"
+      ? dictionary.sw[translationKey] || enToSw[original] || original
+      : original;
+    if (current !== translated) element.setAttribute(attribute, translated);
+    element.dataset[appliedKey] = translated;
+  }
+
+  let originalDocumentTitle;
+  let appliedDocumentTitle;
   function apply(root = document.documentElement) {
     const l = getLang();
     document.documentElement.lang = l;
-    const select = document.querySelector("#language-switch");
-    if (select) select.value = l;
+    document.querySelectorAll(".language-control select").forEach(select => {
+      if (select.value !== l) select.value = l;
+    });
 
-    root.querySelectorAll("[data-i18n]").forEach(element => {
+    queryAll(root, "[data-i18n]").forEach(element => {
       const textNode = [...element.childNodes].find(node => node.nodeType === 3 && node.nodeValue.trim());
-      const value = dictionary[l]?.[element.dataset.i18n] || (l === "sw" && textNode ? textPairs[textNode.nodeValue.trim()] : undefined);
+      const value = dictionary[l]?.[element.dataset.i18n] || (l === "sw" && textNode ? enToSw[textNode.nodeValue.trim()] : undefined);
       if (l === "sw" && !value) return;
       if (textNode) {
         if (textNode._i18nKeyOriginal === undefined) textNode._i18nKeyOriginal = textNode.nodeValue;
         const original = textNode._i18nKeyOriginal;
-        if (l === "sw") textNode.nodeValue = original.replace(original.trim(), value);
-        else textNode.nodeValue = original;
+        const nextValue = l === "sw" ? original.replace(original.trim(), value) : original;
+        if (textNode.nodeValue !== nextValue) textNode.nodeValue = nextValue;
       } else if (!element.childNodes.length) {
         if (element._i18nKeyOriginal === undefined) element._i18nKeyOriginal = element.textContent;
-        element.textContent = l === "sw" ? value : element._i18nKeyOriginal;
+        const nextValue = l === "sw" ? value : element._i18nKeyOriginal;
+        if (element.textContent !== nextValue) element.textContent = nextValue;
       }
     });
-    root.querySelectorAll("[data-i18n-placeholder], [data-i18n-aria-label]").forEach(element => {
-      for (const attribute of ["placeholder", "aria-label"]) {
-        const key = element.getAttribute(`data-i18n-${attribute}`);
-        if (!key) continue;
-        const originalKey = `i18nOriginal${attribute.replace(/(^|-)([a-z])/g, (_, _dash, char) => char.toUpperCase())}`;
-        if (element.dataset[originalKey] === undefined) element.dataset[originalKey] = element.getAttribute(attribute) || "";
-        const value = l === "sw" ? dictionary.sw[key] : element.dataset[originalKey];
-        if (value) element.setAttribute(attribute, value);
+
+    queryAll(root, "[data-i18n-placeholder], [data-i18n-aria-label], [data-i18n-title], [data-i18n-alt], [placeholder], [aria-label], [title], [alt]").forEach(element => {
+      if (element.closest?.('[translate="no"]')) return;
+      for (const attribute of ["placeholder", "aria-label", "title", "alt"]) {
+        if (element.getAttribute(attribute) !== null) applyAttribute(element, attribute, l);
       }
     });
+
+    const currentTitle = document.title;
+    if (originalDocumentTitle === undefined || currentTitle !== appliedDocumentTitle) {
+      originalDocumentTitle = swToEn[currentTitle] || currentTitle;
+    }
+    const nextTitle = l === "sw" ? enToSw[originalDocumentTitle] || originalDocumentTitle : originalDocumentTitle;
+    if (currentTitle !== nextTitle) document.title = nextTitle;
+    appliedDocumentTitle = nextTitle;
 
     // Apply specific key-based node texts
     const map = {
@@ -752,7 +1206,8 @@
     };
     for (const [selector, key] of Object.entries(map)) {
       const node = document.querySelector(selector);
-      if (node) node.textContent = t(key);
+      const value = t(key);
+      if (node && node.textContent !== value) node.textContent = value;
     }
 
     // Traverse text nodes and replace based on the dictionary
@@ -764,6 +1219,7 @@
       const parent = node.parentElement;
       if (!parent || ["SCRIPT", "STYLE", "SELECT"].includes(parent.tagName)) return;
       if (parent.closest("[data-i18n]")) return;
+      if (parent.closest('[translate="no"]')) return;
 
       if (!node._i18nOriginal) {
         node._i18nOriginal = node.nodeValue.trim();
@@ -773,14 +1229,17 @@
       if (!trimmed) return;
 
       if (l === "sw") {
-        if (textPairs[trimmed]) {
-          node.nodeValue = raw.replace(trimmed, textPairs[trimmed]);
+        if (enToSw[trimmed]) {
+          const nextValue = raw.replace(trimmed, enToSw[trimmed]);
+          if (node.nodeValue !== nextValue) node.nodeValue = nextValue;
         }
       } else {
         if (swToEn[trimmed]) {
-          node.nodeValue = raw.replace(trimmed, swToEn[trimmed]);
-        } else if (node._i18nOriginal && textPairs[node._i18nOriginal] === trimmed) {
-          node.nodeValue = raw.replace(trimmed, node._i18nOriginal);
+          const nextValue = raw.replace(trimmed, swToEn[trimmed]);
+          if (node.nodeValue !== nextValue) node.nodeValue = nextValue;
+        } else if (node._i18nOriginal && enToSw[node._i18nOriginal] === trimmed) {
+          const nextValue = raw.replace(trimmed, node._i18nOriginal);
+          if (node.nodeValue !== nextValue) node.nodeValue = nextValue;
         }
       }
     });
@@ -788,28 +1247,25 @@
     // Also update submit button texts or inputs with values
     document.querySelectorAll("input[type=button], input[type=submit]").forEach(input => {
       const val = input.value.trim();
-      if (l === "sw" && textPairs[val]) input.value = textPairs[val];
-      else if (l === "en" && swToEn[val]) input.value = swToEn[val];
+      const nextValue = l === "sw" ? enToSw[val] || val : swToEn[val] || val;
+      if (input.value !== nextValue) input.value = nextValue;
     });
   }
 
   function setLanguage(next) {
     language = next === "sw" ? "sw" : "en";
-    localStorage.setItem("jirani-language", language);
+    try {
+      localStorage.setItem("jirani-language", language);
+    } catch {
+      // Keep the selected language active for this page if it cannot be persisted.
+    }
     apply();
     window.dispatchEvent(new CustomEvent("languagechange", { detail: { language } }));
   }
 
   function translateText(value) {
     const text = String(value ?? "");
-    if (getLang() === "sw") {
-      if (textPairs[text]) return textPairs[text];
-      for (const [key, [english, swahili]] of Object.entries(keyedTranslations)) {
-        if (english === text) return swahili;
-      }
-      return text;
-    }
-    return swToEn[text] || text;
+    return getLang() === "sw" ? enToSw[text] || text : swToEn[text] || text;
   }
 
   window.jiraniI18n = {
@@ -821,10 +1277,38 @@
     setLanguage
   };
 
-  document.addEventListener("DOMContentLoaded", () => {
-    apply();
-    document.querySelector("#language-switch")?.addEventListener("change", event => {
-      setLanguage(event.target.value);
+  function observeDynamicInterface() {
+    if (typeof MutationObserver === "undefined" || !document.documentElement) return;
+    const observer = new MutationObserver(records => {
+      if (getLang() !== "sw") return;
+      const roots = new Set();
+      for (const record of records) {
+        const target = record.type === "characterData" ? record.target.parentElement : record.target;
+        if (!target || target.nodeType !== 1 || target.closest?.('[translate="no"]')) continue;
+        const boundary = target.closest?.(".panel, .feature-card, .step-card, .security-card, .pricing-card, .faq-list, .contact-shell, .contact-form, .pricing-modal-content, .chat-panel-content, .chat-message, .login-content, .topbar, .site-footer, nav, #root");
+        roots.add(boundary || target);
+      }
+      roots.forEach(root => apply(root));
     });
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["placeholder", "aria-label", "title", "alt", "data-i18n"]
+    });
+  }
+
+  document.addEventListener("change", event => {
+    if (event.target?.matches?.(".language-control select")) setLanguage(event.target.value);
   });
+  const initialize = () => {
+    apply();
+    observeDynamicInterface();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize, { once: true });
+  } else {
+    initialize();
+  }
 })();

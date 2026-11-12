@@ -23,10 +23,10 @@ function pinHash(pin) {
   return `${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
 
-const chair = { id: "chair", name: "Test Chair", phone: "+254711000001", role: "chairperson", status: "active", pinHash: pinHash("123456"), mustChangePin: false };
-const treasurer = { id: "treasurer", name: "Test Treasurer", phone: "+254711000002", role: "treasurer", status: "active", pinHash: pinHash("234567"), mustChangePin: false };
-const member = { id: "member", name: "Test Member", phone: "+254711000003", role: "member", status: "active", pinHash: pinHash("345678"), mustChangePin: false };
-const secretary = { id: "secretary", name: "Test Secretary", phone: "+254711000004", role: "secretary", status: "active", pinHash: pinHash("456789"), mustChangePin: false };
+const chair = { id: "chair", name: "Test Chair", phone: "+254711000001", role: "chairperson", status: "active", pinHash: pinHash("123456"), mustChangePin: false, createdAt: "2026-09-01T08:00:00.000Z" };
+const treasurer = { id: "treasurer", name: "Test Treasurer", phone: "+254711000002", role: "treasurer", status: "active", pinHash: pinHash("234567"), mustChangePin: false, createdAt: "2026-09-01T08:00:00.000Z" };
+const member = { id: "member", name: "Test Member", phone: "+254711000003", role: "member", status: "active", pinHash: pinHash("345678"), mustChangePin: false, createdAt: "2026-09-01T08:00:00.000Z" };
+const secretary = { id: "secretary", name: "Test Secretary", phone: "+254711000004", role: "secretary", status: "active", pinHash: pinHash("456789"), mustChangePin: false, createdAt: "2026-09-01T08:00:00.000Z" };
 
 fs.writeFileSync(dataFile, JSON.stringify({
   version: 2,
@@ -163,23 +163,28 @@ test("members need share capital and guarantors to borrow", async () => {
     const credit = await writeRequest("/api/contributions", treasurerCookie, { memberId, amount: 5000, method: "Cash", note: "Share capital for loan tests", referenceNumber: reference, date: "2026-10-05" });
     assert.equal(credit.status, 201);
   }
+  const policy = await writeRequest("/api/loans/policy", chairCookie, { maxGroupCashPercent: 100, maxMemberContributionPercent: 300, tiers: [{ maxAmountKsh: 10000, minActiveDays: 0, minShareContributionKsh: 0 }] });
+  assert.equal(policy.status, 200);
 });
 
-test("loan requests and decisions write audit entries, newest first", async () => {
+test("loan requests receive an automatic decision and write both audit entries, newest first", async () => {
   const requested = await writeRequest("/api/loans", memberCookie, { amount: 1000, months: 1, guarantorIds: ["treasurer", "secretary"] });
   assert.equal(requested.status, 201);
   const loan = (await json(requested)).data;
-  const rejected = await writeRequest(`/api/loans/${loan.id}/decisions`, chairCookie, { decision: "reject", reason: "Savings too low this cycle" });
-  assert.equal(rejected.status, 200);
+  assert.equal(loan.status, "approved");
+  assert.equal(loan.automatedDecision.decision, "approve");
+  const obsoleteVote = await writeRequest(`/api/loans/${loan.id}/decisions`, chairCookie, { decision: "reject", reason: "Role votes are disabled." });
+  assert.equal(obsoleteVote.status, 409);
 
   const entries = (await json(await readAuditLog(chairCookie))).data;
   const decided = entries.findIndex(item => item.type === "loan.decided" && item.entityId === loan.id);
   const requestedIndex = entries.findIndex(item => item.type === "loan.requested" && item.entityId === loan.id);
   assert.ok(decided >= 0 && requestedIndex >= 0, "both loan events should be audited");
   assert.ok(decided < requestedIndex, "newest entries come first");
-  assert.equal(entries[decided].decision, "reject");
-  assert.equal(entries[decided].status, "rejected");
-  assert.equal(entries[decided].by.role, "chairperson");
+  assert.equal(entries[decided].decision, "approve");
+  assert.equal(entries[decided].decisionSource, "automated");
+  assert.equal(entries[decided].status, "approved");
+  assert.equal(entries[decided].by.role, "member", "the audit identifies the applicant while separately marking the decision source");
   assert.equal(entries[requestedIndex].by.id, member.id);
 });
 
@@ -193,7 +198,7 @@ test("the audit log is append-only in the saved data", async () => {
   const beforeWrite = JSON.parse(fs.readFileSync(dataFile, "utf8")).auditLog;
   await writeRequest("/api/loans", memberCookie, { amount: 200, months: 2, guarantorIds: ["treasurer", "secretary"] });
   const afterWrite = JSON.parse(fs.readFileSync(dataFile, "utf8")).auditLog;
-  assert.equal(afterWrite.length, beforeWrite.length + 1);
+  assert.equal(afterWrite.length, beforeWrite.length + 2, "a request and its automatic decision are separate audit events");
   for (const entry of beforeWrite) {
     assert.deepEqual(afterWrite.find(item => item.id === entry.id), entry);
   }

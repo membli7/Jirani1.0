@@ -23,7 +23,7 @@ function pinHash(pin, salt) {
 }
 
 function account(id, name, phone, role, chamaId, shareCapital = 0) {
-  return { id, name, phone, role, status: "active", pinHash: pinHash("123456", `salt-${id}`), mustChangePin: false, shareCapital, chamaId };
+  return { id, name, phone, role, status: "active", pinHash: pinHash("123456", `salt-${id}`), mustChangePin: false, shareCapital, chamaId, createdAt: "2026-09-01T08:00:00.000Z" };
 }
 
 async function freePort() {
@@ -62,10 +62,14 @@ before(async () => {
     ],
     transactions: [
       { id: "a-cash", at: "2026-10-01T08:00:00.000Z", memberId: "a-chair", memberName: "A Chair", amount: 100, status: "confirmed", chamaId: "chama-a" },
+      { id: "a-borrower-share", at: "2026-10-01T08:00:00.000Z", memberId: "a-borrower", memberName: "A Borrower", amount: 1000, paymentType: "Monthly Contribution", shareCapitalAmount: 1000, status: "confirmed", chamaId: "chama-a" },
       { id: "b-cash", at: "2026-10-01T08:00:00.000Z", memberId: "b-chair", memberName: "B Chair", amount: 500000, status: "confirmed", chamaId: "chama-b" },
     ],
     loans: [{ id: "b-pending-loan", chamaId: "chama-b", memberId: "b-chair", memberName: "B Chair", amount: 5000, status: "pending", approvalSteps: [] }], payouts: [], invitations: [], leadershipChanges: [{ id: "due-startup-election", type: "election", chamaId: "chama-a", role: "treasurer", status: "verified", winnerId: "a-election-winner", candidateIds: ["a-election-winner"], candidateNames: [{ id: "a-election-winner", name: "A Election Winner" }], activationAt: new Date(Date.now() - 1000).toISOString() }], pendingMpesas: [], idempotency: {},
-    registers: [], auditLog: [], penalties: [], welfareReserve: 0,
+    registers: [], auditLog: [
+      { id: "a-loan-policy", type: "loan.policy.updated", chamaId: "chama-a", at: "2026-10-01T08:00:00.000Z", policy: { maxGroupCashPercent: 100, maxMemberContributionPercent: 1000, tiers: [{ maxAmountKsh: 5000, minActiveDays: 0, minShareContributionKsh: 0 }] } },
+      { id: "b-loan-policy", type: "loan.policy.updated", chamaId: "chama-b", at: "2026-10-01T08:00:00.000Z", policy: { maxGroupCashPercent: 100, maxMemberContributionPercent: 1000, tiers: [{ maxAmountKsh: 5000, minActiveDays: 0, minShareContributionKsh: 0 }] } },
+    ], penalties: [], welfareReserve: 0,
     settings: { defaultDeadlineDay: 5, meetingDates: {} }, dividendCycles: [], messages: [{ id: "b-private-message", chamaId: "chama-b", authorId: "b-chair", authorName: "B Chair", text: "SYNTHETIC-B-PRIVATE", at: "2026-10-01T08:00:00.000Z" }],
   }), "utf8");
 
@@ -99,14 +103,17 @@ after(async () => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("Chama A loan approval cannot use Chama B's balance", async () => {
+test("Chama A automatic loan limit cannot use Chama B's balance", async () => {
   const loanResponse = await fetch(`${baseUrl}/api/loans`, {
     method: "POST",
     headers: { Cookie: borrowerCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
-    body: JSON.stringify({ amount: 600, months: 1, interestModel: "reducing", guarantorIds: ["a-guarantor-1", "a-guarantor-2"] }),
+    body: JSON.stringify({ amount: 2000, months: 1, interestModel: "reducing", guarantorIds: ["a-guarantor-1", "a-guarantor-2"] }),
   });
   assert.equal(loanResponse.status, 201);
-  const loanId = (await loanResponse.json()).data.id;
+  const loan = (await loanResponse.json()).data;
+  const loanId = loan.id;
+  assert.equal(loan.status, "rejected");
+  assert.match(loan.automatedDecision.reason, /group-balance limit is KES 1100/);
 
   const approval = await fetch(`${baseUrl}/api/loans/${loanId}/decisions`, {
     method: "POST",
@@ -115,7 +122,8 @@ test("Chama A loan approval cannot use Chama B's balance", async () => {
   });
   assert.equal(approval.status, 409);
   const saved = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-  assert.notEqual(saved.loans.find(item => item.id === loanId).status, "approved");
+  assert.equal(saved.loans.find(item => item.id === loanId).status, "rejected");
+  assert.equal(saved.auditLog.find(item => item.type === "loan.decided" && item.entityId === loanId).criteria.groupBalance, 1100);
 });
 
 test("leadership elections reject outside-group candidates and voters, and overdue roles activate on startup", async () => {
@@ -205,7 +213,7 @@ test("authenticated reads and writes remain isolated across chamas", async () =>
     headers: { Cookie: chairCookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ decision: "approve", reason: "Synthetic cross-tenant check" }),
   });
-  assert.equal(foreignDecision.status, 404);
+  assert.equal(foreignDecision.status, 409, "the retired vote endpoint is uniformly disabled and never edits the foreign loan");
   const after = JSON.parse(fs.readFileSync(dataFile, "utf8"));
   assert.equal(after.transactions.length, before.transactions.length, "a foreign contribution must not create a ledger entry");
   assert.equal(after.loans.find(item => item.id === "b-pending-loan").status, "pending", "a foreign loan must remain unchanged");
