@@ -53,6 +53,14 @@ test("auth forms stack on mobile widths and retain scrollability and 44px touch 
   assert.match(frontendCss, /\.toggle-pin-btn\s*\{[^}]*width: 44px;[^}]*height: 44px;[^}]*min-height: 44px;[^}]*min-width: 44px;/);
 });
 
+test("landing footer sits outside the hero grid and fills the overlay without negative margins", () => {
+  const landing = readSource("src/pages/LandingPage.jsx");
+  const theme = readSource("../landing-theme.css");
+  assert.match(landing, /<\/section>\s*<\/div>\s*<\/div>\s*<footer className="site-footer">[\s\S]*?<\/footer>\s*<\/section>/);
+  assert.match(theme, /body\.landing-mode \.site-footer \{[^}]*width: 100% !important;[^}]*margin: 0 !important;/);
+  assert.match(landing, /aria-label="Footer links"><a href="\/privacy\.html">Privacy<\/a>[\s\S]*?<a href="\/terms\.html">Terms<\/a>/);
+});
+
 test("React owns dashboard finance, attendance, cash entry, leadership, loans, ledger, members, audit, invitations, and account routes", () => {
   const main = readSource("src/main.jsx");
   const app = readSource("src/App.jsx");

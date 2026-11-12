@@ -226,8 +226,8 @@ export default function LandingPage() {
               </div>
             </section>
           </div>
-          <footer className="site-footer"><p>Built for Kenyan savings groups.</p><p>© 2026 Jirani Chama. All rights reserved.</p><nav className="site-footer-links" aria-label="Footer links"><a href="/privacy.html">Privacy</a><span aria-hidden="true">·</span><a href="/terms.html">Terms</a></nav></footer>
         </div>
+        <footer className="site-footer"><p>Built for Kenyan savings groups.</p><p>© 2026 Jirani Chama. All rights reserved.</p><nav className="site-footer-links" aria-label="Footer links"><a href="/privacy.html">Privacy</a><span aria-hidden="true">·</span><a href="/terms.html">Terms</a></nav></footer>
       </section>
       <dialog id="pricing-modal" ref={pricingDialogRef} aria-labelledby="pricing-modal-title" aria-describedby="pricing-modal-selection pricing-modal-copy" onClose={() => setSelectedPlan(null)}>
         <div className="pricing-modal-content"><h2 id="pricing-modal-title" ref={pricingTitleRef} tabIndex={-1}>Review your plan</h2>
