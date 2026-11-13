@@ -124,6 +124,7 @@ let postgresRuntimeLock;
 const DATA_FILE = process.env.CHAMA_DATA_FILE || path.join(__dirname, "data.json");
 const FRONTEND = path.join(__dirname, "..", "en public");
 const FRONTEND_BUILD = path.join(__dirname, "frontend-dist");
+const TERMS_VERSION = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(FRONTEND, "terms.html"))).digest("hex")}`;
 const PROFILE_ICON_DIR = process.env.CHAMA_PROFILE_ICON_DIR || path.join(__dirname, "uploads", "profile-icons");
 const PROFILE_DETAILS_FILE = process.env.CHAMA_PROFILE_DETAILS_FILE || path.join(__dirname, "uploads", "profile-details.json");
 const PROFILE_ICON_SIZES = new Set([32, 180, 192, 512]);
@@ -167,6 +168,7 @@ const writeQueue = createWriteQueue();
 if (!SESSION_SECRET) throw new Error("SESSION_SECRET must be set in .env.");
 
 function clean(value) { return String(value ?? "").trim(); }
+function hasAcceptedTerms(value) { return value === true || value === "true"; }
 function roleName(role) { return role ? role[0].toUpperCase() + role.slice(1) : "Officer"; }
 function findChamaName(chamaId) { return state.chamas.find(chama => chama.id === chamaId)?.name || "Unknown Chama"; }
 function normalizePhone(value) {
@@ -1415,6 +1417,7 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   if (!chamaName || chamaName.length > 100 || !name || name.length > 100 || !phone || !validEmail(email) || !validNewPin(pin)) return res.status(400).json({ message: "Enter the chama name, your name, a valid email address, a valid Kenyan phone number, and a 6-12 digit PIN." });
   if (!Number.isInteger(deadlineDay) || deadlineDay < 1 || deadlineDay > 28) return res.status(400).json({ message: "Choose a monthly contribution deadline from day 1 to day 28." });
   if (!Number.isSafeInteger(welfareMonthlyFee) || welfareMonthlyFee < 0 || !Number.isSafeInteger(lateContributionPenalty) || lateContributionPenalty < 0 || !Number.isFinite(loanMonthlyRatePercent) || loanMonthlyRatePercent < 0 || loanMonthlyRatePercent > 100) return res.status(400).json({ message: "Enter whole non-negative KES amounts and a monthly loan rate from 0% to 100%." });
+  if (!hasAcceptedTerms(req.body?.termsAccepted)) return res.status(400).json({ message: "You must accept the Terms and Conditions to create an account." });
   const updated = structuredClone(state);
   const chamaId = newId();
   if (!Array.isArray(updated.chamas)) updated.chamas = [];
@@ -1426,7 +1429,11 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   updated.chamas.push({ id: chamaId, name: chamaName, createdAt: now(), settings: { loanMonthlyRatePercent }, subscription: unpaidSubscription(now()) });
   const joinedAt = now();
   const user = { id: newId(), name, phone, email, role: "chairperson", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt: joinedAt, joinedAt, chamaId };
+  const acceptanceSource = "initial-setup";
+  const acceptanceEvent = auditEntry("terms.accepted", user.id, user, { policy: "terms", version: TERMS_VERSION, source: acceptanceSource, chamaId });
+  user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
   updated.users.push(user);
+  updated.auditLog.push(acceptanceEvent);
   try { await persist(updated); } catch (error) { return next(error); }
   req.session.regenerate(error => {
     if (error) return next(error);
@@ -2048,6 +2055,7 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
         return { status: 400, body: { message: saved.attemptsRemaining === 0 ? "Invitation locked after too many incorrect activation codes." : "Incorrect activation code." } };
       }
       if (!validEmail(matchingCode.email) || !validNewPin(pin)) return { status: 400, body: { message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." } };
+      if (!hasAcceptedTerms(req.body?.termsAccepted)) return { status: 400, body: { message: "You must accept the Terms and Conditions to create an account." } };
       const memberCap = memberCapFor(state, matchingCode.chamaId);
       const activeMembers = scopeToChama(state.users, matchingCode.chamaId).filter(item => item.status === "active").length;
       if (memberCap !== null && activeMembers >= memberCap) return { status: 409, body: { message: `This chama has reached its ${memberCap}-member plan limit. Ask its Chairperson to renew or change plans before activating this invitation.` } };
@@ -2059,7 +2067,11 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
       const directLeaderRole = ["secretary", "treasurer"].includes(saved.requestedRole) && inviter?.role === "chairperson" && !roleAlreadyActive && !priorLeadershipChange;
       const createdAt = now();
       const user = { id: newId(), name: saved.name, phone: saved.phone, email: normalizeEmail(saved.email), role: directLeaderRole ? saved.requestedRole : "member", status: "active", pinHash: pinHash(pin), mustChangePin: false, createdAt, joinedAt: createdAt, chamaId: saved.chamaId };
+      const acceptanceSource = "invitation-activation";
+      const acceptanceEvent = auditEntry("terms.accepted", user.id, user, { policy: "terms", version: TERMS_VERSION, source: acceptanceSource, chamaId: saved.chamaId });
+      user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
       updated.users.push(user);
+      updated.auditLog.push(acceptanceEvent);
       if (directLeaderRole) {
         const leadershipChange = { id: newId(), type: "appointment", role: user.role, outgoingUserId: null, incomingUserId: user.id, effectiveDate: createdAt.slice(0, 10), vote: null, emergencyReason: null, status: "confirmed", proposedBy: inviter.id, proposedAt: createdAt, confirmedBy: inviter.id, confirmedAt: createdAt, audit: [{ action: "proposed", by: inviter.id, at: createdAt }, { action: "confirmed", by: inviter.id, at: createdAt }], chamaId: saved.chamaId };
         updated.leadershipChanges.push(leadershipChange);

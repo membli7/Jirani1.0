@@ -61,7 +61,7 @@ function postAction(server, cookie, route, body) {
   return fetch(`${server.baseUrl}${route}`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(body) });
 }
 function activate(server, phone, code, pin = "123456") {
-  return fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone, code, pin }) });
+  return fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone, code, pin, termsAccepted: true }) });
 }
 function persisted(server) { return JSON.parse(fs.readFileSync(server.dataFile, "utf8")); }
 after(async () => { for (const server of servers) await server.stop(); });

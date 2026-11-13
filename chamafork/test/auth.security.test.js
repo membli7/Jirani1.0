@@ -45,7 +45,7 @@ after(async () => { for (const server of servers) await server.stop(); });
 
 test("signup rejects a four-digit PIN", async () => {
   const server = await startAuthServer({ empty: true });
-  const signup = pin => fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin }) });
+  const signup = pin => fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin, termsAccepted: true }) });
   assert.equal((await signup("1234")).status, 400);
   assert.equal((await signup("123456")).status, 201);
 });
@@ -53,7 +53,7 @@ test("signup rejects a four-digit PIN", async () => {
 test("first-account setup requires the configured operator bootstrap credential", async () => {
   const bootstrapSecret = "B9g4H1k6M8n2P5q7R3w0X2c9V6t1Y4a8";
   const server = await startAuthServer({ empty: true, setupBootstrapSecret: bootstrapSecret });
-  const payload = { chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456" };
+  const payload = { chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456", termsAccepted: true };
   const setup = secret => fetch(`${server.baseUrl}/api/setup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Requested-With": "chama", ...(secret ? { "X-Setup-Bootstrap-Secret": secret } : {}) },
@@ -72,7 +72,7 @@ test("first-account setup requires the configured operator bootstrap credential"
 
 test("invitation activation rejects a four-digit PIN", async () => {
   const server = await startAuthServer({ empty: true });
-  const setup = await fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456" }) });
+  const setup = await fetch(`${server.baseUrl}/api/setup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456", termsAccepted: true }) });
   assert.equal(setup.status, 201);
   const cookie = setup.headers.getSetCookie()[0].split(";")[0];
   const savedState = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
@@ -80,7 +80,7 @@ test("invitation activation rejects a four-digit PIN", async () => {
   const invite = await fetch(`${server.baseUrl}/api/invitations`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": "auth-invite-test" }, body: JSON.stringify({ name: "Test Member", phone: "0711000002", email: "member@example.test", role: "member" }) });
   assert.equal(invite.status, 201);
   const { activationCode } = await json(invite);
-  const activate = pin => fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone: "0711000002", code: activationCode, pin }) });
+  const activate = pin => fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone: "0711000002", code: activationCode, pin, termsAccepted: true }) });
   assert.equal((await activate("5678")).status, 400);
   assert.equal((await activate("567890")).status, 201);
 });

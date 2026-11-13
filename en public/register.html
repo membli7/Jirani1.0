@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Register a new chama | Jirani Chama</title>
     <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-    <link rel="stylesheet" href="/chama.css?v=20261107.5">
+    <link rel="stylesheet" href="/chama.css?v=20261113.1">
 </head>
 <body>
     <header class="topbar auth-page-topbar">
@@ -71,6 +71,10 @@
                     </fieldset>
                     <label class="field" for="register-chairperson-pin">Create PIN
                         <input id="register-chairperson-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required>
+                    </label>
+                    <label class="terms-acceptance" for="register-terms-accepted">
+                        <input id="register-terms-accepted" name="termsAccepted" type="checkbox" value="true" required>
+                        <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
                     </label>
                     <button class="button-primary" type="submit">Register chama</button>
                     <p class="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>

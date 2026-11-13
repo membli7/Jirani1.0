@@ -323,7 +323,7 @@ test("PIN recovery does not replace sign-in OTP or invitation activation", async
   const invitation = await post(server, "/api/invitations", { name: "Invitee", phone: "0711222333", email: "invitee@example.test", role: "member" }, authCookie);
   assert.equal(invitation.status, 201);
   const activationCode = latestCode(logFile, "Jirani Chama Invitation");
-  const activation = await post(server, "/api/invitations/activate", { phone: "0711222333", code: activationCode, pin: "654321" });
+  const activation = await post(server, "/api/invitations/activate", { phone: "0711222333", code: activationCode, pin: "654321", termsAccepted: true });
   assert.equal(activation.status, 201);
   fs.rmSync(directory, { recursive: true, force: true });
 });

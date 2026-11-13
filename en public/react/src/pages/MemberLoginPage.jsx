@@ -185,6 +185,10 @@ export default function MemberLoginPage() {
               <label className="field" htmlFor="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required /></label>
               <label className="field" htmlFor="activate-code">Activation code<input id="activate-code" name="code" inputMode="numeric" autoComplete="one-time-code" required /></label>
               <label className="field" htmlFor="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputMode="numeric" autoComplete="new-password" minLength={6} maxLength={12} pattern="[0-9]{6,12}" required /></label>
+              <label className="terms-acceptance" htmlFor="activate-terms-accepted">
+                <input id="activate-terms-accepted" name="termsAccepted" type="checkbox" value="true" required />
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+              </label>
               <button className="button-primary" type="submit" disabled={busy === "activation"}>{busy === "activation" ? "Activating…" : "Activate"}</button>
               <button className="panel-link" id="show-login" type="button" onClick={() => setView("login")}>Back to sign in</button>
             </form>

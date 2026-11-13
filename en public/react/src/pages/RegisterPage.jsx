@@ -130,6 +130,10 @@ export default function RegisterPage() {
               <label className="field" htmlFor="register-chairperson-pin">Create PIN
                 <input id="register-chairperson-pin" name="pin" type="password" inputMode="numeric" autoComplete="new-password" minLength={6} maxLength={12} pattern="[0-9]{6,12}" required />
               </label>
+              <label className="terms-acceptance" htmlFor="register-terms-accepted">
+                <input id="register-terms-accepted" name="termsAccepted" type="checkbox" value="true" required />
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+              </label>
               <button className="button-primary" type="submit" disabled={submitting}>{submitting ? "Registering…" : "Register chama"}</button>
               <p className="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>
             </form>

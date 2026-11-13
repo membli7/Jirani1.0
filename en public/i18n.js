@@ -3,6 +3,9 @@
   const dictionary = {
     en: {
       language: "Language",
+      termsAcceptanceLead: "I have read and agree to the",
+      termsAndConditions: "Terms and Conditions",
+      termsDraftMarker: " (working draft).",
       english: "English",
       swahili: "Kiswahili",
       signOut: "Sign out",
@@ -140,6 +143,9 @@
     },
     sw: {
       language: "Lugha",
+      termsAcceptanceLead: "Nimesoma na ninakubali",
+      termsAndConditions: "Sheria na Masharti",
+      termsDraftMarker: " (rasimu ya kukaguliwa).",
       english: "Kiingereza",
       swahili: "Kiswahili",
       signOut: "Ondoka",
@@ -664,6 +670,7 @@
     "© 2026 Jirani Chama. All rights reserved.": "© 2026 Jirani Chama. Haki zote zimehifadhiwa.",
     "Privacy": "Faragha",
     "Terms": "Masharti",
+    "You must accept the Terms and Conditions to create an account.": "Ni lazima ukubali Sheria na Masharti ili kufungua akaunti.",
     "Review your plan": "Kagua mpango wako",
     "Tier": "Kiwango",
     "Member cap": "Kikomo cha wanachama",

@@ -119,7 +119,7 @@ test("disabled subscriptions do not restrict access while payment flows stay pau
 
   const decision = await request("/api/loans/pending-loan/decisions", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-loan-dec-0001" }, body: JSON.stringify({ decision: "approve", reason: "Reviewed the request." }) });
   assert.equal(decision.status, 409);
-  const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000002", code: expiredCode, pin: "456789" }) });
+  const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000002", code: expiredCode, pin: "456789", termsAccepted: true }) });
   assert.equal(activation.status, 201);
 
   const selectedPlan = await request("/api/subscription/selection", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-selection-0001" }, body: JSON.stringify({ tier: "basic", billing: "annual" }) });
@@ -173,7 +173,7 @@ test("disabled subscriptions do not enforce member caps", async () => {
   const chairCookie = await login("0711000003", "345678");
   const invite = await request("/api/invitations", { method: "POST", headers: { Cookie: chairCookie, "Idempotency-Key": "subscription-cap-invite-0001" }, body: JSON.stringify({ name: "Over Cap", phone: "0711000007", email: "over-cap@example.test", role: "member" }) });
   assert.equal(invite.status, 201);
-  const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000004", code: cappedCode, pin: "567890" }) });
+  const activation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0711000004", code: cappedCode, pin: "567890", termsAccepted: true }) });
   assert.equal(activation.status, 201);
   const state = JSON.parse(fs.readFileSync(dataFile, "utf8"));
   assert.equal(state.users.some(user => user.phone === "+254711000004"), true);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Member login | Jirani Chama</title>
     <link rel="icon" type="image/svg+xml" href="/brand-mark.svg">
-    <link rel="stylesheet" href="/chama.css?v=20261107.5">
+    <link rel="stylesheet" href="/chama.css?v=20261113.1">
 </head>
 <body>
     <header class="topbar auth-page-topbar">
@@ -53,6 +53,10 @@
             <label class="field" for="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required></label>
             <label class="field" for="activate-code">Activation code<input id="activate-code" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
             <label class="field" for="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
+            <label class="terms-acceptance" for="activate-terms-accepted">
+                <input id="activate-terms-accepted" name="termsAccepted" type="checkbox" value="true" required>
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+            </label>
             <button class="button-primary" type="submit">Activate</button>
             <button class="panel-link" id="show-login" type="button">Back to sign in</button>
         </form>

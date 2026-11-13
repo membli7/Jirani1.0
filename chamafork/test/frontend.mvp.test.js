@@ -20,6 +20,7 @@ const registerReactShell = fs.readFileSync(path.join(frontend, "react", "registe
 const registerPage = fs.readFileSync(path.join(reactSource, "pages", "RegisterPage.jsx"), "utf8");
 const registerActions = fs.readFileSync(path.join(reactSource, "registrationActions.mjs"), "utf8");
 const memberLoginReactShell = fs.readFileSync(path.join(frontend, "react", "member-login.html"), "utf8");
+const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
 const memberLoginPage = fs.readFileSync(path.join(reactSource, "pages", "MemberLoginPage.jsx"), "utf8");
 const authActions = fs.readFileSync(path.join(reactSource, "authActions.mjs"), "utf8");
 const chatPage = fs.readFileSync(path.join(reactSource, "components", "ChatPanel.jsx"), "utf8");
@@ -455,6 +456,8 @@ test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginPage, /window\.location\.assign\("\/"\)/);
   assert.match(memberLoginPage, /id="activate-code"[^>]*autoComplete="one-time-code"/);
   assert.match(memberLoginPage, /id="activate-pin"[^>]*autoComplete="new-password"/);
+  assert.match(memberLoginPage, /name="termsAccepted" type="checkbox" value="true" required/);
+  assert.match(memberLoginHtml, /name="termsAccepted" type="checkbox" value="true" required/);
   assert.match(authActions, /postJson\("\/api\/login"/);
   assert.match(authActions, /postJson\("\/api\/forgot-pin"/);
   assert.match(authActions, /postJson\("\/api\/reset-pin"/);
@@ -474,7 +477,7 @@ test("React auth services preserve same-origin request contracts", async () => {
     return { ok: true, json: async () => ({ message: "Synthetic test response." }) };
   };
   await signIn({ phone: "synthetic-phone", pin: "synthetic-pin" }, fetcher);
-  await activateInvitation({ phone: "synthetic-phone", code: "synthetic-activation-code", pin: "synthetic-pin" }, fetcher);
+  await activateInvitation({ phone: "synthetic-phone", code: "synthetic-activation-code", pin: "synthetic-pin", termsAccepted: true }, fetcher);
   await requestPinReset({ email: "member@example.test" }, fetcher);
   await resetPin({ code: "synthetic-reset-code", newPin: "synthetic-new-pin" }, "member@example.test", fetcher);
 
@@ -488,6 +491,7 @@ test("React auth services preserve same-origin request contracts", async () => {
     assert.equal(options.headers["Content-Type"], "application/json");
   }
   assert.deepEqual(JSON.parse(requests[0].options.body), { phone: "synthetic-phone", pin: "synthetic-pin" });
+  assert.equal(JSON.parse(requests[1].options.body).termsAccepted, true);
   assert.deepEqual(JSON.parse(requests[3].options.body), { code: "synthetic-reset-code", newPin: "synthetic-new-pin", email: "member@example.test" });
 });
 
@@ -501,6 +505,8 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerPage, /name="welfareMonthlyFee" type="number" min=\{0\} step=\{1\} defaultValue=\{500\}/);
   assert.match(registerPage, /name="lateContributionPenalty" type="number" min=\{0\} step=\{1\} defaultValue=\{200\}/);
   assert.match(registerPage, /name="loanMonthlyRatePercent" type="number" min=\{0\} max=\{100\} step=\{0\.1\} defaultValue=\{5\}/);
+  assert.match(registerPage, /name="termsAccepted" type="checkbox" value="true" required/);
+  assert.match(registerHtml, /name="termsAccepted" type="checkbox" value="true" required/);
   assert.match(registerReactShell, /<div id="root"><\/div>/);
   assert.doesNotMatch(registerReactShell, /id="register-chama-form"|register\.js/);
   assert.match(registerActions, /fetcher\("\/api\/setup"/);
@@ -532,7 +538,7 @@ test("registration signs in and opens the dashboard when setup was already compl
   const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
   await registerChama({
     chamaName: "Test Chama", name: "Test Chair", phone: "0700000000", email: "chair@example.test", pin: "135790",
-    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true",
   }, {
     fetcher: async (url, options) => {
       requests.push({ url, options });
@@ -555,7 +561,7 @@ test("registration sends the bootstrap code only in the setup header and clears 
   const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
   await registerChama({
     chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456",
-    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true",
     bootstrapSecret,
   }, {
     fetcher: async (url, options) => {
@@ -567,6 +573,7 @@ test("registration sends the bootstrap code only in the setup header and clears 
 
   assert.equal(requests[0].options.headers["X-Setup-Bootstrap-Secret"], bootstrapSecret);
   const requestBody = JSON.parse(requests[0].options.body);
+  assert.equal(requestBody.termsAccepted, "true");
   assert.equal(requestBody.bootstrapSecret, undefined);
   assert.equal(JSON.stringify(requestBody).includes(bootstrapSecret), false);
   assert.equal(JSON.stringify(requests[0].options.headers).includes(bootstrapSecret), true);
