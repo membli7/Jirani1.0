@@ -11,16 +11,22 @@ function messageFor(error) {
     : error.message);
 }
 
+const AGE_ELIGIBILITY_MESSAGE = "You must be 18 years old or older to create an account.";
+
 export default function MemberLoginPage() {
   const rootRef = useRef(null);
   const loginFormRef = useRef(null);
   const activationFormRef = useRef(null);
+  const activationAgeDialogRef = useRef(null);
   const forgotFormRef = useRef(null);
   const resetFormRef = useRef(null);
   const searchParams = new URLSearchParams(window.location.search);
   const [view, setView] = useState(searchParams.get("activation") === "1" ? "activate" : "login");
   const [loginNotice, setLoginNotice] = useState("");
   const [activationNotice, setActivationNotice] = useState("");
+  const [ageGateNotice, setAgeGateNotice] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState("");
+  const [activationAllowed, setActivationAllowed] = useState(false);
   const [recoveryNotice, setRecoveryNotice] = useState("");
   const [resetFormVisible, setResetFormVisible] = useState(false);
   const [chamaChoices, setChamaChoices] = useState([]);
@@ -39,7 +45,19 @@ export default function MemberLoginPage() {
 
   useEffect(() => {
     window.jiraniI18n?.apply(rootRef.current || document.documentElement);
-  }, [view, loginNotice, activationNotice, recoveryNotice, resetFormVisible, chamaChoices.length, busy]);
+  }, [view, loginNotice, activationNotice, ageGateNotice, ageConfirmed, activationAllowed, recoveryNotice, resetFormVisible, chamaChoices.length, busy]);
+
+  useEffect(() => {
+    if (view !== "activate" || activationAllowed) return undefined;
+    const dialog = activationAgeDialogRef.current;
+    if (!dialog) return undefined;
+    if (!dialog.open) dialog.showModal();
+    return () => { if (dialog.open) dialog.close(); };
+  }, [view, activationAllowed]);
+
+  useEffect(() => {
+    if (view === "activate" && activationAllowed) activationFormRef.current?.querySelector("#activate-phone")?.focus();
+  }, [view, activationAllowed]);
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -76,12 +94,20 @@ export default function MemberLoginPage() {
 
   async function handleActivation(event) {
     event.preventDefault();
+    const values = Object.fromEntries(new FormData(activationFormRef.current).entries());
+    if (values.ageConfirmed !== "true") {
+      setAgeGateNotice(AGE_ELIGIBILITY_MESSAGE);
+      if (!activationAgeDialogRef.current?.open) activationAgeDialogRef.current?.showModal();
+      return;
+    }
     setBusy("activation");
     setActivationNotice("");
     try {
-      const values = Object.fromEntries(new FormData(activationFormRef.current).entries());
       const result = await activateInvitation(values, window.fetch.bind(window));
       activationFormRef.current?.reset();
+      setAgeConfirmed("");
+      setActivationAllowed(false);
+      setAgeGateNotice("");
       setView("login");
       setLoginNotice(translate(result.message || "Account activated. Please sign in."));
     } catch (error) {
@@ -89,6 +115,17 @@ export default function MemberLoginPage() {
     } finally {
       setBusy("");
     }
+  }
+
+  function handleAgeAnswer(answer) {
+    if (answer !== "true") {
+      setAgeGateNotice(AGE_ELIGIBILITY_MESSAGE);
+      return;
+    }
+    setAgeGateNotice("");
+    setAgeConfirmed("true");
+    setActivationAllowed(true);
+    activationAgeDialogRef.current?.close();
   }
 
   async function handlePinRequest(event) {
@@ -197,13 +234,14 @@ export default function MemberLoginPage() {
                   <p className="field-help">Your device may ask for a fingerprint, face unlock, device PIN, or another configured authenticator. You can always sign in with your PIN.</p>
                 </>
               )}
-              <button className="panel-link" id="show-activate" type="button" onClick={() => setView("activate")}>Activate invitation</button>
+                  <button className="panel-link" id="show-activate" type="button" onClick={() => { setAgeConfirmed(""); setActivationAllowed(false); setAgeGateNotice(""); setActivationNotice(""); setView("activate"); }}>Activate invitation</button>
               <p className="login-footer">Your chama’s records are available to you after sign-in.</p>
             </form>
-            <form id="activation-form" className="login-card" ref={activationFormRef} onSubmit={handleActivation} hidden={view !== "activate"}>
+            <form id="activation-form" className="login-card" ref={activationFormRef} onSubmit={handleActivation} hidden={view !== "activate" || !activationAllowed}>
               <h2>Activate account</h2>
               <p className="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
               <p className="login-notice" id="activation-notice" role="alert" aria-live="assertive" hidden={!activationNotice}>{activationNotice}</p>
+              <input id="activate-age-confirmed" name="ageConfirmed" type="hidden" value={ageConfirmed === "true" ? "true" : ""} />
               <label className="field" htmlFor="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required /></label>
               <label className="field" htmlFor="activate-code">Activation code<input id="activate-code" name="code" inputMode="numeric" autoComplete="one-time-code" required /></label>
               <label className="field" htmlFor="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputMode="numeric" autoComplete="new-password" minLength={6} maxLength={12} pattern="[0-9]{6,12}" required /></label>
@@ -215,9 +253,18 @@ export default function MemberLoginPage() {
                 <input id="activate-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required />
                 <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span>{" "}<a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br /><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
               </label>
-              <button className="button-primary" type="submit" disabled={busy === "activation"}>{busy === "activation" ? "Activating…" : "Activate"}</button>
-              <button className="panel-link" id="show-login" type="button" onClick={() => setView("login")}>Back to sign in</button>
+              <button className="button-primary" type="submit" disabled={busy === "activation" || ageConfirmed !== "true"}>{busy === "activation" ? "Activating…" : "Activate"}</button>
+              <button className="panel-link" id="show-login" type="button" onClick={() => { setAgeConfirmed(""); setActivationAllowed(false); setAgeGateNotice(""); setActivationNotice(""); setView("login"); }}>Back to sign in</button>
             </form>
+            <dialog id="activate-age-dialog" ref={activationAgeDialogRef} className="age-gate-dialog" aria-labelledby="activate-age-title" aria-describedby="activate-age-description" onCancel={event => event.preventDefault()}>
+              <h2 id="activate-age-title">Are you 18 years old or older?</h2>
+              <p id="activate-age-description">Choose Yes to continue. This is a self-declaration; we do not ask for your exact age, date of birth, or identity document.</p>
+              <div className="age-gate-actions">
+                <button className="age-gate-button age-gate-button--yes" type="button" data-age-answer="true" autoFocus onClick={() => handleAgeAnswer("true")}>Yes</button>
+                <button className="age-gate-button age-gate-button--no" type="button" data-age-answer="false" onClick={() => handleAgeAnswer("false")}>No</button>
+              </div>
+              <p id="activate-age-block" className="age-gate-message" role="alert" aria-live="assertive" hidden={!ageGateNotice}>{ageGateNotice}</p>
+            </dialog>
             <section id="forgot-pin-view" className="login-card recovery-card" hidden={view !== "forgot"}>
               <h2>Forgot PIN?</h2>
               <p>Enter the email address saved on your account. If it matches an active account, we will send a PIN reset code.</p>

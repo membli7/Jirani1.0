@@ -343,6 +343,8 @@ function bootstrapSecretMatches(candidate, expected) {
 function auditEntry(type, entityId, actor, details = {}) {
   return { id: newId(), type, entityId, at: now(), by: { id: actor.id, name: actor.name, role: actor.role }, ...details };
 }
+const AGE_ELIGIBILITY_MESSAGE = "You must be 18 years old or older to create an account.";
+function hasAdultEligibilityDeclaration(value) { return value === true || value === "true"; }
 function electionVoterToken(election, user) {
   return crypto.createHmac("sha256", SESSION_SECRET)
     .update(`leadership-election:${election.chamaId}:${election.id}:${user.id}`)
@@ -1561,6 +1563,7 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   if (state.users.length > 0 || state.chamas.length > 0) return res.status(409).json({ message: "Initial setup has already been completed." });
   const bootstrapSecret = process.env.SETUP_BOOTSTRAP_SECRET;
   if (bootstrapSecret && !bootstrapSecretMatches(req.get("X-Setup-Bootstrap-Secret"), bootstrapSecret)) return res.status(403).json({ message: "An operator bootstrap code is required for initial setup." });
+  if (!hasAdultEligibilityDeclaration(req.body?.ageConfirmed)) return res.status(400).json({ message: AGE_ELIGIBILITY_MESSAGE });
   const chamaName = clean(req.body?.chamaName);
   const name = clean(req.body?.name);
   const phone = normalizePhone(req.body?.phone);
@@ -1598,8 +1601,9 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
   const privacyAcknowledgmentEvent = auditEntry("privacy.notice.acknowledged", user.id, user, { policy: "privacy-notice", version: PRIVACY_NOTICE_VERSION, source: acceptanceSource, chamaId });
   user.privacyNoticeAcknowledgment = { version: PRIVACY_NOTICE_VERSION, acknowledgedAt: privacyAcknowledgmentEvent.at, source: acceptanceSource };
+  const ageEligibilityEvent = auditEntry("eligibility.age.self-declared", user.id, user, { minimumAge: 18, selfDeclared: true, source: acceptanceSource, chamaId });
   updated.users.push(user);
-  updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent);
+  updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent, ageEligibilityEvent);
   try { await persist(updated); } catch (error) { return next(error); }
   req.session.regenerate(error => {
     if (error) return next(error);
@@ -2223,6 +2227,7 @@ app.post("/api/invitations/:id/revoke", requireAuth, requirePinChanged, requireR
   return commit(req, res, next, updated, 200, { message: "Invitation revoked.", data: revocation });
 }));
 app.post("/api/invitations/activate", activationLimiter, async (req, res, next) => {
+  if (!hasAdultEligibilityDeclaration(req.body?.ageConfirmed)) return res.status(400).json({ message: AGE_ELIGIBILITY_MESSAGE });
   const phone = normalizePhone(req.body?.phone); const code = clean(req.body?.code); const codeDigest = hashCode(code); const pin = clean(req.body?.pin);
   try {
     const activate = async () => {
@@ -2261,8 +2266,9 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
       user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
       const privacyAcknowledgmentEvent = auditEntry("privacy.notice.acknowledged", user.id, user, { policy: "privacy-notice", version: PRIVACY_NOTICE_VERSION, source: acceptanceSource, chamaId: saved.chamaId });
       user.privacyNoticeAcknowledgment = { version: PRIVACY_NOTICE_VERSION, acknowledgedAt: privacyAcknowledgmentEvent.at, source: acceptanceSource };
+      const ageEligibilityEvent = auditEntry("eligibility.age.self-declared", user.id, user, { minimumAge: 18, selfDeclared: true, source: acceptanceSource, chamaId: saved.chamaId });
       updated.users.push(user);
-      updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent);
+      updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent, ageEligibilityEvent);
       if (directLeaderRole) {
         const leadershipChange = { id: newId(), type: "appointment", role: user.role, outgoingUserId: null, incomingUserId: user.id, effectiveDate: createdAt.slice(0, 10), vote: null, emergencyReason: null, status: "confirmed", proposedBy: inviter.id, proposedAt: createdAt, confirmedBy: inviter.id, confirmedAt: createdAt, audit: [{ action: "proposed", by: inviter.id, at: createdAt }, { action: "confirmed", by: inviter.id, at: createdAt }], chamaId: saved.chamaId };
         updated.leadershipChanges.push(leadershipChange);

@@ -9,6 +9,33 @@ const forgotPinForm = document.querySelector("#forgot-pin-form");
 const resetPinForm = document.querySelector("#reset-pin-form");
 const forgotPinNotice = document.querySelector("#forgot-pin-notice");
 const translateAuthText = value => window.jiraniI18n?.translateText(value) || value;
+const activationAgeDialog = document.querySelector("#activate-age-dialog");
+const activationAgeBlock = document.querySelector("#activate-age-block");
+const activationAgeConfirmed = activationForm.querySelector("#activate-age-confirmed");
+const activationSubmitButton = activationForm.querySelector('button[type="submit"]');
+let activationSubmitting = false;
+
+function updateActivationAgeGate() {
+  const answer = activationAgeConfirmed.value || "";
+  activationSubmitButton.disabled = answer !== "true" || activationSubmitting;
+}
+
+activationAgeDialog.addEventListener("cancel", event => event.preventDefault());
+activationAgeDialog.querySelectorAll("[data-age-answer]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (button.dataset.ageAnswer !== "true") {
+      activationAgeBlock.hidden = false;
+      return;
+    }
+    activationAgeBlock.hidden = true;
+    activationAgeConfirmed.value = "true";
+    activationForm.hidden = false;
+    activationAgeDialog.close();
+    updateActivationAgeGate();
+    activationForm.querySelector("#activate-phone")?.focus();
+  });
+});
+updateActivationAgeGate();
 
 if (new URLSearchParams(window.location.search).get("switch-chama") === "1") {
   document.querySelector("#login-page-title")?.replaceChildren("Switch chama");
@@ -82,14 +109,21 @@ loginForm?.addEventListener("submit", async event => {
 
 activationForm?.addEventListener("submit", async event => {
   event.preventDefault();
-  const submitButton = activationForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
+  const values = Object.fromEntries(new FormData(activationForm));
+  if (values.ageConfirmed !== "true") {
+    activationAgeBlock.hidden = false;
+    if (!activationAgeDialog.open) activationAgeDialog.showModal();
+    return;
+  }
+  activationSubmitting = true;
+  updateActivationAgeGate();
   activationNotice.hidden = true;
   activationNotice.textContent = "";
 
   try {
-    const result = await postJson("/api/invitations/activate", Object.fromEntries(new FormData(activationForm)));
+    const result = await postJson("/api/invitations/activate", values);
     activationForm.reset();
+    updateActivationAgeGate();
     activationForm.hidden = true;
     loginForm.hidden = false;
     loginNotice.textContent = translateAuthText(result.message || "Account activated. Please sign in.");
@@ -100,16 +134,27 @@ activationForm?.addEventListener("submit", async event => {
       : error.message);
     activationNotice.hidden = false;
   } finally {
-    submitButton.disabled = false;
+    activationSubmitting = false;
+    updateActivationAgeGate();
   }
 });
 
 document.querySelector("#show-activate")?.addEventListener("click", () => {
   loginForm.hidden = true;
   forgotPinView.hidden = true;
-  activationForm.hidden = false;
+  activationForm.hidden = true;
+  activationAgeConfirmed.value = "";
+  activationAgeBlock.hidden = true;
+  activationNotice.hidden = true;
+  activationNotice.textContent = "";
+  updateActivationAgeGate();
+  activationAgeDialog.showModal();
 });
 document.querySelector("#show-login")?.addEventListener("click", () => {
+  activationAgeConfirmed.value = "";
+  activationNotice.hidden = true;
+  activationNotice.textContent = "";
+  updateActivationAgeGate();
   activationForm.hidden = true;
   loginForm.hidden = false;
 });

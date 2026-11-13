@@ -3,16 +3,48 @@
 const registrationForm = document.querySelector("#register-chama-form");
 const registrationNotice = document.querySelector("#register-notice");
 const translateRegistrationText = value => window.jiraniI18n?.translateText(value) || value;
+const registrationAgeDialog = document.querySelector("#register-age-dialog");
+const registrationAgeBlock = document.querySelector("#register-age-block");
+const registrationAgeConfirmed = registrationForm.querySelector("#register-age-confirmed");
+const registrationSubmitButton = registrationForm.querySelector('button[type="submit"]');
+let registrationSubmitting = false;
+
+function updateRegistrationAgeGate() {
+  const answer = registrationAgeConfirmed.value || "";
+  registrationSubmitButton.disabled = answer !== "true" || registrationSubmitting;
+}
+
+registrationAgeDialog.addEventListener("cancel", event => event.preventDefault());
+registrationAgeDialog.querySelectorAll("[data-age-answer]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (button.dataset.ageAnswer !== "true") {
+      registrationAgeBlock.hidden = false;
+      return;
+    }
+    registrationAgeBlock.hidden = true;
+    registrationAgeConfirmed.value = "true";
+    registrationForm.hidden = false;
+    registrationAgeDialog.close();
+    updateRegistrationAgeGate();
+    registrationForm.querySelector('input:not([type="hidden"])')?.focus();
+  });
+});
+updateRegistrationAgeGate();
 
 registrationForm.addEventListener("submit", async event => {
   event.preventDefault();
-  const submitButton = registrationForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
+  const formData = Object.fromEntries(new FormData(registrationForm));
+  if (formData.ageConfirmed !== "true") {
+    registrationAgeBlock.hidden = false;
+    if (!registrationAgeDialog.open) registrationAgeDialog.showModal();
+    return;
+  }
+  registrationSubmitting = true;
+  updateRegistrationAgeGate();
   registrationNotice.hidden = true;
   registrationNotice.textContent = "";
 
   try {
-    const formData = Object.fromEntries(new FormData(registrationForm));
     const bootstrapSecret = typeof formData.bootstrapSecret === "string" ? formData.bootstrapSecret : "";
     delete formData.bootstrapSecret;
     formData.deadlineDay = Number(formData.deadlineDay);
@@ -65,7 +97,8 @@ registrationForm.addEventListener("submit", async event => {
   } finally {
     const bootstrapField = registrationForm.elements?.namedItem?.("bootstrapSecret");
     if (bootstrapField) bootstrapField.value = "";
-    submitButton.disabled = false;
+    registrationSubmitting = false;
+    updateRegistrationAgeGate();
   }
 });
 
@@ -77,7 +110,10 @@ if (new URLSearchParams(window.location.search).get("new-chama") === "1") {
       return result;
     })
     .then(result => {
-      if (result.open) return;
+      if (result.open) {
+        if (!registrationAgeDialog.open) registrationAgeDialog.showModal();
+        return;
+      }
       registrationForm.hidden = true;
       document.querySelector("#new-chama-existing-instance").hidden = false;
     })
@@ -86,5 +122,8 @@ if (new URLSearchParams(window.location.search).get("new-chama") === "1") {
         ? "Cannot reach the server. Check that it is running, then try again."
         : error.message);
       registrationNotice.hidden = false;
+      if (!registrationAgeDialog.open) registrationAgeDialog.showModal();
     });
+} else {
+  registrationAgeDialog.showModal();
 }

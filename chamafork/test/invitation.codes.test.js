@@ -60,11 +60,40 @@ async function createInvitation(server, cookie, phone, role = "member") {
 function postAction(server, cookie, route, body) {
   return fetch(`${server.baseUrl}${route}`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", "X-Requested-With": "chama", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(body) });
 }
-function activate(server, phone, code, pin = "123456") {
-  return fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify({ phone, code, pin, termsAccepted: true, privacyNoticeAcknowledged: true }) });
+function activate(server, phone, code, pin = "123456", ageConfirmed = true) {
+  const body = { phone, code, pin, termsAccepted: true, privacyNoticeAcknowledged: true };
+  if (ageConfirmed !== null) body.ageConfirmed = ageConfirmed;
+  return fetch(`${server.baseUrl}/api/invitations/activate`, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "chama" }, body: JSON.stringify(body) });
 }
 function persisted(server) { return JSON.parse(fs.readFileSync(server.dataFile, "utf8")); }
 after(async () => { for (const server of servers) await server.stop(); });
+
+test("invited activation requires an affirmative adult self-declaration before changing state", async () => {
+  const server = await startServer();
+  const chairCookie = await login(server, "+254711000001");
+  const { response: invitationResponse, body: invitation } = await createInvitation(server, chairCookie, "0712000090");
+  assert.equal(invitationResponse.status, 201);
+  const beforeActivation = persisted(server);
+
+  for (const [answer, label] of [[false, "No"], [null, "missing"]]) {
+    const rejected = await activate(server, "0712000090", invitation.activationCode, "123456", answer);
+    assert.equal(rejected.status, 400, `${label} age declaration should be rejected`);
+    assert.match((await rejected.json()).message, /18 years old or older/);
+    assert.deepEqual(persisted(server), beforeActivation, `${label} age declaration must not create a user or consume the invitation`);
+  }
+
+  const accepted = await activate(server, "0712000090", invitation.activationCode, "123456", true);
+  assert.equal(accepted.status, 201);
+  const activatedUser = (await accepted.json()).user;
+  const afterActivation = persisted(server);
+  assert.equal(afterActivation.users.length, beforeActivation.users.length + 1);
+  assert.equal(afterActivation.invitations[0].usedAt !== null, true);
+  const ageEvent = afterActivation.auditLog.find(item => item.type === "eligibility.age.self-declared" && item.entityId === activatedUser.id);
+  assert.ok(ageEvent);
+  assert.equal(ageEvent.minimumAge, 18);
+  assert.equal(ageEvent.selfDeclared, true);
+  assert.equal(ageEvent.source, "invitation-activation");
+});
 
 test("Chairperson can invite both Secretary and Treasurer directly during initial setup", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-bootstrap-test-"));

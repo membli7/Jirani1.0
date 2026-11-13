@@ -72,7 +72,7 @@ async function createAccount(chairCookie, name, phone, pin) {
   const invitation = await body(invitationResponse);
   const activation = await request("/api/invitations/activate", {
     method: "POST",
-    body: JSON.stringify({ phone, code: invitation.activationCode, pin, termsAccepted: true, privacyNoticeAcknowledged: true })
+    body: JSON.stringify({ phone, code: invitation.activationCode, pin, termsAccepted: true, privacyNoticeAcknowledged: true, ageConfirmed: true })
   });
   assert.equal(activation.status, 201);
   return (await body(activation)).user.id;

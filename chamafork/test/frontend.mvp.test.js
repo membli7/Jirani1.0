@@ -16,11 +16,13 @@ const profileReactShell = fs.readFileSync(path.join(frontend, "react", "profile.
 const profilePage = fs.readFileSync(path.join(reactSource, "pages", "ProfilePage.jsx"), "utf8");
 const profileModeSource = fs.readFileSync(path.join(reactSource, "profileMode.mjs"), "utf8");
 const registerHtml = fs.readFileSync(path.join(frontend, "register.html"), "utf8");
+const legacyRegisterScript = fs.readFileSync(path.join(frontend, "register.js"), "utf8");
 const registerReactShell = fs.readFileSync(path.join(frontend, "react", "register.html"), "utf8");
 const registerPage = fs.readFileSync(path.join(reactSource, "pages", "RegisterPage.jsx"), "utf8");
 const registerActions = fs.readFileSync(path.join(reactSource, "registrationActions.mjs"), "utf8");
 const memberLoginReactShell = fs.readFileSync(path.join(frontend, "react", "member-login.html"), "utf8");
 const memberLoginHtml = fs.readFileSync(path.join(frontend, "member-login.html"), "utf8");
+const legacyAuthScript = fs.readFileSync(path.join(frontend, "auth-pages.js"), "utf8");
 const memberLoginPage = fs.readFileSync(path.join(reactSource, "pages", "MemberLoginPage.jsx"), "utf8");
 const authActions = fs.readFileSync(path.join(reactSource, "authActions.mjs"), "utf8");
 const chatPage = fs.readFileSync(path.join(reactSource, "components", "ChatPanel.jsx"), "utf8");
@@ -48,6 +50,33 @@ const simulatedInbox = fs.readFileSync(path.join(reactSource, "components", "Sim
 const simulatedPaymentActions = fs.readFileSync(path.join(reactSource, "simulatedPaymentActions.mjs"), "utf8");
 const i18n = fs.readFileSync(path.join(frontend, "i18n.js"), "utf8");
 const contactScript = fs.readFileSync(path.join(frontend, "contact.js"), "utf8");
+
+function fakeControl(initial = {}) {
+  const listeners = new Map();
+  return {
+    hidden: false,
+    disabled: false,
+    textContent: "",
+    value: "",
+    open: false,
+    dataset: {},
+    addEventListener(type, listener) {
+      const group = listeners.get(type) || [];
+      group.push(listener);
+      listeners.set(type, group);
+    },
+    dispatch(type, event = {}) {
+      for (const listener of listeners.get(type) || []) listener(event);
+    },
+    getHandler(type) { return (listeners.get(type) || [])[0]; },
+    showModal() { this.open = true; },
+    close() { this.open = false; },
+    focus() { this.focused = true; },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    ...initial,
+  };
+}
 
 test("launch-critical invitation, election, and cash copy is accurate in English and Kiswahili", () => {
   for (const message of [
@@ -460,6 +489,20 @@ test("standalone member login posts credentials to the login API", () => {
   assert.match(memberLoginHtml, /name="termsAccepted" type="checkbox" value="true" required/);
   assert.match(memberLoginPage, /name="privacyNoticeAcknowledged" type="checkbox" value="true" required/);
   assert.match(memberLoginHtml, /name="privacyNoticeAcknowledged" type="checkbox" value="true" required/);
+  assert.match(memberLoginPage, /<dialog id="activate-age-dialog"/);
+  assert.match(memberLoginPage, /onCancel=\{event => event\.preventDefault\(\)\}/);
+  assert.match(memberLoginPage, /hidden=\{view !== "activate" \|\| !activationAllowed\}/);
+  assert.match(memberLoginPage, /ageConfirmed === "true" \? "true" : ""/);
+  assert.doesNotMatch(memberLoginPage, /name="ageConfirmed" type="radio"/);
+  assert.match(memberLoginPage, /disabled=\{busy === "activation" \|\| ageConfirmed !== "true"\}/);
+  assert.match(memberLoginPage, /values\.ageConfirmed !== "true"/);
+  assert.match(memberLoginPage, /role="alert" aria-live="assertive"/);
+  assert.match(memberLoginHtml, /<dialog id="activate-age-dialog"/);
+  assert.match(memberLoginHtml, /name="ageConfirmed" type="hidden" value=""/);
+  assert.doesNotMatch(memberLoginHtml, /name="ageConfirmed" type="radio"/);
+  assert.match(legacyAuthScript, /values\.ageConfirmed !== "true"/);
+  assert.match(legacyAuthScript, /activationAgeConfirmed\.value = "true"/);
+  assert.match(legacyAuthScript, /activationAgeDialog\.addEventListener\("cancel", event => event\.preventDefault\(\)\)/);
   assert.match(authActions, /postJson\("\/api\/login"/);
   assert.match(authActions, /postJson\("\/api\/forgot-pin"/);
   assert.match(authActions, /postJson\("\/api\/reset-pin"/);
@@ -479,7 +522,7 @@ test("React auth services preserve same-origin request contracts", async () => {
     return { ok: true, json: async () => ({ message: "Synthetic test response." }) };
   };
   await signIn({ phone: "synthetic-phone", pin: "synthetic-pin" }, fetcher);
-  await activateInvitation({ phone: "synthetic-phone", code: "synthetic-activation-code", pin: "synthetic-pin", termsAccepted: true, privacyNoticeAcknowledged: true }, fetcher);
+  await activateInvitation({ phone: "synthetic-phone", code: "synthetic-activation-code", pin: "synthetic-pin", termsAccepted: true, privacyNoticeAcknowledged: true, ageConfirmed: "true" }, fetcher);
   await requestPinReset({ email: "member@example.test" }, fetcher);
   await resetPin({ code: "synthetic-reset-code", newPin: "synthetic-new-pin" }, "member@example.test", fetcher);
 
@@ -495,14 +538,30 @@ test("React auth services preserve same-origin request contracts", async () => {
   assert.deepEqual(JSON.parse(requests[0].options.body), { phone: "synthetic-phone", pin: "synthetic-pin" });
   assert.equal(JSON.parse(requests[1].options.body).termsAccepted, true);
   assert.equal(JSON.parse(requests[1].options.body).privacyNoticeAcknowledged, true);
+  assert.equal(JSON.parse(requests[1].options.body).ageConfirmed, "true");
   assert.deepEqual(JSON.parse(requests[3].options.body), { code: "synthetic-reset-code", newPin: "synthetic-new-pin", email: "member@example.test" });
 });
 
 test("landing registration opens a complete first-chama setup page", () => {
   assert.match(html, /id="landing-register" href="\/register\.html"/);
-  for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin", "bootstrapSecret"]) {
+  for (const field of ["chamaName", "name", "phone", "email", "deadlineDay", "welfareMonthlyFee", "lateContributionPenalty", "loanMonthlyRatePercent", "pin", "bootstrapSecret", "ageConfirmed"]) {
     assert.match(registerPage, new RegExp(`name="${field}"`));
   }
+  assert.match(registerPage, /<dialog id="register-age-dialog"/);
+  assert.match(registerPage, /onCancel=\{event => event\.preventDefault\(\)\}/);
+  assert.match(registerPage, /ageConfirmed === "true" \? "true" : ""/);
+  assert.match(registerPage, /hidden=\{showExistingInstance \|\| ageConfirmed !== "true"\}/);
+  assert.doesNotMatch(registerPage, /name="ageConfirmed" type="radio"/);
+  assert.match(registerPage, /disabled=\{submitting \|\| ageConfirmed !== "true"\}/);
+  assert.match(registerPage, /values\.ageConfirmed !== "true"/);
+  assert.match(registerPage, /role="alert" aria-live="assertive"/);
+  assert.match(registerHtml, /<dialog id="register-age-dialog"/);
+  assert.match(registerHtml, /name="ageConfirmed" type="hidden" value=""/);
+  assert.doesNotMatch(registerHtml, /name="ageConfirmed" type="radio"/);
+  assert.match(legacyRegisterScript, /formData\.ageConfirmed !== "true"/);
+  assert.match(legacyRegisterScript, /registrationAgeConfirmed\.value = "true"/);
+  assert.match(legacyRegisterScript, /registrationAgeDialog\.addEventListener\("cancel", event => event\.preventDefault\(\)\)/);
+  assert.match(legacyRegisterScript, /button\.dataset\.ageAnswer !== "true"/);
   assert.match(registerPage, /id="register-chama-form"/);
   assert.match(registerPage, /name="deadlineDay" type="number" min=\{1\} max=\{28\} defaultValue=\{5\}/);
   assert.match(registerPage, /name="welfareMonthlyFee" type="number" min=\{0\} step=\{1\} defaultValue=\{500\}/);
@@ -524,6 +583,171 @@ test("landing registration opens a complete first-chama setup page", () => {
   assert.match(registerPage, /error instanceof TypeError/);
 });
 
+test("React and classic invitation activation use a blocking, accessible age dialog", () => {
+  assert.match(memberLoginPage, /<dialog id="activate-age-dialog"/);
+  assert.match(memberLoginPage, /onCancel=\{event => event\.preventDefault\(\)\}/);
+  assert.match(memberLoginPage, /hidden=\{view !== "activate" \|\| !activationAllowed\}/);
+  assert.match(memberLoginPage, /setActivationAllowed\(true\)/);
+  assert.match(memberLoginPage, /setAgeGateNotice\(AGE_ELIGIBILITY_MESSAGE\)/);
+  assert.match(memberLoginPage, /ageConfirmed === "true" \? "true" : ""/);
+  assert.doesNotMatch(memberLoginPage, /name="ageConfirmed" type="radio"/);
+  assert.match(memberLoginHtml, /<dialog id="activate-age-dialog"/);
+  assert.match(memberLoginHtml, /name="ageConfirmed" type="hidden" value=""/);
+  assert.doesNotMatch(memberLoginHtml, /name="ageConfirmed" type="radio"/);
+  assert.match(legacyAuthScript, /activationAgeDialog\.addEventListener\("cancel", event => event\.preventDefault\(\)\)/);
+  assert.match(legacyAuthScript, /button\.dataset\.ageAnswer !== "true"/);
+  assert.match(legacyAuthScript, /values\.ageConfirmed !== "true"/);
+  assert.match(css, /dialog\.age-gate-dialog[^\n]*background: #153d33/);
+  assert.match(css, /\.age-gate-button[^\n]*min-height: 52px/);
+  assert.match(css, /\.age-gate-button:focus-visible/);
+  assert.match(css, /@media \(max-width: 360px\)/);
+});
+
+test("classic new-Chama signup blocks No, prevents modal dismissal, and submits ageConfirmed only after Yes", async () => {
+  const ageConfirmed = fakeControl();
+  const submitButton = fakeControl({ disabled: true });
+  const firstField = fakeControl();
+  const bootstrapField = fakeControl();
+  const registrationNotice = fakeControl({ hidden: true });
+  const ageBlock = fakeControl({ hidden: true });
+  const yesButton = fakeControl({ dataset: { ageAnswer: "true" } });
+  const noButton = fakeControl({ dataset: { ageAnswer: "false" } });
+  const ageDialog = fakeControl({ querySelectorAll: () => [yesButton, noButton] });
+  const registrationForm = fakeControl({ hidden: true });
+  const formElements = new Map([
+    ["#register-age-confirmed", ageConfirmed], ['button[type="submit"]', submitButton],
+    ['input:not([type="hidden"])', firstField], ["#register-bootstrap-secret", bootstrapField],
+  ]);
+  registrationForm.querySelector = selector => formElements.get(selector) || null;
+  registrationForm.formValues = {
+    chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200",
+    loanMonthlyRatePercent: "5", pin: "123456", termsAccepted: "true", privacyNoticeAcknowledged: "true",
+  };
+  registrationForm.elements = { namedItem: name => name === "bootstrapSecret" ? bootstrapField : null };
+  const elements = new Map([
+    ["#register-chama-form", registrationForm], ["#register-notice", registrationNotice],
+    ["#register-age-dialog", ageDialog], ["#register-age-block", ageBlock],
+    ["#new-chama-existing-instance", fakeControl({ hidden: true })],
+  ]);
+  const fetchCalls = [];
+  const navigations = [];
+  class TestFormData {
+    constructor(form) { this.form = form; }
+    [Symbol.iterator]() {
+      const values = { ...this.form.formValues, ageConfirmed: this.form.querySelector("#register-age-confirmed").value };
+      return Object.entries(values)[Symbol.iterator]();
+    }
+  }
+  vm.runInNewContext(legacyRegisterScript, {
+    document: { querySelector: selector => elements.get(selector) || null },
+    window: { location: { search: "", assign: destination => navigations.push(destination) } },
+    URLSearchParams,
+    FormData: TestFormData,
+    fetch: async (url, options) => {
+      fetchCalls.push({ url, options });
+      return { ok: true, status: 201, json: async () => ({}) };
+    },
+  });
+
+  assert.equal(ageDialog.open, true, "signup should open the modal immediately");
+  assert.equal(registrationForm.hidden, true, "the signup form stays hidden until Yes");
+  noButton.dispatch("click");
+  assert.equal(ageDialog.open, true, "No must not dismiss the modal");
+  assert.equal(ageBlock.hidden, false, "No must explain the age requirement");
+  assert.equal(registrationForm.hidden, true, "No must keep the form blocked");
+  let cancelled = false;
+  ageDialog.dispatch("cancel", { preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true, "Escape cancellation is prevented");
+  await registrationForm.getHandler("submit")({ preventDefault() {} });
+  assert.equal(fetchCalls.length, 0, "a missing Yes declaration must never reach setup");
+
+  yesButton.dispatch("click");
+  assert.equal(ageDialog.open, false, "Yes closes the modal");
+  assert.equal(registrationForm.hidden, false, "Yes reveals the form");
+  assert.equal(ageConfirmed.value, "true");
+  assert.equal(firstField.focused, true, "focus moves into the revealed form");
+  await registrationForm.getHandler("submit")({ preventDefault() {} });
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, "/api/setup");
+  assert.equal(JSON.parse(fetchCalls[0].options.body).ageConfirmed, "true");
+  assert.deepEqual(navigations, ["/"]);
+});
+
+test("classic invited-member activation blocks No and allows activation only after Yes", async () => {
+  const ageConfirmed = fakeControl();
+  const activationSubmit = fakeControl({ disabled: true });
+  const activationPhone = fakeControl();
+  const activationNotice = fakeControl({ hidden: true });
+  const ageBlock = fakeControl({ hidden: true });
+  const yesButton = fakeControl({ dataset: { ageAnswer: "true" } });
+  const noButton = fakeControl({ dataset: { ageAnswer: "false" } });
+  const ageDialog = fakeControl({ querySelectorAll: () => [yesButton, noButton] });
+  const loginForm = fakeControl({ hidden: false });
+  const loginNotice = fakeControl({ hidden: true });
+  const activationForm = fakeControl({ hidden: true });
+  const activationFields = new Map([
+    ["#activate-age-confirmed", ageConfirmed], ['button[type="submit"]', activationSubmit], ["#activate-phone", activationPhone],
+  ]);
+  activationForm.querySelector = selector => activationFields.get(selector) || null;
+  activationForm.formValues = { phone: "0711000002", code: "123456", pin: "567890", termsAccepted: "true", privacyNoticeAcknowledged: "true" };
+  activationForm.reset = () => { ageConfirmed.value = ""; };
+  const forgotPinView = fakeControl({ hidden: true });
+  const forgotPinForm = fakeControl();
+  const resetPinForm = fakeControl({ hidden: true });
+  const forgotPinNotice = fakeControl({ hidden: true });
+  const showActivate = fakeControl();
+  const showLogin = fakeControl();
+  const elements = new Map([
+    ["#login-form", loginForm], ["#login-notice", loginNotice], ["#activation-form", activationForm],
+    ["#activation-notice", activationNotice], ["#activate-age-dialog", ageDialog], ["#activate-age-block", ageBlock],
+    ["#forgot-pin-view", forgotPinView], ["#forgot-pin-form", forgotPinForm], ["#reset-pin-form", resetPinForm],
+    ["#forgot-pin-notice", forgotPinNotice], ["#show-activate", showActivate], ["#show-login", showLogin],
+  ]);
+  const fetchCalls = [];
+  class TestFormData {
+    constructor(form) { this.form = form; }
+    [Symbol.iterator]() {
+      const values = { ...this.form.formValues, ageConfirmed: this.form.querySelector("#activate-age-confirmed").value };
+      return Object.entries(values)[Symbol.iterator]();
+    }
+  }
+  vm.runInNewContext(legacyAuthScript, {
+    document: { querySelector: selector => elements.get(selector) || null },
+    window: { location: { search: "" } },
+    URLSearchParams,
+    FormData: TestFormData,
+    fetch: async (url, options) => {
+      fetchCalls.push({ url, options });
+      return { ok: true, status: 200, json: async () => ({ message: "Account activated." }) };
+    },
+  });
+
+  showActivate.dispatch("click");
+  assert.equal(ageDialog.open, true, "activation should open the modal");
+  assert.equal(activationForm.hidden, true, "the activation form stays hidden until Yes");
+  noButton.dispatch("click");
+  assert.equal(ageDialog.open, true, "No must not dismiss the modal");
+  assert.equal(ageBlock.hidden, false, "No must explain the age requirement");
+  assert.equal(activationForm.hidden, true, "No must keep activation blocked");
+  let cancelled = false;
+  ageDialog.dispatch("cancel", { preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true, "Escape cancellation is prevented");
+  await activationForm.getHandler("submit")({ preventDefault() {} });
+  assert.equal(fetchCalls.length, 0, "a missing Yes declaration must never reach activation");
+
+  yesButton.dispatch("click");
+  assert.equal(ageDialog.open, false, "Yes closes the modal");
+  assert.equal(activationForm.hidden, false, "Yes reveals the activation form");
+  assert.equal(ageConfirmed.value, "true");
+  assert.equal(activationPhone.focused, true, "focus moves to the first activation field");
+  await activationForm.getHandler("submit")({ preventDefault() {} });
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, "/api/invitations/activate");
+  assert.equal(JSON.parse(fetchCalls[0].options.body).ageConfirmed, "true");
+  assert.equal(activationForm.hidden, true, "successful activation returns to sign-in");
+});
+
 test("React member invitations require an email and preserve one-time activation-code handling", () => {
   assert.match(html, /id="react-invite-root"/);
   assert.doesNotMatch(html, /id="invite-form"|id="invite-code"/);
@@ -543,7 +767,7 @@ test("registration signs in and opens the dashboard when setup was already compl
   const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
   await registerChama({
     chamaName: "Test Chama", name: "Test Chair", phone: "0700000000", email: "chair@example.test", pin: "135790",
-    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true", privacyNoticeAcknowledged: "true",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true", privacyNoticeAcknowledged: "true", ageConfirmed: "true",
   }, {
     fetcher: async (url, options) => {
       requests.push({ url, options });
@@ -566,7 +790,7 @@ test("registration sends the bootstrap code only in the setup header and clears 
   const { registerChama } = await import("../../en public/react/src/registrationActions.mjs");
   await registerChama({
     chamaName: "Test Chama", name: "Test Chair", phone: "0711000001", email: "chair@example.test", pin: "123456",
-    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true", privacyNoticeAcknowledged: "true",
+    deadlineDay: "5", welfareMonthlyFee: "500", lateContributionPenalty: "200", loanMonthlyRatePercent: "5", termsAccepted: "true", privacyNoticeAcknowledged: "true", ageConfirmed: "true",
     bootstrapSecret,
   }, {
     fetcher: async (url, options) => {

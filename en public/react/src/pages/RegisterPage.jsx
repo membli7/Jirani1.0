@@ -5,13 +5,19 @@ function translate(value) {
   return window.jiraniI18n?.translateText(value) || value;
 }
 
+const AGE_ELIGIBILITY_MESSAGE = "You must be 18 years old or older to create an account.";
+
 export default function RegisterPage() {
   const rootRef = useRef(null);
   const formRef = useRef(null);
+  const ageGateDialogRef = useRef(null);
+  const checkSetupBeforeShowingForm = new URLSearchParams(window.location.search).get("new-chama") === "1";
   const [notice, setNotice] = useState("");
+  const [ageGateNotice, setAgeGateNotice] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showExistingInstance, setShowExistingInstance] = useState(false);
-  const checkSetupBeforeShowingForm = new URLSearchParams(window.location.search).get("new-chama") === "1";
+  const [registrationPageReady, setRegistrationPageReady] = useState(!checkSetupBeforeShowingForm);
 
   useEffect(() => {
     document.title = "Register a new chama | Jirani Chama";
@@ -24,19 +30,34 @@ export default function RegisterPage() {
 
   useEffect(() => {
     window.jiraniI18n?.apply(rootRef.current || document.documentElement);
-  }, [notice, showExistingInstance, submitting]);
+  }, [notice, ageGateNotice, ageConfirmed, showExistingInstance, submitting]);
+
+  useEffect(() => {
+    if (!registrationPageReady || showExistingInstance || ageConfirmed === "true") return undefined;
+    const dialog = ageGateDialogRef.current;
+    if (!dialog) return undefined;
+    if (!dialog.open) dialog.showModal();
+    return () => { if (dialog.open) dialog.close(); };
+  }, [registrationPageReady, showExistingInstance, ageConfirmed]);
+
+  useEffect(() => {
+    if (ageConfirmed === "true") formRef.current?.querySelector('input:not([type="hidden"])')?.focus();
+  }, [ageConfirmed]);
 
   useEffect(() => {
     if (!checkSetupBeforeShowingForm) return undefined;
     let active = true;
     setupIsOpen().then(open => {
-      if (active && !open) setShowExistingInstance(true);
+      if (!active) return;
+      if (open) setRegistrationPageReady(true);
+      else setShowExistingInstance(true);
     }).catch(error => {
       if (!active) return;
       const message = error instanceof TypeError
         ? "Cannot reach the server. Check that it is running, then try again."
         : error.message;
       setNotice(translate(message));
+      setRegistrationPageReady(true);
     });
     return () => { active = false; };
   }, [checkSetupBeforeShowingForm]);
@@ -44,10 +65,15 @@ export default function RegisterPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     if (!formRef.current) return;
+    const values = Object.fromEntries(new FormData(formRef.current).entries());
+    if (values.ageConfirmed !== "true") {
+      setAgeGateNotice(AGE_ELIGIBILITY_MESSAGE);
+      if (!ageGateDialogRef.current?.open) ageGateDialogRef.current?.showModal();
+      return;
+    }
     setSubmitting(true);
     setNotice("");
     try {
-      const values = Object.fromEntries(new FormData(formRef.current).entries());
       await registerChama(values, {
         fetcher: window.fetch.bind(window),
         navigate: destination => window.location.assign(destination),
@@ -62,6 +88,16 @@ export default function RegisterPage() {
       if (bootstrapField) bootstrapField.value = "";
       setSubmitting(false);
     }
+  }
+
+  function handleAgeAnswer(answer) {
+    if (answer !== "true") {
+      setAgeGateNotice(AGE_ELIGIBILITY_MESSAGE);
+      return;
+    }
+    setAgeGateNotice("");
+    setAgeConfirmed("true");
+    ageGateDialogRef.current?.close();
   }
 
   return (
@@ -91,11 +127,12 @@ export default function RegisterPage() {
               <p>To create a separate chama, open this app on a separate instance connected to an empty database. This instance’s existing records will remain unchanged.</p>
               <a className="button-primary" href="/member-login.html">Sign in to this instance</a>
             </section>
-            <form id="register-chama-form" className="login-card" ref={formRef} onSubmit={handleSubmit} hidden={showExistingInstance}>
+            <form id="register-chama-form" className="login-card" ref={formRef} onSubmit={handleSubmit} hidden={showExistingInstance || ageConfirmed !== "true"}>
               <h2>Chama and chairperson details</h2>
               <p className="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
               <p>All fields are required. Your PIN must have 6 to 12 digits.</p>
               <p id="register-notice" className="login-notice" role="alert" aria-live="assertive" hidden={!notice}>{notice}</p>
+              <input id="register-age-confirmed" name="ageConfirmed" type="hidden" value={ageConfirmed === "true" ? "true" : ""} />
               <label className="field" htmlFor="register-bootstrap-secret" data-i18n="setupBootstrapLabel">Operator bootstrap code (if requested)
                 <input id="register-bootstrap-secret" name="bootstrapSecret" type="password" autoComplete="off" maxLength={256} aria-describedby="register-bootstrap-note" spellCheck={false} />
               </label>
@@ -139,9 +176,18 @@ export default function RegisterPage() {
                 <input id="register-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required />
                 <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span>{" "}<a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br /><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
               </label>
-              <button className="button-primary" type="submit" disabled={submitting}>{submitting ? "Registering…" : "Register chama"}</button>
+              <button className="button-primary" type="submit" disabled={submitting || ageConfirmed !== "true"}>{submitting ? "Registering…" : "Register chama"}</button>
               <p className="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>
             </form>
+            <dialog id="register-age-dialog" ref={ageGateDialogRef} className="age-gate-dialog" aria-labelledby="register-age-title" aria-describedby="register-age-description" onCancel={event => event.preventDefault()}>
+              <h2 id="register-age-title">Are you 18 years old or older?</h2>
+              <p id="register-age-description">Choose Yes to continue. This is a self-declaration; we do not ask for your exact age, date of birth, or identity document.</p>
+              <div className="age-gate-actions">
+                <button className="age-gate-button age-gate-button--yes" type="button" data-age-answer="true" autoFocus onClick={() => handleAgeAnswer("true")}>Yes</button>
+                <button className="age-gate-button age-gate-button--no" type="button" data-age-answer="false" onClick={() => handleAgeAnswer("false")}>No</button>
+              </div>
+              <p id="register-age-block" className="age-gate-message" role="alert" aria-live="assertive" hidden={!ageGateNotice}>{ageGateNotice}</p>
+            </dialog>
             <section id="register-success" className="login-card" aria-live="polite" hidden>
               <h2>Chama registered</h2>
               <p>Your chairperson account is ready. Continue to your chama dashboard.</p>

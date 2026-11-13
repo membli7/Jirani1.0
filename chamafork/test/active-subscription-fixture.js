@@ -32,7 +32,7 @@ async function activateTestSubscription({ dataFile, baseUrl, chamaId }) {
   const reload = await fetch(`${baseUrl}/api/invitations/activate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Requested-With": "chama" },
-    body: JSON.stringify({ phone: "0700000000", code: "000000", pin: "123456" })
+    body: JSON.stringify({ phone: "0700000000", code: "000000", pin: "123456", ageConfirmed: true })
   });
   if (reload.status !== 400) throw new Error(`Test entitlement state reload returned ${reload.status}, expected 400 for an invalid code.`);
 }

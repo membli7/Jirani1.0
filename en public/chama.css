@@ -324,6 +324,17 @@ dialog::backdrop { background: rgba(31, 48, 40, .42); }
 dialog h2 { margin: 0 0 8px; font-size: 16px; }
 dialog p { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+dialog.age-gate-dialog { width: min(460px, calc(100vw - 24px)); max-width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; padding: clamp(20px, 5vw, 28px); border: 1px solid #153d33; border-radius: 16px; color: #fff; background: #153d33; box-shadow: 0 16px 44px rgba(14, 30, 24, .32); }
+dialog.age-gate-dialog::backdrop { background: rgba(12, 20, 17, .72); }
+dialog.age-gate-dialog h2 { margin: 0 0 12px; color: #fff; font-size: clamp(22px, 5vw, 28px) !important; line-height: 1.25; }
+dialog.age-gate-dialog p { margin: 0; color: #f4f7f5; font-size: 16px; line-height: 1.55; }
+.age-gate-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.age-gate-button { width: 100%; min-height: 52px; padding: 10px 16px; border: 2px solid #fff; border-radius: 10px; font: inherit; font-size: 16px; font-weight: 750; cursor: pointer; }
+.age-gate-button--yes { color: #153d33; background: #fff; }
+.age-gate-button--no { color: #fff; background: #153d33; }
+.age-gate-button:hover { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25); }
+.age-gate-button:focus-visible { outline: 3px solid #ffdf6e; outline-offset: 3px; }
+.age-gate-message { margin-top: 18px !important; padding: 12px 14px; border: 2px solid #fcd34d; border-radius: 8px; color: #202010 !important; background: #fff7d6; font-weight: 750; }
 .offline-banner { margin: 0 0 12px; padding: 12px 14px; border: 2px solid #a44b13; border-radius: 8px; color: #642b00; background: #fff0df; font-size: 12px; font-weight: 800; line-height: 1.45; }
 .pending-actions-panel { margin-bottom: 14px; border-color: #d69b38; }
 .pending-actions-list { padding: 0 17px 8px; }
@@ -701,6 +712,10 @@ section[id] { scroll-margin-top: 16px; }
   .login-brand { max-width: 100%; }
   .login-brand h1, .login-intro { margin-right: auto; margin-left: auto; text-align: center; }
   #landing-view { width: 100%; }
+}
+@media (max-width: 360px) {
+  dialog.age-gate-dialog { padding: 20px; }
+  .age-gate-actions { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Footer */
