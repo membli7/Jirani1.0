@@ -1,0 +1,39 @@
+.pwa-toast {
+  position: fixed;
+  z-index: 1500;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #cbd9ce;
+  border-left: 4px solid var(--green, #24734a);
+  border-radius: 12px;
+  color: var(--ink, #1f3028);
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(20, 42, 30, .2);
+}
+.pwa-toast-copy { min-width: 0; }
+.pwa-toast-copy strong { display: block; font-size: 13px; }
+.pwa-toast-copy p { margin: 5px 0 0; color: var(--muted, #78847d); font-size: 12px; line-height: 1.45; }
+.pwa-toast-close { align-self: start; padding: 0 2px; border: 0; color: var(--muted, #78847d); background: transparent; font-size: 22px; line-height: 1; }
+.pwa-settings-card { margin-top: 18px; }
+.pwa-settings-card .panel-heading { align-items: flex-start; }
+.pwa-settings-card .panel-heading h2 { font-size: 15px; }
+.pwa-settings-card .panel-heading p { max-width: 62ch; font-size: 12px; line-height: 1.5; }
+.pwa-settings-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 17px 12px; }
+.pwa-permission-status, .pwa-installed-label { color: var(--muted, #78847d); font-size: 12px; }
+.pwa-action-status { min-height: 1.4em; margin: 0; padding: 0 17px 15px; color: var(--green, #24734a); font-size: 12px; line-height: 1.45; }
+.pwa-action-status:empty { display: none; }
+.pwa-action-status.error { color: var(--red, #b64c4c); }
+.pwa-install-action { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.pwa-install-action.compact { margin: 0; }
+.pwa-install-action .pwa-action-status { flex-basis: 100%; padding: 0; }
+.pwa-install-action .button-primary, .pwa-settings-actions .button-primary { width: auto; min-height: 40px; padding: 10px 15px; }
+.landing-actions .pwa-install-action { flex-basis: 100%; }
+@media (max-width: 560px) {
+  .pwa-settings-actions { align-items: flex-start; flex-direction: column; }
+  .pwa-toast { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
+}

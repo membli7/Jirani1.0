@@ -16,6 +16,10 @@ const { resetPinAfterRevokingSessions } = require("./security/pin-recovery");
 const { makeRedisClient } = require("./redis-client");
 const nodemailer = require("nodemailer");
 const { createWriteQueue } = require("./storage/write-queue");
+const webPush = require("web-push");
+const { createPushSubscriptionStore, normalizeEndpoint, normalizeSubscription } = require("./push-subscriptions");
+const { PUSH_CATEGORIES, addNotification, notifyMembers, collectDueReminders } = require("./notification-scheduler");
+const { createWebPushService } = require("./web-push-service");
 const { RedisRateLimitStore } = require("./storage/redis-rate-limit-store");
 const { createRenderTrustedProxyPredicate, createTrustedProxyPredicate, parseAllowedOrigins, resolveAppBindHost, validateProductionConfig } = require("./security/production-config");
 const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = require("./security/mpesa-c2b-subscriptions");
@@ -26,6 +30,7 @@ const { addNotifications, applyDueElections, applyScheduledElections, electionWi
 const { connectEventClients, createEventDelivery } = require("./event-delivery");
 const { loadAppEnv } = require("./config/env");
 const { MAX_LOAN_AMOUNT_KES, evaluateLoanEligibility, validateLoanPolicy } = require("./loan-policy");
+const { createPasskeyRouter } = require("./security/passkey-routes");
 if (process.env.NODE_ENV === "test") {
   // Tests use explicit disposable storage and must not connect to services in the local .env.
   process.env.REDIS_URL = "";
@@ -101,7 +106,10 @@ const setupLimiter = sharedRateLimit("setup", { windowMs: 15 * 60 * 1000, max: 1
 const activationLimiter = sharedRateLimit("activation", { windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many activation attempts. Please try again later." } });
 const pinRecoveryLimiter = sharedRateLimit("pin-recovery", { windowMs: 15 * 60 * 1000, max: 10, message: { message: "Too many PIN recovery attempts. Please try again later." } });
 const loginLimiter = sharedRateLimit("login", { windowMs: 15 * 60 * 1000, max: 100, message: { message: "Too many login attempts. Please try again later." } });
+const passkeyLoginLimiter = sharedRateLimit("passkey-login", { windowMs: 15 * 60 * 1000, max: 20, message: { message: "Too many passkey attempts. Please try again later." } });
+const passkeyManagementLimiter = sharedRateLimit("passkey-management", { windowMs: 15 * 60 * 1000, max: 20, keyGenerator: req => `chama:${req.user.chamaId}:member:${req.user.id}`, message: { message: "Too many passkey changes. Please try again later." } });
 const loanEstimateLimiter = sharedRateLimit("loan-estimate", { windowMs: 60 * 1000, max: 60, keyGenerator: req => `chama:${req.user.chamaId}:member:${req.user.id}`, message: { message: "Too many loan estimates. Wait a moment, then try again." } });
+const pushSubscriptionLimiter = sharedRateLimit("push-subscription", { windowMs: 15 * 60 * 1000, max: 30, keyGenerator: req => `chama:${req.user.chamaId}:member:${req.user.id}`, message: { message: "Too many push subscription changes. Try again later." } });
 
 const app = express();
 const trustedProxyTrust = process.env.NODE_ENV === "production"
@@ -210,6 +218,21 @@ const deliverChamaEvent = createEventDelivery({
   onError: err => logger.error("Redis publish error; used local SSE fallback", { err: err.message }),
 });
 function broadcastToChama(chamaId, ssePayload) { deliverChamaEvent(chamaId, ssePayload); }
+function publishNotificationUpdate(chamaId) {
+  if (!chamaId) return;
+  const payload = `event: notifications-updated\ndata: ${JSON.stringify({ at: now() })}\n\n`;
+  broadcastToChama(chamaId, payload);
+}
+function announcePersistedNotifications(previous, next) {
+  const previousIds = new Set((Array.isArray(previous?.messages) ? previous.messages : []).filter(item => item?.type === "notification").map(item => item.id));
+  const added = (Array.isArray(next?.messages) ? next.messages : []).filter(item => item?.type === "notification" && item.id && !previousIds.has(item.id));
+  for (const notification of added) {
+    publishNotificationUpdate(notification.chamaId);
+    if (PUSH_CATEGORIES.has(notification.category)) {
+      queueMicrotask(() => { void webPushService.dispatch(notification).catch(error => logger.warn("Browser push dispatch failed", { category: notification.category, err: error.message })); });
+    }
+  }
+}
 
 // Invalidate the cached dashboard summary after any write that changes totals.
 function invalidateSummaryCache(chamaId) {
@@ -560,6 +583,20 @@ function loadState() {
   catch (error) { if (error.code === "ENOENT") return emptyState(); throw error; }
 }
 let state = DATA_BACKEND === "json" ? loadState() : emptyState();
+const pushSubscriptionStore = createPushSubscriptionStore({
+  filePath: path.resolve(process.env.CHAMA_PUSH_SUBSCRIPTIONS_FILE || path.join(__dirname, "storage", "push-subscriptions.json")),
+  redisClient: redisCache,
+});
+const webPushService = createWebPushService({
+  webPush,
+  subscriptionStore: pushSubscriptionStore,
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY,
+  subject: process.env.VAPID_SUBJECT,
+  getActiveUser: (userId, chamaId) => state.users.find(user => user.id === userId && user.chamaId === chamaId && user.status === "active") || null,
+  logger,
+});
+let notificationSchedulerTimer = null;
 setOperationalMetricsProvider(() => {
   let callbackQueueDepth = 0;
   let oldestReceivedAt = null;
@@ -590,6 +627,7 @@ function persistProfileDetails(next) {
     .then(() => { profileDetails = next; });
 }
 async function persist(next = state) {
+  const previousState = state;
   if (DATA_BACKEND === "postgres") {
     if (!postgresPool) throw new Error("DATABASE_URL must be set for DATA_BACKEND=postgres.");
     postgresRuntimeLock?.assertHeld();
@@ -598,10 +636,12 @@ async function persist(next = state) {
       await writeQueue.writeFile(DATA_FILE, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
     }
     state = next;
+    announcePersistedNotifications(previousState, next);
     return;
   }
   await writeQueue.writeFile(DATA_FILE, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   state = next;
+  announcePersistedNotifications(previousState, next);
 }
 let startupPersistence;
 function initializeStorage() {
@@ -831,6 +871,36 @@ async function processDueLeadershipElections() {
     for (const chamaId of new Set(completed.map(item => item.chamaId))) publishMemberUpdate(chamaId);
     return completed.length;
   });
+}
+async function processDuePushReminders() {
+  return withSerializedWrite(async () => {
+    const updated = structuredClone(state);
+    const added = collectDueReminders(updated, {
+      today: todayInNairobi(),
+      deadlineForMonth: month => scheduledMeetingDate(month),
+      minimumContribution: configuredWelfareFee(),
+      transactionDate,
+      at: now(),
+    });
+    if (!added.length) return 0;
+    await persist(updated);
+    return added.length;
+  });
+}
+function scheduleNotificationReminderCheck(retryDelayMs) {
+  if (notificationSchedulerTimer) clearTimeout(notificationSchedulerTimer);
+  const delay = Number.isFinite(retryDelayMs) ? retryDelayMs : 5 * 60 * 1000;
+  notificationSchedulerTimer = setTimeout(async () => {
+    notificationSchedulerTimer = null;
+    try {
+      await processDuePushReminders();
+      scheduleNotificationReminderCheck();
+    } catch (error) {
+      logger.warn("Push reminder scheduler failed", { err: error.message });
+      scheduleNotificationReminderCheck(5000);
+    }
+  }, delay);
+  notificationSchedulerTimer.unref?.();
 }
 function scheduleLeadershipElectionCheck(retryDelayMs) {
   if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
@@ -1072,7 +1142,7 @@ function dashboardFor(user) {
     notifications: scopeToChama(state.messages, chamaId, item => item.recipientId ? item.chamaId : null)
       .filter(item => item.type === "notification" && item.recipientId === user.id)
       .slice(-50)
-      .map(item => ({ id: item.id, at: item.at, text: item.text })),
+      .map(item => ({ id: item.id, at: item.at, category: item.category || null, title: item.title || "", text: item.text })),
   };
 }
 function validMeetingDate(value) {
@@ -1216,6 +1286,32 @@ if (sessionBackend.store) sessionOptions.store = sessionBackend.store;
 app.use(session(sessionOptions));
 app.use("/api", protectWriteRequest);
 app.use("/api", serializeWriteRequests);
+app.use("/api/passkeys", createPasskeyRouter({
+  express,
+  getState: () => state,
+  persist,
+  redisClient: redisCache,
+  production: process.env.NODE_ENV === "production",
+  strictOrigin: process.env.NODE_ENV === "production" || process.env.FORCE_HTTPS_REDIRECT === "1",
+  canonicalOrigin: APP_CANONICAL_ORIGIN,
+  allowedOrigins: APP_ALLOWED_ORIGINS,
+  sessionIdleMs: idleSessionMs,
+  requireAuth,
+  requirePinChanged,
+  loginLimiter,
+  passkeyLoginLimiter,
+  passkeyManagementLimiter,
+  activeSessionsGauge,
+  safeUser,
+  findChamaName,
+  loginLocked,
+  recordLoginFailure,
+  clearLoginFailures,
+  normalizePhone,
+  saveSession,
+  makeId: newId,
+  now,
+}));
 app.post("/api/contact", sharedRateLimit("contact", {
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -1334,10 +1430,52 @@ app.post("/api/profile/photo/:size", requireAuth, requirePinChanged, express.raw
   }
   return res.status(201).json({ message: "Profile photo saved.", size, path: `/api/profile/photo/${size}` });
 });
+app.get("/api/push/config", (_req, res) => {
+  res.set("Cache-Control", "no-store").json({ enabled: webPushService.enabled, publicKey: webPushService.publicKey });
+});
+app.get("/api/push/subscription", requireAuth, requirePinChanged, async (req, res, next) => {
+  try {
+    const subscriptions = await pushSubscriptionStore.get(req.user.chamaId, req.user.id);
+    return res.set("Cache-Control", "no-store").json({ subscribed: subscriptions.length > 0 });
+  } catch (error) { return next(error); }
+});
+app.post("/api/push/subscription", requireAuth, requirePinChanged, pushSubscriptionLimiter, async (req, res, next) => {
+  if (!webPushService.enabled) return res.status(503).json({ message: "Browser push is not configured for this site yet." });
+  let subscription;
+  try { subscription = normalizeSubscription(req.body); }
+  catch { return res.status(400).json({ message: "The browser push subscription is invalid or unsupported." }); }
+  try {
+    const result = await pushSubscriptionStore.upsert(req.user.chamaId, req.user.id, subscription);
+    return res.status(201).json({ subscribed: true, deviceCount: result.count });
+  } catch (error) { return next(error); }
+});
+app.delete("/api/push/subscription", requireAuth, requirePinChanged, pushSubscriptionLimiter, async (req, res, next) => {
+  let endpoint;
+  try { endpoint = normalizeEndpoint(req.body?.endpoint); }
+  catch { return res.status(400).json({ message: "The browser push endpoint is invalid or unsupported." }); }
+  try {
+    await pushSubscriptionStore.remove(req.user.chamaId, req.user.id, endpoint);
+    return res.json({ subscribed: false });
+  } catch (error) { return next(error); }
+});
 app.get("/manifest.webmanifest", (req, res) => {
-  res.type("application/manifest+json").json({
-    name: "Jirani Chama", short_name: "Jirani Chama", start_url: "/", display: "standalone",
-    icons: [{ src: "/brand-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
+  res.set("Cache-Control", "no-store").type("application/manifest+json").json({
+    id: "/",
+    name: "Jirani Chama",
+    short_name: "Jirani",
+    description: "Keep Chama contributions, loans, meetings and group decisions together.",
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    display_override: ["standalone", "minimal-ui"],
+    background_color: "#f5f7f4",
+    theme_color: "#15344A",
+    prefer_related_applications: false,
+    related_applications: [{ platform: "webapp", url: "/manifest.webmanifest", id: "/" }],
+    icons: [
+      { src: "/assets/app-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/assets/app-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+    ],
   });
 });
 app.use(express.static(FRONTEND_BUILD, {
@@ -1437,8 +1575,11 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   try { await persist(updated); } catch (error) { return next(error); }
   req.session.regenerate(error => {
     if (error) return next(error);
+    const authenticatedAt = Date.now();
     req.session.userId = user.id;
-    req.session.lastActivityAt = Date.now();
+    req.session.lastActivityAt = authenticatedAt;
+    req.session.authMethod = "pin";
+    req.session.pinAuthenticatedAt = authenticatedAt;
     req.session.save(saveError => saveError ? next(saveError) : res.status(201).json({ message: "Your chairperson account is ready.", user: safeUser(user) }));
   });
 });
@@ -1455,7 +1596,19 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
     return res.status(200).json({ message: "Pick a chama to enter.", chooseChamaId: userChamaAccounts.map(account => ({ chamaId: account.chamaId, name: findChamaName(account.chamaId) })) });
   }
   await markLegacyPinForChange(user, pin);
-  req.session.regenerate(error => { if (error) return next(error); req.session.userId = user.id; req.session.lastActivityAt = Date.now(); req.session.save(saveError => { if (saveError) return next(saveError); activeSessionsGauge.inc(); return res.json({ message: "Signed in successfully.", user: safeUser(user) }); }); });
+  req.session.regenerate(error => {
+    if (error) return next(error);
+    const authenticatedAt = Date.now();
+    req.session.userId = user.id;
+    req.session.lastActivityAt = authenticatedAt;
+    req.session.authMethod = "pin";
+    req.session.pinAuthenticatedAt = authenticatedAt;
+    req.session.save(saveError => {
+      if (saveError) return next(saveError);
+      activeSessionsGauge.inc();
+      return res.json({ message: "Signed in successfully.", user: safeUser(user) });
+    });
+  });
 });
 const PIN_RESET_TTL_MS = process.env.NODE_ENV === "test" && Number.isSafeInteger(Number(process.env.PIN_RESET_TTL_MS)) && Number(process.env.PIN_RESET_TTL_MS) > 0
   ? Number(process.env.PIN_RESET_TTL_MS)
@@ -1726,6 +1879,7 @@ app.get("/api/messages", requireAuth, requirePinChanged, (req, res) => {
   const authors = new Map(scopeToChama(state.users, req.user.chamaId).map(user => [user.id, user]));
   const data = scopeToChama(state.messages, req.user.chamaId)
     .filter(item => !item.recipientId || item.recipientId === req.user.id)
+    .filter(item => !item.category)
     .slice(-MESSAGES_SHOWN)
     .map(item => ({ ...item, authorName: item.authorId && authors.has(item.authorId) ? chatDisplayName(authors.get(item.authorId)) : item.authorName }));
   return res.json({ data });
@@ -1736,6 +1890,12 @@ app.post("/api/messages", requireAuth, requirePinChanged, idempotent((req, res, 
   const updated = structuredClone(state);
   const message = { id: newId(), at: now(), authorId: req.user.id, authorName: chatDisplayName(req.user), authorRole: req.user.role, text, chamaId: req.user.chamaId };
   updated.messages.push(message);
+  for (const recipient of scopeToChama(updated.users, req.user.chamaId).filter(user => user.status === "active" && user.id !== req.user.id)) {
+    addNotification(updated, {
+      recipientId: recipient.id, chamaId: req.user.chamaId, category: "message", title: "New group message",
+      text: `New message from ${message.authorName}. Open Group chat to read it.`, notificationKey: `message:${message.id}`, at: message.at,
+    });
+  }
   updated.auditLog.push(auditEntry("message.posted", message.id, req.user, { length: text.length }));
   return commit(req, res, next, updated, 201, { message: "Message sent.", data: message }, undefined, () => publishMessageUpdate(message, req.user.chamaId));
 }));
@@ -2086,7 +2246,17 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
 app.post("/api/pin/change", requireAuth, async (req, res, next) => {
   const currentPin = clean(req.body?.currentPin); const newPin = clean(req.body?.newPin);
   if (!verifyPin(currentPin, req.user.pinHash) || !validNewPin(newPin)) return res.status(400).json({ message: "Enter your current PIN and a new 6-12 digit PIN." });
-  const updated = structuredClone(state); const user = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === req.user.id); user.pinHash = pinHash(newPin); user.mustChangePin = false; await persist(updated); return res.json({ message: "PIN changed successfully.", user: safeUser(user) });
+  const updated = structuredClone(state);
+  const user = scopeToChama(updated.users, req.user.chamaId).find(item => item.id === req.user.id);
+  user.pinHash = pinHash(newPin);
+  user.mustChangePin = false;
+  await persist(updated);
+  const authenticatedAt = Date.now();
+  req.session.authMethod = "pin";
+  req.session.pinAuthenticatedAt = authenticatedAt;
+  req.session.lastActivityAt = authenticatedAt;
+  await saveSession(req.session);
+  return res.json({ message: "PIN changed successfully.", user: safeUser(user) });
 });
 
 function hasUnsupportedCashEntryFields(body) {
@@ -2138,6 +2308,7 @@ app.post("/api/contributions", requireAuth, requirePinChanged, requireRole("trea
   if (newPenalty) {
     const charge = { id: newId(), memberId: member.id, memberName: member.name, amount: newPenalty, reason: "Late contribution", status: "outstanding", transactionId: null, paidTransactionId: null, date, at: transaction.at, chamaId: req.user.chamaId };
     updated.penalties.push(charge);
+    addNotification(updated, { recipientId: member.id, chamaId: req.user.chamaId, category: "fine", title: "Fine recorded", text: `A KES ${newPenalty} late-contribution fine was recorded on ${date}.`, notificationKey: `fine:${charge.id}`, at: charge.at });
     updated.auditLog.push(auditEntry("penalty.charged", charge.id, req.user, { memberId: member.id, memberName: member.name, amount: newPenalty, transactionId: transaction.id }));
   }
   // Outstanding penalties are settled from this payment before the welfare fee and share capital.
@@ -2188,6 +2359,10 @@ app.post("/api/settings/meeting-date", requireAuth, requirePinChanged, requireRo
   if (!/^\d{4}-\d{2}$/.test(month) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date.slice(0, 7) !== month || Number.isNaN(Date.parse(date))) return res.status(400).json({ message: "Enter a month (YYYY-MM) and a meeting date inside that month." });
   const updated = structuredClone(state);
   updated.settings.meetingDates[month] = date;
+  const meetingDatesByChama = updated.settings.meetingDatesByChama && typeof updated.settings.meetingDatesByChama === "object" && !Array.isArray(updated.settings.meetingDatesByChama) ? updated.settings.meetingDatesByChama : {};
+  const existingChamaDates = meetingDatesByChama[req.user.chamaId] && typeof meetingDatesByChama[req.user.chamaId] === "object" && !Array.isArray(meetingDatesByChama[req.user.chamaId]) ? meetingDatesByChama[req.user.chamaId] : {};
+  updated.settings.meetingDatesByChama = { ...meetingDatesByChama, [req.user.chamaId]: { ...existingChamaDates, [month]: date } };
+  if (date >= todayInNairobi()) notifyMembers(updated, req.user.chamaId, { category: "meeting", title: "Chama meeting scheduled", text: `Your Chama meeting is scheduled for ${date}.`, notificationKey: `meeting-scheduled:${req.user.chamaId}:${month}:${date}`, at: now() });
   updated.auditLog.push(auditEntry("meeting-date.set", month, req.user, { month, date }));
   return commit(req, res, next, updated, 200, { message: "Meeting date saved.", data: { month, date } });
 }));
@@ -2246,6 +2421,7 @@ app.post("/api/penalties/assess", requireAuth, requirePinChanged, requireRole("c
     if (penaltyAmount === 0) continue;
     const charge = { id: newId(), memberId: member.id, memberName: member.name, amount: penaltyAmount, reason: "Missed monthly contribution", month, status: "outstanding", transactionId: null, paidTransactionId: null, date: todayInNairobi(), at: now(), chamaId: req.user.chamaId };
     updated.penalties.push(charge);
+    addNotification(updated, { recipientId: member.id, chamaId: req.user.chamaId, category: "fine", title: "Fine recorded", text: `A KES ${penaltyAmount} fine was recorded for the missed ${month} monthly contribution.`, notificationKey: `fine:${charge.id}`, at: charge.at });
     updated.auditLog.push(auditEntry("penalty.assessed", charge.id, req.user, { memberId: member.id, memberName: member.name, amount: charge.amount, month, deadline, paidByDeadline }));
     assessed.push({ memberId: member.id, memberName: member.name, amount: charge.amount });
   }
@@ -2364,6 +2540,14 @@ app.post("/api/loans", requireAuth, requirePinChanged, requireActiveSubscription
   if (approved) applyLoanSchedule(loan, todayInNairobi());
   else loan.resolvedAt = decisionAt;
   updated.loans.push(loan);
+  addNotification(updated, {
+    recipientId: req.user.id, chamaId: req.user.chamaId, category: "loan_decision",
+    title: approved ? "Loan approved" : "Loan not approved",
+    text: approved
+      ? `Your KES ${amount} loan request was approved under the configured Chama rules. The app records the decision only; it does not transfer funds.`
+      : `Your KES ${amount} loan request was not approved automatically. ${decisionReason}`,
+    notificationKey: `loan-decision:${loan.id}:${loan.status}`, at: decisionAt,
+  });
   updated.auditLog.push(auditEntry("loan.requested", loan.id, req.user, { chamaId: req.user.chamaId, amount, months, interestModel, monthlyRatePercent, guarantors: loanGuarantors.map(({ memberId, pledged }) => ({ memberId, pledged })), policyVersion: policy.version }));
   updated.auditLog.push(auditEntry("loan.decided", loan.id, req.user, {
     chamaId: req.user.chamaId, decisionSource: "automated", decision: automatedDecision.decision, reason: decisionReason,
@@ -2412,6 +2596,7 @@ app.post("/api/loans/:id/reviews", requireAuth, requirePinChanged, requireRole("
   const updated = structuredClone(state);
   const loan = scopeToChama(updated.loans, req.user.chamaId).find(item => item.id === req.params.id && loanHasAutomaticDecision(item));
   if (!loan) return res.status(404).json({ message: "Automated loan decision not found." });
+  const previousStatus = loan.status;
   if (loan.memberId === req.user.id || (loan.guarantors || []).some(item => item.memberId === req.user.id)) return res.status(403).json({ message: "A borrower or guarantor cannot review their own loan decision." });
   const review = loanReviewRecords(loan, updated);
   if (!review.request || review.response) return res.status(409).json({ message: "There is no unanswered human-review request for this loan." });
@@ -2448,6 +2633,12 @@ app.post("/api/loans/:id/reviews", requireAuth, requirePinChanged, requireRole("
     reassessmentReasons, confirmsNoFundsDisbursed: decision === "withdraw",
   });
   updated.auditLog.push(completed);
+  if (loan.status !== previousStatus) addNotification(updated, {
+    recipientId: loan.memberId, chamaId: loan.chamaId, category: "loan_decision",
+    title: loan.status === "approved" ? "Loan approved after review" : "Loan approval withdrawn",
+    text: `Your reviewed KES ${loan.amount} loan request is now ${loan.status}. The app records the decision only; it does not transfer funds.`,
+    notificationKey: `loan-decision:${loan.id}:${loan.status}`, at: completed.at,
+  });
   const view = loanApprovalView(loan, req.user, updated);
   const message = decision === "reassess" && loan.status === "approved"
     ? "Human review completed; the checked and updated records now satisfy the original loan rules. The loan has been approved. No funds were transferred by the app."
@@ -2979,10 +3170,14 @@ async function start() {
   if (redisCache && !redisCache.isOpen) await redisCache.connect();
   await processDueLeadershipElections();
   scheduleLeadershipElectionCheck();
+  await processDuePushReminders();
+  scheduleNotificationReminderCheck();
   const server = app.listen(PORT, APP_BIND_HOST, () => logger.info(`Jirani Chama backend running at http://localhost:${PORT}`));
   server.once("close", () => {
     if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
     leadershipElectionTimer = null;
+    if (notificationSchedulerTimer) clearTimeout(notificationSchedulerTimer);
+    notificationSchedulerTimer = null;
     void closeRuntimeDependencies();
   });
   return server;

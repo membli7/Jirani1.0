@@ -134,10 +134,22 @@ describe("Jirani Chama server", () => {
     const manifest = await request("/manifest.webmanifest");
     assert.equal(manifest.status, 200);
     assert.match(manifest.headers.get("content-type"), /application\/manifest\+json/);
-    assert.deepEqual(await json(manifest), {
-      name: "Jirani Chama", short_name: "Jirani Chama", start_url: "/", display: "standalone",
-      icons: [{ src: "/brand-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
-    });
+    const manifestBody = await json(manifest);
+    assert.equal(manifestBody.name, "Jirani Chama");
+    assert.equal(manifestBody.short_name, "Jirani");
+    assert.equal(manifestBody.start_url, "/");
+    assert.equal(manifestBody.scope, "/");
+    assert.equal(manifestBody.display, "standalone");
+    assert.deepEqual(manifestBody.icons, [
+      { src: "/assets/app-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/assets/app-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+    ]);
+    const serviceWorker = await request("/service-worker.js");
+    assert.equal(serviceWorker.status, 200);
+    assert.match(serviceWorker.headers.get("content-type"), /javascript/);
+    const appIcon = await request("/assets/app-icon-192.png");
+    assert.equal(appIcon.status, 200);
+    assert.match(appIcon.headers.get("content-type"), /image\/png/);
 
     const registerPage = await request("/register.html");
     assert.equal(registerPage.status, 200);

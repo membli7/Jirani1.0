@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { submitContact } from "../contactActions.mjs";
+import PwaInstallButton from "../components/PwaInstallButton.jsx";
 
 const navItems = [
   ["#features", "Features", "landingNavFeatures"],
@@ -172,6 +173,7 @@ export default function LandingPage() {
               <a className="button-primary" id="landing-register" href="/register.html" data-i18n="registerNewChama">Register a New Chama</a>
               <a className="button-primary button-secondary" id="landing-login" href="/member-login.html" data-i18n="memberLogin">Member Login</a>
               <a className="button-primary button-outline" id="landing-invite" href="/member-login.html?activation=1">Enter Invite Code</a>
+              <PwaInstallButton />
             </div>
           </div>
           <div className="landing-sections-container">

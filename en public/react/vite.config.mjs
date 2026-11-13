@@ -12,6 +12,7 @@ export default {
     alias: [
       { find: /^react(?=\/|$)/, replacement: resolve(appNodeModules, "react") },
       { find: /^react-dom(?=\/|$)/, replacement: resolve(appNodeModules, "react-dom") },
+      { find: /^@passwordless-id\/webauthn$/, replacement: resolve(appNodeModules, "@passwordless-id/webauthn/dist/esm/index.js") },
     ],
   },
   server: {

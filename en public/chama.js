@@ -334,6 +334,7 @@ async function refresh() {
     guarantorMembers = (await api("/api/loans/guarantors")).data || [];
     $("#retry").hidden = true;
     render();
+    window.dispatchEvent(new CustomEvent("chama:dashboard-state", { detail: state }));
     connectEventStream();
   }
   catch (error) {
@@ -398,6 +399,7 @@ function connectEventStream() {
   };
   eventStream.addEventListener("members-updated", () => { refresh(); });
   eventStream.addEventListener("loans-updated", () => { refresh(); });
+  eventStream.addEventListener("notifications-updated", () => { refresh(); });
   eventStream.addEventListener("messages-updated", () => {
     window.dispatchEvent(new Event("chama:messages-updated"));
   });

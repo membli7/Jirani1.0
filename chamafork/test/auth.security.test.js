@@ -2,11 +2,21 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
+const express = require("express");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { after, test } = require("node:test");
+const {
+  createPasskeyRouter,
+  PASSKEY_CHALLENGE_TTL_MS,
+  createPasskeyChallenge,
+  consumePasskeyChallenge,
+  derivePasskeyContext,
+  validCounterTransition,
+  nextStoredCounter,
+} = require("../security/passkey-routes");
 
 const servers = [];
 function hashedPin(pin) {
@@ -19,11 +29,11 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
   const phone = "+254711000001";
   const legacyPhone = "+254711000002";
   fs.writeFileSync(dataFile, JSON.stringify({ version: 2, users: empty ? [] : [
-    { id: "current", name: "Test Chair", phone, role: "chairperson", status: "active", pinHash: hashedPin("123456"), mustChangePin: false },
-    { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false },
+    { id: "current", name: "Test Chair", phone, role: "chairperson", status: "active", pinHash: hashedPin("123456"), mustChangePin: false, chamaId: "test-chama" },
+    { id: "legacy", name: "Legacy Member", phone: legacyPhone, role: "member", status: "active", pinHash: hashedPin("1234"), mustChangePin: false, chamaId: "test-chama" },
   ], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {} }));
   const port = 30000 + (process.pid % 20000) + servers.length;
-  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", FORCE_HTTPS_REDIRECT: production ? "1" : "0", FORCE_SECURE_COOKIE: production ? "1" : "0", FORCE_METRICS_AUTH: production ? "1" : "0", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", SETUP_BOOTSTRAP_SECRET: setupBootstrapSecret, METRICS_BEARER_TOKEN: "test-metrics-bearer-token-long-enough-123456", APP_ALLOWED_ORIGINS: production ? "https://chama.example.test" : "", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
+  const child = execFile(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env: { ...process.env, NODE_ENV: "test", APP_BIND_HOST: "localhost", FORCE_HTTPS_REDIRECT: production ? "1" : "0", FORCE_SECURE_COOKIE: production ? "1" : "0", FORCE_METRICS_AUTH: production ? "1" : "0", DATA_BACKEND: "json", TRUST_PROXY: production ? "1" : "0", PORT: String(port), SESSION_SECRET: "auth-test-secret", SETUP_BOOTSTRAP_SECRET: setupBootstrapSecret, METRICS_BEARER_TOKEN: "test-metrics-bearer-token-long-enough-123456", APP_ALLOWED_ORIGINS: production ? "https://chama.example.test" : "", CHAMA_DATA_FILE: dataFile, CHAMA_LOGIN_LOCKOUT_MS: String(lockoutMs), APP_CANONICAL_ORIGIN: production ? "https://chama.example.test" : "", AFRICASTALKING_USERNAME: "", AFRICASTALKING_API_KEY: "" } });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -32,7 +42,7 @@ async function startAuthServer({ lockoutMs = 900000, production = false, empty =
     const check = setInterval(() => { if (output.includes(`localhost:${port}`)) { clearTimeout(timer); clearInterval(check); resolve(); } }, 20);
     child.once("exit", code => { clearTimeout(timer); clearInterval(check); reject(new Error(`Server exited (${code}): ${output}`)); });
   });
-  const server = { baseUrl: `http://127.0.0.1:${port}`, phone, legacyPhone, dataFile, stop: async () => { if (child.exitCode === null) { child.kill(); await new Promise(resolve => child.once("exit", resolve)); } fs.rmSync(directory, { recursive: true, force: true }); } };
+  const server = { baseUrl: `http://localhost:${port}`, phone, legacyPhone, dataFile, stop: async () => { if (child.exitCode === null) { child.kill(); await new Promise(resolve => child.once("exit", resolve)); } fs.rmSync(directory, { recursive: true, force: true }); } };
   servers.push(server);
   return server;
 }
@@ -165,4 +175,335 @@ test("OTP requests enforce a destination phone cooldown even when delivery is un
   });
   assert.equal((await requestCode()).status, 503);
   assert.equal((await requestCode()).status, 429);
+});
+
+
+function toBase64Url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function clientDataBytes(type, challenge, origin) {
+  return Buffer.from(JSON.stringify({ type, challenge, origin, crossOrigin: false }), "utf8");
+}
+
+function cborText(value) {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length >= 24) throw new Error("Test CBOR text value is too long.");
+  return Buffer.concat([Buffer.from([0x60 + bytes.length]), bytes]);
+}
+
+function cborBytes(value) {
+  const bytes = Buffer.from(value);
+  if (bytes.length < 24) return Buffer.concat([Buffer.from([0x40 + bytes.length]), bytes]);
+  if (bytes.length <= 255) return Buffer.concat([Buffer.from([0x58, bytes.length]), bytes]);
+  throw new Error("Test CBOR byte string is too long.");
+}
+
+function makeRegistrationFixture(options, origin, { userVerified = true } = {}) {
+  const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const publicKey = keyPair.publicKey;
+  const spki = publicKey.export({ type: "spki", format: "der" }).toString("base64url");
+  const jwk = publicKey.export({ format: "jwk" });
+  const cosePublicKey = Buffer.concat([
+    Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21]),
+    cborBytes(Buffer.from(jwk.x, "base64url")),
+    Buffer.from([0x22]),
+    cborBytes(Buffer.from(jwk.y, "base64url")),
+  ]);
+  const credentialIdBytes = crypto.randomBytes(32);
+  const credentialIdLength = Buffer.alloc(2);
+  credentialIdLength.writeUInt16BE(credentialIdBytes.length, 0);
+  const rpIdHash = crypto.createHash("sha256").update(options.rpId, "utf8").digest();
+  const authenticatorData = Buffer.concat([
+    rpIdHash,
+    Buffer.from([userVerified ? 0x45 : 0x41]),
+    Buffer.alloc(4),
+    Buffer.alloc(16),
+    credentialIdLength,
+    credentialIdBytes,
+    cosePublicKey,
+  ]);
+  const attestationObject = Buffer.concat([
+    Buffer.from([0xa3]),
+    cborText("fmt"), cborText("none"),
+    cborText("attStmt"), Buffer.from([0xa0]),
+    cborText("authData"), cborBytes(authenticatorData),
+  ]);
+  const id = toBase64Url(credentialIdBytes);
+  return {
+    keyPair,
+    publicKey: spki,
+    body: {
+      type: "public-key",
+      id,
+      rawId: id,
+      user: options.user,
+      response: {
+        clientDataJSON: toBase64Url(clientDataBytes("webauthn.create", options.challenge, origin)),
+        authenticatorData: toBase64Url(authenticatorData),
+        attestationObject: toBase64Url(attestationObject),
+        publicKey: spki,
+        publicKeyAlgorithm: -7,
+        transports: ["internal"],
+      },
+    },
+  };
+}
+
+function makeAssertionFixture(credential, challenge, origin, counter = 1) {
+  const clientData = clientDataBytes("webauthn.get", challenge, origin);
+  const authenticatorData = Buffer.alloc(37);
+  crypto.createHash("sha256").update(new URL(origin).hostname, "utf8").digest().copy(authenticatorData, 0);
+  authenticatorData[32] = 0x05;
+  authenticatorData.writeUInt32BE(counter, 33);
+  const signedBytes = Buffer.concat([
+    authenticatorData,
+    crypto.createHash("sha256").update(clientData).digest(),
+  ]);
+  const signature = crypto.sign("sha256", signedBytes, credential.keyPair.privateKey);
+  const userHandle = toBase64Url(Buffer.from(credential.userHandle, "utf8"));
+  return {
+    type: "public-key",
+    id: credential.id,
+    rawId: credential.id,
+    authenticatorAttachment: "platform",
+    response: {
+      clientDataJSON: toBase64Url(clientData),
+      authenticatorData: toBase64Url(authenticatorData),
+      signature: toBase64Url(signature),
+      userHandle,
+    },
+  };
+}
+
+function passkeyOrigin(server) {
+  return server.baseUrl;
+}
+
+function passkeyHeaders(server, cookie) {
+  return {
+    "Content-Type": "application/json",
+    "X-Requested-With": "chama",
+    Origin: passkeyOrigin(server),
+    Host: new URL(passkeyOrigin(server)).host,
+    ...(cookie ? { Cookie: cookie } : {}),
+  };
+}
+
+function sessionCookie(response) {
+  const cookies = response.headers.getSetCookie?.() || [response.headers.get("set-cookie")];
+  const value = cookies.find(Boolean);
+  if (!value) throw new Error("Expected a session cookie from the disposable test server.");
+  return value.split(";")[0];
+}
+
+async function passkeyPost(server, route, cookie, body = {}) {
+  return fetch(`${server.baseUrl}/api/passkeys/${route}`, {
+    method: "POST",
+    headers: passkeyHeaders(server, cookie),
+    body: JSON.stringify(body),
+  });
+}
+
+async function enrollTestPasskey(server, { userVerified = true } = {}) {
+  const pinLogin = await login(server, server.phone, "123456");
+  assert.equal(pinLogin.status, 200);
+  const pinCookie = sessionCookie(pinLogin);
+  const optionsResponse = await passkeyPost(server, "registration/options", pinCookie);
+  assert.equal(optionsResponse.status, 200);
+  const options = await json(optionsResponse);
+  const fixture = makeRegistrationFixture(options, passkeyOrigin(server), { userVerified });
+  const verifyResponse = await passkeyPost(server, "registration/verify", pinCookie, fixture.body);
+  const savedState = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
+  const savedUser = savedState.users.find(user => user.id === "current");
+  return {
+    pinCookie,
+    options,
+    fixture,
+    verifyResponse,
+    savedState,
+    savedUser,
+    credential: {
+      id: fixture.body.id,
+      keyPair: fixture.keyPair,
+      publicKey: fixture.publicKey,
+      userHandle: savedUser.passkeyUserHandle,
+    },
+  };
+}
+
+async function startPasskeyStepUpServer() {
+  let currentSession = {};
+  let state = { users: [{ id: "current", name: "Test Chair", phone: "+254711000001", role: "chairperson", status: "active", mustChangePin: false, chamaId: "test-chama" }] };
+  const user = state.users[0];
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.session = { ...currentSession };
+    req.sessionID = "step-up-test-session";
+    next();
+  });
+  const passThrough = (_req, _res, next) => next();
+  app.use("/api/passkeys", createPasskeyRouter({
+    express,
+    getState: () => state,
+    persist: async updated => { state = updated; },
+    production: false,
+    strictOrigin: false,
+    allowedOrigins: new Set(),
+    sessionIdleMs: 30 * 60 * 1000,
+    requireAuth: (req, _res, next) => { req.user = user; next(); },
+    requirePinChanged: passThrough,
+    loginLimiter: passThrough,
+    passkeyLoginLimiter: passThrough,
+    passkeyManagementLimiter: passThrough,
+    activeSessionsGauge: { inc() {} },
+    safeUser: value => ({ id: value.id }),
+    findChamaName: () => "Test Chama",
+    loginLocked: async () => false,
+    recordLoginFailure: async () => {},
+    clearLoginFailures: async () => {},
+    normalizePhone: value => value,
+    saveSession: async () => {},
+  }));
+  const server = await new Promise(resolve => {
+    const listener = app.listen(0, "localhost", () => resolve(listener));
+  });
+  const address = server.address();
+  return {
+    baseUrl: `http://localhost:${address.port}`,
+    setSession(value) { currentSession = value; },
+    async close() { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); },
+  };
+}
+
+test("passkey RP context accepts HTTPS or standards-valid HTTP localhost only", () => {
+  assert.deepEqual(derivePasskeyContext({ originHeader: "http://localhost:3000", hostHeader: "localhost:3000" }), { origin: "http://localhost:3000", rpId: "localhost" });
+  assert.equal(derivePasskeyContext({ originHeader: "http://127.0.0.1:3000", hostHeader: "127.0.0.1:3000" }), null);
+  assert.deepEqual(derivePasskeyContext({ originHeader: "https://chama.example.test", hostHeader: "chama.example.test" }), { origin: "https://chama.example.test", rpId: "chama.example.test" });
+  assert.equal(derivePasskeyContext({ originHeader: "https://127.0.0.1", hostHeader: "127.0.0.1" }), null);
+  assert.equal(derivePasskeyContext({ originHeader: "https://[::1]", hostHeader: "[::1]" }), null);
+  assert.equal(derivePasskeyContext({ originHeader: "http://chama.example.test", hostHeader: "chama.example.test" }), null);
+  assert.equal(derivePasskeyContext({ originHeader: "https://attacker.example", hostHeader: "chama.example.test" }), null);
+  assert.equal(derivePasskeyContext({ originHeader: "https://chama.example.test/path", hostHeader: "chama.example.test" }), null);
+  assert.deepEqual(derivePasskeyContext({ originHeader: "https://chama.example.test", hostHeader: "chama.example.test", strictOrigin: true, canonicalOrigin: "https://chama.example.test" }), { origin: "https://chama.example.test", rpId: "chama.example.test" });
+  assert.equal(derivePasskeyContext({ originHeader: "http://localhost:3000", hostHeader: "localhost:3000", strictOrigin: true, canonicalOrigin: "https://chama.example.test" }), null);
+});
+
+test("passkey challenges are session-bound, expire, and can be consumed only once", async () => {
+  const challenge = crypto.randomBytes(24).toString("base64url");
+  const record = createPasskeyChallenge({ ceremony: "login", challenge, sessionId: "session-one", origin: "https://chama.example.test", rpId: "chama.example.test" });
+  let saveCount = 0;
+  const saveSession = async session => {
+    saveCount += 1;
+    assert.equal(Object.hasOwn(session, "passkeyChallenge"), false);
+  };
+  const consumed = await consumePasskeyChallenge({ session: { passkeyChallenge: record }, sessionId: "session-one", ceremony: "login", saveSession });
+  assert.equal(consumed.challenge, challenge);
+  assert.equal(await consumePasskeyChallenge({ session: { passkeyChallenge: record }, sessionId: "session-one", ceremony: "login", saveSession }), null);
+  assert.equal(await consumePasskeyChallenge({ session: { passkeyChallenge: record }, sessionId: "different-session", ceremony: "login", saveSession }), null);
+  const expired = createPasskeyChallenge({ ceremony: "registration", challenge: crypto.randomBytes(24).toString("base64url"), sessionId: "session-one", origin: "https://chama.example.test", rpId: "chama.example.test", issuedAt: Date.now() - PASSKEY_CHALLENGE_TTL_MS - 1 });
+  assert.equal(await consumePasskeyChallenge({ session: { passkeyChallenge: expired }, sessionId: "session-one", ceremony: "registration", saveSession }), null);
+  assert.equal(saveCount, 4);
+});
+
+test("passkey signature counters reject repeats and regressions but allow counterless authenticators", () => {
+  assert.equal(validCounterTransition(0, 0), true);
+  assert.equal(validCounterTransition(0, 1), true);
+  assert.equal(validCounterTransition(4, 5), true);
+  assert.equal(validCounterTransition(4, 4), false);
+  assert.equal(validCounterTransition(4, 3), false);
+  assert.equal(validCounterTransition(4, 0), true);
+  assert.equal(nextStoredCounter(4, 0), 4);
+});
+
+test("passkey enrollment needs a fresh PIN-authenticated session, not merely any logged-in session", async () => {
+  const server = await startPasskeyStepUpServer();
+  const request = () => fetch(`${server.baseUrl}/api/passkeys/registration/options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "chama", Origin: passkeyOrigin(server), Host: new URL(passkeyOrigin(server)).host },
+    body: "{}",
+  });
+  try {
+    server.setSession({ authMethod: "passkey", pinAuthenticatedAt: Date.now() });
+    assert.equal((await request()).status, 403);
+    server.setSession({ authMethod: "pin", pinAuthenticatedAt: Date.now() - 11 * 60 * 1000 });
+    assert.equal((await request()).status, 403);
+    server.setSession({ authMethod: "pin", pinAuthenticatedAt: Date.now() });
+    const allowed = await request();
+    assert.equal(allowed.status, 200);
+    assert.equal(typeof (await allowed.json()).challenge, "string");
+  } finally {
+    await server.close();
+  }
+});
+
+test("registration requires verified user presence and consumes failed challenges", async () => {
+  const server = await startAuthServer();
+  const pinLogin = await login(server, server.phone, "123456");
+  const pinCookie = sessionCookie(pinLogin);
+  const optionsResponse = await passkeyPost(server, "registration/options", pinCookie);
+  assert.equal(optionsResponse.status, 200);
+  const options = await json(optionsResponse);
+  const unverified = makeRegistrationFixture(options, passkeyOrigin(server), { userVerified: false });
+  assert.equal((await passkeyPost(server, "registration/verify", pinCookie, unverified.body)).status, 400);
+  const replay = makeRegistrationFixture(options, passkeyOrigin(server), { userVerified: true });
+  assert.equal((await passkeyPost(server, "registration/verify", pinCookie, replay.body)).status, 400);
+  const saved = JSON.parse(fs.readFileSync(server.dataFile, "utf8"));
+  assert.equal(saved.users.find(user => user.id === "current").passkeys, undefined);
+});
+
+test("a PIN-enrolled passkey can sign in once; only public credential material is persisted", async () => {
+  const server = await startAuthServer();
+  const enrolled = await enrollTestPasskey(server);
+  assert.equal(enrolled.verifyResponse.status, 201);
+  const stored = enrolled.savedUser.passkeys[0];
+  assert.equal(stored.id, enrolled.credential.id);
+  assert.equal(stored.publicKey, enrolled.credential.publicKey);
+  assert.equal(stored.privateKey, undefined);
+  assert.equal(stored.counter, 0);
+  assert.equal(enrolled.savedUser.passkeyUserHandle, enrolled.options.user.id);
+
+  const optionsResponse = await passkeyPost(server, "login/options");
+  assert.equal(optionsResponse.status, 200);
+  const optionsCookie = sessionCookie(optionsResponse);
+  const options = await json(optionsResponse);
+  const assertion = makeAssertionFixture(enrolled.credential, options.challenge, passkeyOrigin(server));
+  const loginResponse = await passkeyPost(server, "login/verify", optionsCookie, assertion);
+  assert.equal(loginResponse.status, 200);
+  assert.equal((await json(loginResponse)).message, "Signed in successfully.");
+  const authenticatedCookie = sessionCookie(loginResponse);
+  assert.notEqual(authenticatedCookie, optionsCookie, "successful passkey login must regenerate the session");
+  const passkeyList = await fetch(`${server.baseUrl}/api/passkeys`, { headers: { Cookie: authenticatedCookie } });
+  assert.equal(passkeyList.status, 200);
+  assert.equal((await json(passkeyList)).data.length, 1);
+
+  const replay = await passkeyPost(server, "login/verify", optionsCookie, assertion);
+  assert.equal(replay.status, 401);
+  assert.equal((await json(replay)).message, "Could not sign in with that passkey. Try again or use your phone number and PIN.");
+});
+
+test("passkey failures do not reveal whether a credential/account exists", async () => {
+  const server = await startAuthServer();
+  const enrolled = await enrollTestPasskey(server);
+  assert.equal(enrolled.verifyResponse.status, 201);
+
+  const knownOptionsResponse = await passkeyPost(server, "login/options");
+  const knownCookie = sessionCookie(knownOptionsResponse);
+  const knownOptions = await json(knownOptionsResponse);
+  const knownBad = makeAssertionFixture(enrolled.credential, knownOptions.challenge, passkeyOrigin(server));
+  knownBad.response.signature = toBase64Url(Buffer.alloc(64, 0x42));
+  const knownFailure = await passkeyPost(server, "login/verify", knownCookie, knownBad);
+
+  const unknownOptionsResponse = await passkeyPost(server, "login/options");
+  const unknownCookie = sessionCookie(unknownOptionsResponse);
+  const unknownOptions = await json(unknownOptionsResponse);
+  const unknown = makeAssertionFixture(enrolled.credential, unknownOptions.challenge, passkeyOrigin(server));
+  unknown.id = toBase64Url(crypto.randomBytes(32));
+  unknown.rawId = unknown.id;
+  const unknownFailure = await passkeyPost(server, "login/verify", unknownCookie, unknown);
+
+  assert.equal(knownFailure.status, 401);
+  assert.equal(unknownFailure.status, 401);
+  assert.equal((await knownFailure.json()).message, (await unknownFailure.json()).message);
 });

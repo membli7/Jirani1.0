@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { profileModeFromSearch } from "../profileMode.mjs";
+import PushNotificationSettings from "../components/PushNotificationSettings.jsx";
+import PwaInstallButton from "../components/PwaInstallButton.jsx";
+import { enrollPasskey, listPasskeys, removePasskey } from "../authActions.mjs";
 
 const EMPTY_PROFILE = { firstName: "", lastName: "", nickname: "", phone: "", email: "" };
 const PROFILE_FIELDS = Object.keys(EMPTY_PROFILE);
@@ -49,6 +52,85 @@ function idempotencyKey() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   const bytes = window.crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+}
+
+function PasskeySettings() {
+  const [passkeys, setPasskeys] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    listPasskeys(window.fetch.bind(window))
+      .then(items => { if (mounted) setPasskeys(items); })
+      .catch(problem => { if (mounted) { setNotice(problem.message); setError(true); } })
+      .finally(() => { if (mounted) setLoaded(true); });
+    return () => { mounted = false; };
+  }, []);
+
+  function displayDate(value) {
+    const date = value ? new Date(value) : null;
+    return date && Number.isFinite(date.getTime()) ? date.toLocaleString() : "Not yet used";
+  }
+
+  async function handleAdd() {
+    setBusy("add");
+    setNotice("");
+    setError(false);
+    try {
+      const result = await enrollPasskey(window.fetch.bind(window));
+      setNotice(result.message || "Passkey added.");
+      setPasskeys(await listPasskeys(window.fetch.bind(window)));
+    } catch (problem) {
+      setNotice(problem.message || "Could not add a passkey.");
+      setError(true);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleRemove(credentialRef) {
+    setBusy(credentialRef);
+    setNotice("");
+    setError(false);
+    try {
+      const result = await removePasskey(credentialRef, window.fetch.bind(window));
+      setNotice(result.message || "Passkey removed.");
+      setPasskeys(await listPasskeys(window.fetch.bind(window)));
+    } catch (problem) {
+      setNotice(problem.message || "Could not remove that passkey.");
+      setError(true);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <section className="profile-section passkey-settings" aria-labelledby="passkey-settings-title">
+      <h2 id="passkey-settings-title">Passkeys</h2>
+      <p>Use a saved passkey to sign in without entering your phone number and PIN.</p>
+      <p className="field-help">Your browser/device chooses its configured authenticator, such as fingerprint, face unlock, device PIN, or another method; this site cannot force fingerprint. Adding or removing a passkey requires signing in with your current PIN within the last 10 minutes.</p>
+      <button className="button-primary" type="button" onClick={handleAdd} disabled={busy !== ""}>
+        {busy === "add" ? "Waiting for your device…" : "Add a passkey"}
+      </button>
+      {loaded && passkeys.length > 0 && (
+        <ul className="passkey-list">
+          {passkeys.map(item => (
+            <li key={item.id}>
+              <span><strong>{item.label}</strong><br />Added {displayDate(item.createdAt)} · Last used {displayDate(item.lastUsedAt)}</span>
+              <button className="panel-link" type="button" onClick={() => handleRemove(item.id)} disabled={busy !== ""} aria-label={`Remove ${item.label}`}>
+                {busy === item.id ? "Removing…" : "Remove"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {loaded && passkeys.length === 0 && !error && <p className="field-help">No passkeys saved for this account yet.</p>}
+      <p className={`form-notice${error ? " error" : ""}`} role="status" aria-live="polite">{notice}</p>
+    </section>
+  );
 }
 
 export default function ProfilePage() {
@@ -240,6 +322,9 @@ export default function ProfilePage() {
           )}
           <p id="profile-status" className={`form-notice${photoError ? " error" : ""}`} role="status" aria-live="polite">{photoStatus}</p>
         </section>
+        {!viewOnly && <PasskeySettings />}
+        <PushNotificationSettings />
+        <PwaInstallButton settings />
       </main>
     </div>
   );

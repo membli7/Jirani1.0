@@ -177,6 +177,7 @@ test("a meeting date is set per month and only the Chairperson or Secretary can 
   const saved = await post("/api/settings/meeting-date", secretaryCookie, { month, date: meetingDate });
   assert.equal(saved.status, 200);
   assert.equal(persistedState().settings.meetingDates[month], meetingDate);
+  assert.equal(persistedState().settings.meetingDatesByChama["test-chama"][month], meetingDate);
 });
 
 test("an outstanding penalty is paid first, then the welfare fee, then share capital", async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { activateInvitation, requestPinReset, resetPin, signIn } from "../authActions.mjs";
+import { activateInvitation, requestPinReset, resetPin, signIn, signInWithPasskey } from "../authActions.mjs";
 
 function translate(value) {
   return window.jiraniI18n?.translateText(value) || value;
@@ -53,6 +53,19 @@ export default function MemberLoginPage() {
         setLoginNotice(translate("Select your chama, then sign in again."));
         return;
       }
+      window.location.assign("/");
+    } catch (error) {
+      setLoginNotice(messageFor(error));
+      } finally {
+      setBusy("");
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    setBusy("passkey");
+    setLoginNotice("");
+    try {
+      await signInWithPasskey(window.fetch.bind(window));
       window.location.assign("/");
     } catch (error) {
       setLoginNotice(messageFor(error));
@@ -175,7 +188,15 @@ export default function MemberLoginPage() {
                 </label>
               )}
               <button className="panel-link forgot-pin-link" id="show-forgot-pin" type="button" onClick={showForgotPin}>Forgot PIN?</button>
-              <button className="button-primary" type="submit" disabled={busy === "login"}>{busy === "login" ? "Signing in…" : "Sign in"}</button>
+              <button className="button-primary" type="submit" disabled={busy === "login" || busy === "passkey"}>{busy === "login" ? "Signing in…" : "Sign in"}</button>
+              {!switchChama && (
+                <>
+                  <button className="button-primary" id="passkey-login" type="button" onClick={handlePasskeyLogin} disabled={busy !== ""}>
+                    {busy === "passkey" ? "Waiting for passkey…" : "Sign in with a passkey"}
+                  </button>
+                  <p className="field-help">Your device may ask for a fingerprint, face unlock, device PIN, or another configured authenticator. You can always sign in with your PIN.</p>
+                </>
+              )}
               <button className="panel-link" id="show-activate" type="button" onClick={() => setView("activate")}>Activate invitation</button>
               <p className="login-footer">Your chama’s records are available to you after sign-in.</p>
             </form>
