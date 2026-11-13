@@ -35,6 +35,7 @@
                 </section>
                 <form id="register-chama-form" class="login-card">
                     <h2>Chama and chairperson details</h2>
+                    <p class="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
                     <p>All fields are required. Your PIN must have 6 to 12 digits.</p>
                     <p id="register-notice" class="login-notice" role="alert" aria-live="assertive" hidden></p>
                     <label class="field" for="register-bootstrap-secret" data-i18n="setupBootstrapLabel">Operator bootstrap code (if requested)
@@ -74,7 +75,11 @@
                     </label>
                     <label class="terms-acceptance" for="register-terms-accepted">
                         <input id="register-terms-accepted" name="termsAccepted" type="checkbox" value="true" required>
-                        <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+                        <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a></span>
+                    </label>
+                    <label class="terms-acceptance" for="register-privacy-acknowledged">
+                        <input id="register-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required>
+                        <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span> <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
                     </label>
                     <button class="button-primary" type="submit">Register chama</button>
                     <p class="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>

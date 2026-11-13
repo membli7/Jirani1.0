@@ -93,6 +93,7 @@ export default function RegisterPage() {
             </section>
             <form id="register-chama-form" className="login-card" ref={formRef} onSubmit={handleSubmit} hidden={showExistingInstance}>
               <h2>Chama and chairperson details</h2>
+              <p className="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
               <p>All fields are required. Your PIN must have 6 to 12 digits.</p>
               <p id="register-notice" className="login-notice" role="alert" aria-live="assertive" hidden={!notice}>{notice}</p>
               <label className="field" htmlFor="register-bootstrap-secret" data-i18n="setupBootstrapLabel">Operator bootstrap code (if requested)
@@ -132,7 +133,11 @@ export default function RegisterPage() {
               </label>
               <label className="terms-acceptance" htmlFor="register-terms-accepted">
                 <input id="register-terms-accepted" name="termsAccepted" type="checkbox" value="true" required />
-                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a></span>
+              </label>
+              <label className="terms-acceptance" htmlFor="register-privacy-acknowledged">
+                <input id="register-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required />
+                <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span>{" "}<a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br /><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
               </label>
               <button className="button-primary" type="submit" disabled={submitting}>{submitting ? "Registering…" : "Register chama"}</button>
               <p className="auth-page-links"><a href="/">Back to home</a> · <a href="/member-login.html" data-i18n="memberLogin">Member Login</a></p>

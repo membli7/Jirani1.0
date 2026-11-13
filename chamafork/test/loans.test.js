@@ -31,7 +31,7 @@ const people = [
   { id: "g2", name: "Guarantor Two", phone: "+254711000007", role: "member", pin: "789012", shareCapital: 1000 },
   { id: "g3", name: "Guarantor Three", phone: "+254711000008", role: "member", pin: "890123", shareCapital: 300 },
   { id: "g4", name: "Guarantor Four", phone: "+254711000009", role: "member", pin: "901234", shareCapital: 300 },
-  { id: "rate-b", name: "Other Chama Member", phone: "+254711000010", role: "member", pin: "012345", shareCapital: 0, chamaId: "other-chama" },
+  { id: "rate-b", name: "Other Chama Chair", phone: "+254711000010", role: "chairperson", pin: "012345", shareCapital: 0, chamaId: "other-chama" },
 ];
 
 // A fixed cash balance, so approvals are never blocked by group funds.
@@ -282,7 +282,92 @@ test("pledged share capital stays locked for other loans until repaid", async ()
   assert.equal((await response.json()).data.status, "rejected");
 });
 
-test("human review can reassess an automated rejection against its original rules and updated records", async () => {
+test("human review records an independent upheld result and makes the written history visible without changing a loan", async () => {
+  const loanId = primaryLoanId;
+  const before = structuredClone(loanById(loanId));
+  const invalidRequest = await post(`/api/loans/${loanId}/review-requests`, cookies.borrower, { reason: { text: "Please review my records." } });
+  assert.equal(invalidRequest.status, 400, "review request explanations must be strings");
+  const tooLongRequest = await post(`/api/loans/${loanId}/review-requests`, cookies.borrower, { reason: "x".repeat(1001) });
+  assert.equal(tooLongRequest.status, 400, "review request explanations are bounded");
+
+  const reviewRequest = await post(`/api/loans/${loanId}/review-requests`, cookies.borrower, { reason: "Please consider my explanation and the contribution receipt details." });
+  assert.equal(reviewRequest.status, 201);
+  const pending = (await reviewRequest.json()).data;
+  assert.equal(pending.humanReview.status, "requested");
+  assert.deepEqual(pending.humanReview.history.map(item => item.stage), ["requested"]);
+
+  const reviewerInput = {
+    outcome: "upheld",
+    memberExplanationConsidered: true,
+    noConflictOfInterest: true,
+    informationConsidered: "Member explanation, original automated-decision record, and the Chama contribution ledger.",
+    reason: "The member's stated records support the original decision and no discrepancy was found in the entries reviewed.",
+  };
+  const memberAttempt = await post(`/api/loans/${loanId}/reviews`, cookies.richer, reviewerInput);
+  assert.equal(memberAttempt.status, 403, "a non-officer cannot submit a review result");
+  const otherChamaAttempt = await post(`/api/loans/${loanId}/reviews`, cookies["rate-b"], reviewerInput);
+  assert.equal(otherChamaAttempt.status, 404, "a reviewer in another Chama cannot access this loan");
+
+  const review = await post(`/api/loans/${loanId}/reviews`, cookies.chair, reviewerInput);
+  assert.equal(review.status, 200);
+  const result = (await review.json()).data;
+  assert.equal(result.status, "approved");
+  assert.equal(result.humanReview.status, "completed");
+  assert.equal(result.humanReview.response.outcome, "upheld");
+  assert.equal(result.humanReview.response.noConflictOfInterest, true);
+  assert.equal(result.humanReview.response.reviewerName, "Test Chair");
+  assert.equal(result.humanReview.response.informationConsidered, reviewerInput.informationConsidered);
+  assert.equal(result.humanReview.response.reason, reviewerInput.reason);
+  assert.deepEqual(loanById(loanId), before, "review must not mutate status, schedules, balances, or guarantor holds");
+
+  const completed = persistedState().auditLog.find(item => item.type === "loan.review.completed" && item.entityId === loanId);
+  assert.equal(completed.by.id, "chair");
+  assert.equal(completed.by.role, "chairperson");
+  assert.equal(completed.outcome, "upheld");
+  assert.equal(completed.noConflictOfInterest, true);
+  assert.equal(completed.informationConsidered, reviewerInput.informationConsidered);
+  assert.equal(completed.reasoning, reviewerInput.reason);
+  assert.equal(completed.originalDecision, "approve");
+  assert.equal(completed.resultingStatus, before.status);
+
+  const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, { headers: { Cookie: cookies.borrower } });
+  assert.equal(dashboardResponse.status, 200);
+  const borrowerDashboard = await dashboardResponse.json();
+  const borrowerLoan = borrowerDashboard.loans.find(item => item.id === loanId);
+  assert.equal(borrowerLoan.humanReview.status, "completed");
+  assert.deepEqual(borrowerLoan.humanReview.history.map(item => item.stage), ["requested", "completed"]);
+  assert.equal(borrowerLoan.humanReview.history[1].outcome, "upheld");
+  assert.equal(borrowerLoan.humanReview.history[1].noConflictOfInterest, true);
+  assert.equal(borrowerLoan.humanReview.history[1].reason, reviewerInput.reason);
+  const reviewNotice = borrowerDashboard.notifications.find(item => item.title === "Human loan review completed");
+  assert.ok(reviewNotice, "the borrower receives an in-app written review result");
+  assert.match(reviewNotice.text, /original automated decision was upheld/);
+  assert.ok(reviewNotice.text.includes(reviewerInput.reason));
+});
+
+test("borrowers and guarantors who are officers cannot review their own loan decision", async () => {
+  const chairLoanResponse = await requestLoan(cookies.chair, { amount: 100, months: 1, guarantorIds: ["g1", "g2"] });
+  assert.equal(chairLoanResponse.status, 201);
+  const chairLoan = (await chairLoanResponse.json()).data;
+  assert.equal(chairLoan.status, "rejected");
+  assert.equal((await post(`/api/loans/${chairLoan.id}/review-requests`, cookies.chair, { reason: "Please consider my records and explanation." })).status, 201);
+  const reviewerInput = {
+    outcome: "upheld", memberExplanationConsidered: true,
+    noConflictOfInterest: true,
+    informationConsidered: "The member explanation and the recorded eligibility decision.",
+    reason: "The available information supports upholding the original automated decision.",
+  };
+  assert.equal((await post(`/api/loans/${chairLoan.id}/reviews`, cookies.chair, reviewerInput)).status, 403);
+
+  const guarantorLoanResponse = await requestLoan(cookies.borrower, { amount: 2000, months: 1, guarantorIds: ["chair", "g2"] });
+  assert.equal(guarantorLoanResponse.status, 201);
+  const guarantorLoan = (await guarantorLoanResponse.json()).data;
+  assert.equal(guarantorLoan.status, "rejected");
+  assert.equal((await post(`/api/loans/${guarantorLoan.id}/review-requests`, cookies.borrower, { reason: "Please consider my records and explanation." })).status, 201);
+  assert.equal((await post(`/api/loans/${guarantorLoan.id}/reviews`, cookies.chair, reviewerInput)).status, 403);
+});
+
+test("a reviewer can reach a different human finding from the automated rules without changing the rejected loan", async () => {
   await setLoanPolicy({ ...baselineLoanPolicy, tiers: [baselineLoanPolicy.tiers[0], { ...baselineLoanPolicy.tiers[1], minShareContributionKsh: 5000 }] });
   const response = await requestLoan(cookies.borrower, { amount: 1200, months: 1, guarantorIds: ["richer", "g4"] });
   assert.equal(response.status, 201);
@@ -290,19 +375,39 @@ test("human review can reassess an automated rejection against its original rule
   assert.equal(rejected.status, "rejected");
   assert.match(rejected.automatedDecision.reason, /requires KES 5000 in recorded share-capital contributions/);
   assert.equal(memberHeld(loanById(rejected.id), "g4"), 0, "rejected applications must not hold guarantor shares");
+  const before = structuredClone(loanById(rejected.id));
 
-  const reviewRequest = await post(`/api/loans/${rejected.id}/review-requests`, cookies.borrower, { reason: "Please recheck my recorded contribution receipts." });
+  const reviewRequest = await post(`/api/loans/${rejected.id}/review-requests`, cookies.borrower, { reason: "Please consider my explanation and the contribution receipt details." });
   assert.equal(reviewRequest.status, 201);
   assert.equal((await decide(rejected.id, cookies.chair, "approve")).status, 409, "role votes are no longer available");
+  const validReviewerInput = {
+    outcome: "not_upheld",
+    memberExplanationConsidered: true,
+    noConflictOfInterest: true,
+    informationConsidered: "Member explanation, the original decision record, and the submitted receipt details.",
+    reason: "The explanation and receipt show that the recorded contribution value should not determine this human review result.",
+  };
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, outcome: "reassess" })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, memberExplanationConsidered: false })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, noConflictOfInterest: false })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, informationConsidered: ["not", "text"] })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, informationConsidered: "no" })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, informationConsidered: "x".repeat(2001) })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, reason: "Too short." })).status, 400);
+  assert.equal((await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { ...validReviewerInput, reason: "x".repeat(2001) })).status, 400);
 
-  const contribution = await post("/api/contributions", cookies.treasurer, { memberId: "borrower", amount: 5000, method: "Cash", paymentType: "Monthly Contribution", note: "Additional recorded share capital", referenceNumber: "RCPT-HUMAN-REASSESS-01", date: "2026-11-01" });
-  assert.equal(contribution.status, 201);
-  const review = await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, { decision: "reassess", reason: "Checked the new share-capital receipt against the original tier." });
+  const review = await post(`/api/loans/${rejected.id}/reviews`, cookies.chair, validReviewerInput);
   assert.equal(review.status, 200);
-  const reassessed = (await review.json()).data;
-  assert.equal(reassessed.status, "approved");
-  assert.equal(reassessed.humanReview.response.decision, "reassess");
-  assert.deepEqual(reassessed.humanReview.response.reassessmentReasons, []);
+  const reviewed = (await review.json()).data;
+  assert.equal(reviewed.status, "rejected");
+  assert.equal(reviewed.humanReview.response.outcome, "not_upheld");
+  assert.equal(reviewed.humanReview.response.reason, validReviewerInput.reason);
+  assert.deepEqual(loanById(rejected.id), before, "an independent review result must not itself change any loan fields");
+  const completed = persistedState().auditLog.find(item => item.type === "loan.review.completed" && item.entityId === rejected.id);
+  assert.equal(completed.originalDecision, "reject");
+  assert.equal(completed.outcome, "not_upheld");
+  assert.equal(completed.resultingStatus, "rejected");
+  assert.equal(persistedState().auditLog.filter(item => item.type === "loan.decided" && item.entityId === rejected.id).length, 1);
 });
 
 test("repayments split interest first, then release pledges as principal falls", async () => {

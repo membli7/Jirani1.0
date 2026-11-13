@@ -133,6 +133,7 @@ const DATA_FILE = process.env.CHAMA_DATA_FILE || path.join(__dirname, "data.json
 const FRONTEND = path.join(__dirname, "..", "en public");
 const FRONTEND_BUILD = path.join(__dirname, "frontend-dist");
 const TERMS_VERSION = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(FRONTEND, "terms.html"))).digest("hex")}`;
+const PRIVACY_NOTICE_VERSION = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(FRONTEND, "privacy.html"))).digest("hex")}`;
 const PROFILE_ICON_DIR = process.env.CHAMA_PROFILE_ICON_DIR || path.join(__dirname, "uploads", "profile-icons");
 const PROFILE_DETAILS_FILE = process.env.CHAMA_PROFILE_DETAILS_FILE || path.join(__dirname, "uploads", "profile-details.json");
 const PROFILE_ICON_SIZES = new Set([32, 180, 192, 512]);
@@ -177,6 +178,7 @@ if (!SESSION_SECRET) throw new Error("SESSION_SECRET must be set in .env.");
 
 function clean(value) { return String(value ?? "").trim(); }
 function hasAcceptedTerms(value) { return value === true || value === "true"; }
+function hasAcknowledgedPrivacyNotice(value) { return value === true || value === "true"; }
 function roleName(role) { return role ? role[0].toUpperCase() + role.slice(1) : "Officer"; }
 function findChamaName(chamaId) { return state.chamas.find(chama => chama.id === chamaId)?.name || "Unknown Chama"; }
 function normalizePhone(value) {
@@ -685,7 +687,13 @@ function loanReviewRecords(loan, source = state) {
   const events = (Array.isArray(source.auditLog) ? source.auditLog : []).filter(item => item.chamaId === loan.chamaId && item.entityId === loan.id);
   const request = events.find(item => item.type === "loan.review.requested") || null;
   const response = request ? events.find(item => item.type === "loan.review.completed" && item.requestId === request.id) || null : null;
-  return { request, response };
+  const history = events.filter(item => item.type === "loan.review.requested" || item.type === "loan.review.completed");
+  return { request, response, history };
+}
+function loanReviewerEligible(loan, reviewer) {
+  return reviewer?.status === "active" && reviewer.chamaId === loan.chamaId &&
+    ["chairperson", "secretary", "treasurer"].includes(reviewer.role) &&
+    reviewer.id !== loan.memberId && !(loan.guarantors || []).some(item => item.memberId === reviewer.id);
 }
 function loanHasAutomaticDecision(loan) {
   return (Array.isArray(loan.approvals) ? loan.approvals : []).some(item => item.role === "automated");
@@ -980,6 +988,10 @@ function loanApprovalView(loan, viewer, source = state) {
     ? "Loan repaid."
     : status === "cancelled"
       ? "Previous-workflow loan request cancelled."
+      : reviewResponse?.outcome === "upheld"
+        ? `Human review completed: the automated decision was upheld. The recorded loan status remains ${status}.`
+        : reviewResponse?.outcome === "not_upheld"
+          ? `Human review completed: the automated decision was not upheld. The recorded loan status remains ${status}; this review finding does not approve or fund a loan.`
       : reviewResponse?.decision === "withdraw"
     ? "Approval withdrawn after human review and confirmation that no funds were disbursed."
     : reviewResponse?.decision === "reassess" && status === "approved"
@@ -1009,8 +1021,7 @@ function loanApprovalView(loan, viewer, source = state) {
     reason: viewer?.id === loan.memberId && item.decision === "approve" && item.role !== "automated" ? null : item.reason,
     at: item.at
   }));
-  const conflictedReviewer = viewer?.id === loan.memberId || (loan.guarantors || []).some(item => item.memberId === viewer?.id);
-  const officerReviewer = ["chairperson", "secretary", "treasurer"].includes(viewer?.role) && !conflictedReviewer;
+  const eligibleReviewer = loanReviewerEligible(loan, viewer);
   const reviewRequest = review.request ? {
     id: review.request.id,
     reason: review.request.reason,
@@ -1019,13 +1030,27 @@ function loanApprovalView(loan, viewer, source = state) {
     requesterName: review.request.by?.name || null,
     status: review.response ? "completed" : "requested",
     response: review.response ? {
-      decision: review.response.decision,
-      reason: review.response.reason,
+      decision: review.response.outcome || review.response.decision,
+      outcome: review.response.outcome || null,
+      reason: review.response.reasoning || review.response.reason || null,
+      informationConsidered: review.response.informationConsidered || null,
+      noConflictOfInterest: review.response.noConflictOfInterest === true,
       reviewerName: review.response.by?.name || "Chama officer",
       reviewerRole: review.response.by?.role || null,
       reviewedAt: review.response.at,
       reassessmentReasons: Array.isArray(review.response.reassessmentReasons) ? review.response.reassessmentReasons : [],
     } : null,
+    history: review.history.map(item => ({
+      id: item.id,
+      stage: item.type === "loan.review.requested" ? "requested" : "completed",
+      at: item.at,
+      actorName: item.by?.name || null,
+      actorRole: item.by?.role || null,
+      outcome: item.type === "loan.review.completed" ? item.outcome || item.decision || null : null,
+      informationConsidered: item.informationConsidered || null,
+      noConflictOfInterest: item.type === "loan.review.completed" ? item.noConflictOfInterest === true : null,
+      reason: item.type === "loan.review.requested" ? item.reason : item.reasoning || item.reason || null,
+    })),
   } : null;
   return {
     id: loan.id, memberId: loan.memberId, memberName: loan.memberName, amount: loan.amount, months: loan.months, monthlyRatePercent: loan.monthlyRatePercent ?? null, interestModel: loan.interestModel || null, outstanding: loan.outstanding, totalPayable: loan.totalPayable ?? null, schedule: Array.isArray(loan.schedule) ? loan.schedule.map(row => ({ no: row.no, dueDate: row.dueDate, principal: row.principal, interest: row.interest, installment: row.installment })) : [], status, createdAt: loan.createdAt, resolvedAt: loan.resolvedAt || null,
@@ -1044,7 +1069,7 @@ function loanApprovalView(loan, viewer, source = state) {
     automatedDecision: automatedDecision ? { decision: automatedDecision.decision, reason: automatedDecision.reason, policyVersion: automatedDecision.policyVersion || null, at: automatedDecision.at, criteria: decisionDetails?.criteria || null } : null,
     humanReview: reviewRequest,
     canRequestHumanReview: !!viewer && viewer.id === loan.memberId && !!automatedDecision && !review.request && ["approved", "rejected"].includes(status),
-    canReview: !!review.request && !review.response && officerReviewer,
+    canReview: !!review.request && !review.response && eligibleReviewer,
     canCancel: !!viewer && viewer.id === loan.memberId && pending && !automatedDecision,
     canDecide: false
   };
@@ -1556,6 +1581,7 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   if (!Number.isInteger(deadlineDay) || deadlineDay < 1 || deadlineDay > 28) return res.status(400).json({ message: "Choose a monthly contribution deadline from day 1 to day 28." });
   if (!Number.isSafeInteger(welfareMonthlyFee) || welfareMonthlyFee < 0 || !Number.isSafeInteger(lateContributionPenalty) || lateContributionPenalty < 0 || !Number.isFinite(loanMonthlyRatePercent) || loanMonthlyRatePercent < 0 || loanMonthlyRatePercent > 100) return res.status(400).json({ message: "Enter whole non-negative KES amounts and a monthly loan rate from 0% to 100%." });
   if (!hasAcceptedTerms(req.body?.termsAccepted)) return res.status(400).json({ message: "You must accept the Terms and Conditions to create an account." });
+  if (!hasAcknowledgedPrivacyNotice(req.body?.privacyNoticeAcknowledged)) return res.status(400).json({ message: "You must acknowledge the Privacy Notice to create an account." });
   const updated = structuredClone(state);
   const chamaId = newId();
   if (!Array.isArray(updated.chamas)) updated.chamas = [];
@@ -1570,8 +1596,10 @@ app.post("/api/setup", setupLimiter, async (req, res, next) => {
   const acceptanceSource = "initial-setup";
   const acceptanceEvent = auditEntry("terms.accepted", user.id, user, { policy: "terms", version: TERMS_VERSION, source: acceptanceSource, chamaId });
   user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
+  const privacyAcknowledgmentEvent = auditEntry("privacy.notice.acknowledged", user.id, user, { policy: "privacy-notice", version: PRIVACY_NOTICE_VERSION, source: acceptanceSource, chamaId });
+  user.privacyNoticeAcknowledgment = { version: PRIVACY_NOTICE_VERSION, acknowledgedAt: privacyAcknowledgmentEvent.at, source: acceptanceSource };
   updated.users.push(user);
-  updated.auditLog.push(acceptanceEvent);
+  updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent);
   try { await persist(updated); } catch (error) { return next(error); }
   req.session.regenerate(error => {
     if (error) return next(error);
@@ -2216,6 +2244,7 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
       }
       if (!validEmail(matchingCode.email) || !validNewPin(pin)) return { status: 400, body: { message: "Enter a valid activation code, registered email address, and 6-12 digit PIN." } };
       if (!hasAcceptedTerms(req.body?.termsAccepted)) return { status: 400, body: { message: "You must accept the Terms and Conditions to create an account." } };
+      if (!hasAcknowledgedPrivacyNotice(req.body?.privacyNoticeAcknowledged)) return { status: 400, body: { message: "You must acknowledge the Privacy Notice to create an account." } };
       const memberCap = memberCapFor(state, matchingCode.chamaId);
       const activeMembers = scopeToChama(state.users, matchingCode.chamaId).filter(item => item.status === "active").length;
       if (memberCap !== null && activeMembers >= memberCap) return { status: 409, body: { message: `This chama has reached its ${memberCap}-member plan limit. Ask its Chairperson to renew or change plans before activating this invitation.` } };
@@ -2230,8 +2259,10 @@ app.post("/api/invitations/activate", activationLimiter, async (req, res, next) 
       const acceptanceSource = "invitation-activation";
       const acceptanceEvent = auditEntry("terms.accepted", user.id, user, { policy: "terms", version: TERMS_VERSION, source: acceptanceSource, chamaId: saved.chamaId });
       user.termsAcceptance = { version: TERMS_VERSION, acceptedAt: acceptanceEvent.at, source: acceptanceSource };
+      const privacyAcknowledgmentEvent = auditEntry("privacy.notice.acknowledged", user.id, user, { policy: "privacy-notice", version: PRIVACY_NOTICE_VERSION, source: acceptanceSource, chamaId: saved.chamaId });
+      user.privacyNoticeAcknowledgment = { version: PRIVACY_NOTICE_VERSION, acknowledgedAt: privacyAcknowledgmentEvent.at, source: acceptanceSource };
       updated.users.push(user);
-      updated.auditLog.push(acceptanceEvent);
+      updated.auditLog.push(acceptanceEvent, privacyAcknowledgmentEvent);
       if (directLeaderRole) {
         const leadershipChange = { id: newId(), type: "appointment", role: user.role, outgoingUserId: null, incomingUserId: user.id, effectiveDate: createdAt.slice(0, 10), vote: null, emergencyReason: null, status: "confirmed", proposedBy: inviter.id, proposedAt: createdAt, confirmedBy: inviter.id, confirmedAt: createdAt, audit: [{ action: "proposed", by: inviter.id, at: createdAt }, { action: "confirmed", by: inviter.id, at: createdAt }], chamaId: saved.chamaId };
         updated.leadershipChanges.push(leadershipChange);
@@ -2575,7 +2606,8 @@ app.post("/api/loans/:id/cancel", requireAuth, requirePinChanged, requireActiveS
   return commit(req, res, next, updated, 200, { message: "Previous request cancelled. You can submit a new application under the current Chama rules.", data: view }, undefined, () => { publishLoanUpdate(loan, loan.chamaId); publishFinancialUpdate(loan.chamaId); });
 }));
 app.post("/api/loans/:id/review-requests", requireAuth, requirePinChanged, requireActiveSubscription, idempotent((req, res, next) => {
-  const reason = clean(req.body?.reason);
+  if (typeof req.body?.reason !== "string") return res.status(400).json({ message: "Explain why you want a human review in 5 to 1,000 characters." });
+  const reason = clean(req.body.reason);
   if (reason.length < 5 || reason.length > 1000) return res.status(400).json({ message: "Explain why you want a human review in 5 to 1,000 characters." });
   const loan = scopeToChama(state.loans, req.user.chamaId).find(item => item.id === req.params.id);
   if (!loan || !loanHasAutomaticDecision(loan)) return res.status(404).json({ message: "Automated loan decision not found." });
@@ -2586,68 +2618,44 @@ app.post("/api/loans/:id/review-requests", requireAuth, requirePinChanged, requi
   const request = auditEntry("loan.review.requested", loan.id, req.user, { chamaId: req.user.chamaId, decision: loan.status, reason });
   updated.auditLog.push(request);
   const view = loanApprovalView(loan, req.user, updated);
-  return commit(req, res, next, updated, 201, { message: "Human review requested. A non-conflicted Chama officer can review the decision and your explanation; this is not a pre-approval vote.", data: view }, undefined, () => publishLoanUpdate(loan, loan.chamaId));
+  return commit(req, res, next, updated, 201, { message: "Human review requested. A non-conflicted Chama officer should consider your explanation and relevant information; the written result will appear in your loan record and in-app notification. No fixed response deadline is set here.", data: view }, undefined, () => publishLoanUpdate(loan, loan.chamaId));
 }));
 app.post("/api/loans/:id/reviews", requireAuth, requirePinChanged, requireRole("chairperson", "secretary", "treasurer"), requireActiveSubscription, idempotent((req, res, next) => {
-  const decision = clean(req.body?.decision);
-  const reason = clean(req.body?.reason);
-  if (!["confirm", "reassess", "withdraw"].includes(decision)) return res.status(400).json({ message: "Choose confirm, reassess, or withdraw after human review." });
-  if (reason.length < 5 || reason.length > 1000) return res.status(400).json({ message: "Enter a human-review reason between 5 and 1,000 characters." });
+  const outcome = req.body?.outcome;
+  const memberExplanationConsidered = req.body?.memberExplanationConsidered;
+  const noConflictOfInterest = req.body?.noConflictOfInterest;
+  const informationConsidered = typeof req.body?.informationConsidered === "string" ? clean(req.body.informationConsidered) : "";
+  const reason = typeof req.body?.reason === "string" ? clean(req.body.reason) : "";
+  if (!["upheld", "not_upheld"].includes(outcome)) return res.status(400).json({ message: "Choose whether the original automated decision is upheld or not upheld." });
+  if (memberExplanationConsidered !== true) return res.status(400).json({ message: "Confirm that you considered the member's explanation and relevant information." });
+  if (noConflictOfInterest !== true) return res.status(400).json({ message: "Confirm that you have no other conflict of interest in this review." });
+  if (informationConsidered.length < 5 || informationConsidered.length > 2000) return res.status(400).json({ message: "Record the information considered in 5 to 2,000 characters." });
+  if (reason.length < 20 || reason.length > 2000) return res.status(400).json({ message: "Enter written reasons for the review outcome in 20 to 2,000 characters." });
   const updated = structuredClone(state);
   const loan = scopeToChama(updated.loans, req.user.chamaId).find(item => item.id === req.params.id && loanHasAutomaticDecision(item));
   if (!loan) return res.status(404).json({ message: "Automated loan decision not found." });
-  const previousStatus = loan.status;
-  if (loan.memberId === req.user.id || (loan.guarantors || []).some(item => item.memberId === req.user.id)) return res.status(403).json({ message: "A borrower or guarantor cannot review their own loan decision." });
+  if (!loanReviewerEligible(loan, req.user)) return res.status(403).json({ message: "Only an active, non-conflicted officer of this Chama can review the decision." });
   const review = loanReviewRecords(loan, updated);
   if (!review.request || review.response) return res.status(409).json({ message: "There is no unanswered human-review request for this loan." });
-  let reassessmentReasons = [];
-  if (decision === "reassess") {
-    if (loan.status !== "rejected") return res.status(409).json({ message: "A reassessment can only recheck a rejected request after the reviewer has examined the member's explanation and relevant records." });
-    const automaticDecision = loan.approvals.find(item => item.role === "automated");
-    const policyEvent = updated.auditLog.find(item => item.type === "loan.policy.updated" && item.chamaId === loan.chamaId && item.id === automaticDecision?.policyVersion);
-    if (!policyEvent?.policy) return res.status(409).json({ message: "The original loan rules are unavailable, so this request cannot be reassessed safely." });
-    const borrower = scopeToChama(updated.users, loan.chamaId).find(item => item.id === loan.memberId);
-    const eligibility = evaluateLoanEligibility({
-      policy: { ...policyEvent.policy, version: policyEvent.id }, amount: loan.amount,
-      activeDays: activeMembershipDays(borrower), shareContributions: confirmedShareContributions(updated, loan.chamaId, loan.memberId),
-      groupBalance: currentBalance(updated, loan.chamaId), priorPrincipal: memberOutstandingPrincipal(updated, loan.chamaId, loan.memberId),
-    });
-    const guarantorIds = (loan.guarantors || []).map(item => item.memberId);
-    const allocation = allocateLoanGuarantors(updated, loan.chamaId, guarantorIds, loan.amount, loan.id);
-    reassessmentReasons = [...eligibility.reasons];
-    if (!allocation.covered) reassessmentReasons.push("The selected active guarantors' combined unpledged share capital does not cover this loan amount.");
-    if (!reassessmentReasons.length) {
-      loan.guarantors = allocation.guarantors;
-      applyLoanSchedule(loan, todayInNairobi());
-    }
-  } else if (decision === "withdraw") {
-    if (loan.status !== "approved") return res.status(409).json({ message: "Only an approved automated decision can be withdrawn after human review." });
-    if (req.body?.confirmNoFundsDisbursed !== true) return res.status(409).json({ message: "The app does not record off-app disbursement. Confirm that no funds were disbursed before withdrawing this approval; otherwise resolve the existing group loan agreement outside the app." });
-    loan.status = "rejected";
-    loan.outstanding = 0;
-    loan.resolvedAt = now();
-    for (const guarantor of loan.guarantors || []) guarantor.held = 0;
-  }
+  const automaticDecision = loan.approvals.find(item => item.role === "automated");
   const completed = auditEntry("loan.review.completed", loan.id, req.user, {
-    chamaId: req.user.chamaId, requestId: review.request.id, decision, reason, resultingStatus: loan.status,
-    reassessmentReasons, confirmsNoFundsDisbursed: decision === "withdraw",
+    chamaId: req.user.chamaId, requestId: review.request.id, outcome,
+    originalDecision: automaticDecision?.decision || null,
+    loanStatusAtReview: loan.status, resultingStatus: loan.status,
+    memberExplanationConsidered: true, noConflictOfInterest: true, informationConsidered, reasoning: reason,
+    decisionSource: "human-review",
   });
   updated.auditLog.push(completed);
-  if (loan.status !== previousStatus) addNotification(updated, {
+  const outcomeText = outcome === "upheld" ? "upheld" : "not upheld";
+  addNotification(updated, {
     recipientId: loan.memberId, chamaId: loan.chamaId, category: "loan_decision",
-    title: loan.status === "approved" ? "Loan approved after review" : "Loan approval withdrawn",
-    text: `Your reviewed KES ${loan.amount} loan request is now ${loan.status}. The app records the decision only; it does not transfer funds.`,
-    notificationKey: `loan-decision:${loan.id}:${loan.status}`, at: completed.at,
+    title: "Human loan review completed",
+    text: `The human review found that the original automated decision was ${outcomeText}. Written reasons: ${reason} This review finding does not change the recorded loan status or authorize funds.`,
+    notificationKey: `loan-review:${loan.id}:${completed.id}`, at: completed.at,
   });
   const view = loanApprovalView(loan, req.user, updated);
-  const message = decision === "reassess" && loan.status === "approved"
-    ? "Human review completed; the checked and updated records now satisfy the original loan rules. The loan has been approved. No funds were transferred by the app."
-    : decision === "reassess"
-      ? "Human review completed. The request remains rejected under the original rules; see the review record for the current reasons."
-      : decision === "withdraw"
-        ? "Human review completed; the approval was withdrawn after confirming that no funds were disbursed."
-        : "Human review completed and the recorded decision was confirmed.";
-  return commit(req, res, next, updated, 200, { message, data: view, reassessmentReasons }, undefined, () => { publishLoanUpdate(loan, loan.chamaId); publishFinancialUpdate(loan.chamaId); });
+  const message = `Human review completed: the original automated decision was ${outcomeText}. The recorded loan status remains ${loan.status}; this review finding does not approve or fund a loan. Written reasons are available in the loan review history.`;
+  return commit(req, res, next, updated, 200, { message, data: view }, undefined, () => publishLoanUpdate(loan, loan.chamaId));
 }));
 
 const activeElectionStatuses = new Set(["proposed", "scheduled", "voting", "closed", "verified", "runoff-needed"]);

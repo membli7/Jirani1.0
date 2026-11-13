@@ -72,7 +72,7 @@ async function createAccount(chairCookie, name, phone, pin) {
   const invitation = await body(invitationResponse);
   const activation = await request("/api/invitations/activate", {
     method: "POST",
-    body: JSON.stringify({ phone, code: invitation.activationCode, pin, termsAccepted: true })
+    body: JSON.stringify({ phone, code: invitation.activationCode, pin, termsAccepted: true, privacyNoticeAcknowledged: true })
   });
   assert.equal(activation.status, 201);
   return (await body(activation)).user.id;
@@ -393,22 +393,31 @@ describe("attendance registers", () => {
     assert.equal(reviewableLoan.canReview, true);
 
     const reviewCompletionEvent = nextSseEvent(reader, "loans-updated");
-    const confirmedReview = await request(`/api/loans/${rejectedLoanId}/reviews`, {
+    const completedReview = await request(`/api/loans/${rejectedLoanId}/reviews`, {
       cookie: chairCookie,
       method: "POST",
       write: true,
-      body: JSON.stringify({ decision: "confirm", reason: "Checked the available records; the configured tier is not met." })
+      body: JSON.stringify({
+        outcome: "upheld",
+        memberExplanationConsidered: true,
+        noConflictOfInterest: true,
+        informationConsidered: "The member's share-capital explanation and the contribution records for this tier.",
+        reason: "I considered the member's explanation and available records. They show that the configured contribution tier was not met, so I uphold the automated decision."
+      })
     });
-    assert.equal(confirmedReview.status, 200);
+    assert.equal(completedReview.status, 200);
     assert.match(await reviewCompletionEvent, new RegExp(`"id":"${rejectedLoanId}"`));
-    const confirmedReviewBody = await body(confirmedReview);
-    assert.equal(confirmedReviewBody.data.status, "rejected");
-    assert.equal(confirmedReviewBody.data.humanReview.response.reviewerRole, "chairperson");
-    assert.equal(confirmedReviewBody.data.humanReview.response.decision, "confirm");
+    const completedReviewBody = await body(completedReview);
+    assert.equal(completedReviewBody.data.status, "rejected");
+    assert.equal(completedReviewBody.data.humanReview.response.reviewerRole, "chairperson");
+    assert.equal(completedReviewBody.data.humanReview.response.outcome, "upheld");
+    assert.equal(completedReviewBody.data.humanReview.response.noConflictOfInterest, true);
+    assert.equal(completedReviewBody.data.humanReview.response.informationConsidered, "The member's share-capital explanation and the contribution records for this tier.");
     const borrowerRejected = await body(await request("/api/dashboard", { cookie: anotherMemberCookie }));
     const borrowerRejectedLoan = borrowerRejected.loans.find(loan => loan.id === rejectedLoanId);
     assert.equal(borrowerRejectedLoan.history[0].role, "automated");
-    assert.equal(borrowerRejectedLoan.humanReview.response.reason, "Checked the available records; the configured tier is not met.");
+    assert.equal(borrowerRejectedLoan.humanReview.response.outcome, "upheld");
+    assert.equal(borrowerRejectedLoan.humanReview.response.reason, "I considered the member's explanation and available records. They show that the configured contribution tier was not met, so I uphold the automated decision.");
 
     const approvedRequestEvent = nextSseEvent(reader, "loans-updated");
     const approvedRequest = await request("/api/loans", {

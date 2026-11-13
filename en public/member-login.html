@@ -49,13 +49,18 @@
         </form>
         <form id="activation-form" class="login-card" hidden>
             <h2>Activate account</h2>
+            <p class="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
             <p class="login-notice" id="activation-notice" role="alert" aria-live="assertive" hidden></p>
             <label class="field" for="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required></label>
             <label class="field" for="activate-code">Activation code<input id="activate-code" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
             <label class="field" for="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required></label>
             <label class="terms-acceptance" for="activate-terms-accepted">
                 <input id="activate-terms-accepted" name="termsAccepted" type="checkbox" value="true" required>
-                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span> <a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a></span>
+            </label>
+            <label class="terms-acceptance" for="activate-privacy-acknowledged">
+                <input id="activate-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required>
+                <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span> <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
             </label>
             <button class="button-primary" type="submit">Activate</button>
             <button class="panel-link" id="show-login" type="button">Back to sign in</button>

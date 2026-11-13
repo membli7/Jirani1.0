@@ -1,36 +1,24 @@
 # Policy page and acceptance status
 
-**Checked:** 13 November 2026. A server-enforced Terms acceptance gate is implemented for initial Chairperson setup and invited-account activation. Acceptance metadata uses the existing JSON-backed user and audit records; no relational schema migration was needed. Existing-user sign-in, Privacy acknowledgment, and payment behavior were not changed.
+**Checked:** 13 November 2026. This update implements separate new-account Terms acceptance and Privacy Notice acknowledgment in Jirani Chama. The policy texts remain working drafts and are not ready for final legal reliance or an unreviewed production release.
 
 ## Current state
 
-- The landing page links to `/privacy.html` and `/terms.html` in its footer.
-- The React member-login and registration forms require an explicit checkbox linked to the Terms page when a new account is created; the direct-source fallback forms have the same control.
-- The server rejects account creation when explicit acceptance is missing. It stores a SHA-256 fingerprint of the Terms file, UTC acceptance time, source, and account/Chama context in existing JSON-backed user metadata and the application audit log.
-- Existing accounts are not gated at sign-in, acceptance of Privacy is not requested, and re-acceptance after a material policy change is not implemented.
-- `en public/terms.html` and `en public/privacy.html` now contain detailed, linked HTML versions of the review drafts. Both pages include a visible draft warning and a `noindex, nofollow` directive.
-- The Terms source retains the existing payment disclosure: live billing is disabled, and the M-Pesa C2B subscription verifier is described as sandbox-only and disabled pending configuration. No payment code was changed.
-- The legal operator identity, controller/processor map, providers and data locations, retention schedule, children’s-data position, and other marked factual items remain unconfirmed. The documents are not ready to be treated as final legal terms or a complete final privacy notice.
+- The landing page links to `/privacy.html` and `/terms.html`; both pages are visible working drafts with `noindex, nofollow` and linked legal sources. `noindex` is not access control.
+- React and direct-source registration and invited-member activation forms show links to both pages before account details and require two distinct checkboxes. English and Kiswahili labels are available.
+- The server rejects either missing or non-affirmative choice during initial Chairperson setup and invited-member activation.
+- The server stores separate Terms acceptance and Privacy Notice acknowledgment metadata and audit events. Each records a SHA-256 fingerprint of the current policy HTML, timestamp, source, and account/Chama context. This uses existing account/audit structures without a relational schema migration. It is application-level evidence, not tamper-evident proof.
+- A Privacy Notice acknowledgment records that the notice was presented and acknowledged; it is not consent to unrelated processing. Existing accounts are not gated at sign-in, and re-acknowledgment after policy updates is not implemented.
+- No subscription/payment flow was changed. Live payment processing was reported as disabled or simulated in the reviewed context; production status and provider arrangements still require verification.
 
-## Serving and deployment note
+## Verification
 
-Express serves `chamafork/frontend-dist` first and then falls back to the `en public` source directory. The Terms and Privacy pages are not included in `frontend-dist`, so Express serves the source pages directly. A local Vite build was run while verifying the acceptance UI; no deployment was made. If the currently open Cloudflare tunnel still points to this instance, the draft pages may already be reachable there.
+- The configured Vite production build passed. It reported existing asset-reference and large-chunk warnings.
+- The focused frontend MVP test file passed all 47 tests, including the updated forms and client payload behavior.
+- The full `npm test` run did not complete successfully: server-dependent integration suites could not connect to their child test servers. A same-process loopback probe also returned `EACCES` for both Node `fetch` and `http.get`, indicating this execution environment blocks local HTTP connections. This prevents end-to-end server verification here; it is not evidence that the implementation passes those tests. Re-run server integration tests in an environment that permits loopback before release.
 
-The `noindex, nofollow` directive asks compliant search crawlers not to index or follow links from these pages. It is not access control and does not prevent a person with the URL from reading a draft. Do not treat the content update as a production release. Confirm whether the temporary tunnel should remain publicly reachable while these pages contain draft placeholders.
+## Unresolved before publication or production reliance
 
-## Acceptance gate status
+Confirm the operator’s registered legal identity and address; which Chama and operator are controllers or processors for each purpose; the lawful basis for each purpose; actual production fields, providers, storage/access countries and transfer safeguards; retention/deletion criteria and backup expiry; whether minors may be recorded; required ODPC registration or an evidenced exemption; and secure, monitored handling of `09elim3@gmail.com` and privacy requests. Complete the loan-processing DPIA/legal classification and verify that the human-review route is staffed and has an appropriate response target before relying on the automated-loan descriptions. Obtain Kenyan advocate review, complete the remaining bracketed facts, set the approved policy version and effective date, then publish only after environment-permitted server integration tests pass.
 
-The new-account Terms gate is enforced in both UI and server validation. Missing or non-affirmative `termsAccepted` values are rejected; an accepted version fingerprint, timestamp, source, and account context are persisted in the existing user record and audit history. This is application-level evidence, not a tamper-evident record. No schema migration was needed.
-
-Coverage status:
-
-1. New Chama registration and the initial Chairperson account — implemented.
-2. Invited-member account activation — implemented.
-3. Existing users at their next sign-in — not implemented; outside the current scope.
-4. Re-acceptance after material Terms changes or any Privacy acknowledgment — not implemented; outside the current scope.
-
-Terms acceptance must be separate from a Privacy Notice acknowledgment, and neither should be treated as blanket consent to unrelated processing. Any optional consent-based processing requires its own specific choice.
-
-## Before final release
-
-Complete the factual fields in both policy documents, verify the current production data and vendor flows, check the applicable Kenyan law again on the release date, obtain Kenyan legal review, remove the draft banner only after approval, and then update the public pages. Do not describe this change as an existing-user sign-in gate, a Privacy acceptance, or a tamper-evident audit record; those behaviors remain unimplemented.
+No deployment or production release was made as part of this change.

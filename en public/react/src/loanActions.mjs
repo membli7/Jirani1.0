@@ -92,7 +92,7 @@ export function saveLoanPolicy(writeRequester, owner, payload) {
 }
 
 export function requestLoanHumanReview(writeRequester, owner, loanId, reason) {
-  const normalizedReason = String(reason ?? "").trim();
+  const normalizedReason = typeof reason === "string" ? reason.trim() : "";
   if (!loanId || normalizedReason.length < 5 || normalizedReason.length > 1000) {
     throw new TypeError("Explain why you want a human review in 5 to 1,000 characters.");
   }
@@ -106,19 +106,31 @@ export function requestLoanHumanReview(writeRequester, owner, loanId, reason) {
 }
 
 export function respondToLoanHumanReview(writeRequester, owner, loanId, payload) {
-  if (!loanId || !["confirm", "reassess", "withdraw"].includes(payload?.decision)) {
-    throw new TypeError("Choose a valid human-review action.");
+  if (!loanId || !["upheld", "not_upheld"].includes(payload?.outcome)) {
+    throw new TypeError("Choose whether the original automated decision is upheld or not upheld.");
   }
-  const reason = String(payload.reason ?? "").trim();
-  if (reason.length < 5 || reason.length > 1000) {
-    throw new TypeError("Enter a human-review reason between 5 and 1,000 characters.");
+  if (payload.memberExplanationConsidered !== true) {
+    throw new TypeError("Confirm that you considered the member's explanation and relevant information.");
+  }
+  if (payload.noConflictOfInterest !== true) {
+    throw new TypeError("Confirm that you have no other conflict of interest in this review.");
+  }
+  const informationConsidered = typeof payload.informationConsidered === "string" ? payload.informationConsidered.trim() : "";
+  const reason = typeof payload.reason === "string" ? payload.reason.trim() : "";
+  if (informationConsidered.length < 5 || informationConsidered.length > 2000) {
+    throw new TypeError("Record the information considered in 5 to 2,000 characters.");
+  }
+  if (reason.length < 20 || reason.length > 2000) {
+    throw new TypeError("Enter written reasons for the review outcome in 20 to 2,000 characters.");
   }
   return writeRequester.submit({
     owner,
     path: `/api/loans/${encodeURIComponent(loanId)}/reviews`,
     method: "POST",
-    body: { ...payload, reason },
-    validate: response => response?.data?.id === loanId && response.data.humanReview?.status === "completed",
+    body: { outcome: payload.outcome, memberExplanationConsidered: true, noConflictOfInterest: true, informationConsidered, reason },
+    validate: response => response?.data?.id === loanId
+      && response.data.humanReview?.status === "completed"
+      && ["upheld", "not_upheld"].includes(response.data.humanReview.response?.outcome),
   });
 }
 

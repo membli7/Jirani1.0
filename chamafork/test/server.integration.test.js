@@ -259,9 +259,16 @@ describe("Jirani Chama server", () => {
     assert.equal(missingTerms.status, 400);
     assert.match((await json(missingTerms)).message, /Terms and Conditions/);
 
-    const setup = await request("/api/setup", {
+    const missingPrivacyAcknowledgment = await request("/api/setup", {
       method: "POST",
       body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456", deadlineDay: 10, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 7.5, termsAccepted: "true" }),
+    });
+    assert.equal(missingPrivacyAcknowledgment.status, 400);
+    assert.match((await json(missingPrivacyAcknowledgment)).message, /Privacy Notice/);
+
+    const setup = await request("/api/setup", {
+      method: "POST",
+      body: JSON.stringify({ chamaName: "Test Chama", name: "Test Chair", phone: "0712345678", email: "chair@example.test", pin: "123456", deadlineDay: 10, welfareMonthlyFee: 350, lateContributionPenalty: 75, loanMonthlyRatePercent: 7.5, termsAccepted: "true", privacyNoticeAcknowledged: "true" }),
     });
     assert.equal(setup.status, 201);
     const duplicateSetup = await request("/api/setup", {
@@ -284,6 +291,12 @@ describe("Jirani Chama server", () => {
     assert.equal(termsAcceptanceEvent.source, "initial-setup");
     assert.equal(termsAcceptanceEvent.chamaId, savedState.chamas[0].id);
     assert.deepEqual(savedState.users[0].termsAcceptance, { version: termsAcceptanceEvent.version, acceptedAt: termsAcceptanceEvent.at, source: "initial-setup" });
+    const privacyAcknowledgmentEvent = savedState.auditLog.find(item => item.type === "privacy.notice.acknowledged");
+    assert.ok(privacyAcknowledgmentEvent);
+    assert.match(privacyAcknowledgmentEvent.version, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(privacyAcknowledgmentEvent.source, "initial-setup");
+    assert.equal(privacyAcknowledgmentEvent.chamaId, savedState.chamas[0].id);
+    assert.deepEqual(savedState.users[0].privacyNoticeAcknowledgment, { version: privacyAcknowledgmentEvent.version, acknowledgedAt: privacyAcknowledgmentEvent.at, source: "initial-setup" });
     cookie = setup.headers.getSetCookie?.()[0]?.split(";")[0] || setup.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie, "setup should establish a session cookie");
     await require("./active-subscription-fixture").activateTestSubscription({ dataFile: path.join(tempDir, "data.json"), baseUrl, chamaId: savedState.chamas[0].id });
@@ -401,9 +414,16 @@ describe("Jirani Chama server", () => {
     assert.match((await json(missingTerms)).message, /Terms and Conditions/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(tempDir, "data.json"), "utf8")).users.length, 1);
 
-    const activation = await request("/api/invitations/activate", {
+    const missingPrivacyAcknowledgment = await request("/api/invitations/activate", {
       method: "POST",
       body: JSON.stringify({ phone: "0712345679", code: invitationBody.activationCode, pin: "567890", termsAccepted: "true" }),
+    });
+    assert.equal(missingPrivacyAcknowledgment.status, 400);
+    assert.match((await json(missingPrivacyAcknowledgment)).message, /Privacy Notice/);
+
+    const activation = await request("/api/invitations/activate", {
+      method: "POST",
+      body: JSON.stringify({ phone: "0712345679", code: invitationBody.activationCode, pin: "567890", termsAccepted: "true", privacyNoticeAcknowledged: "true" }),
     });
     assert.equal(activation.status, 201);
     const secretaryId = (await json(activation)).user.id;
@@ -412,6 +432,10 @@ describe("Jirani Chama server", () => {
     assert.ok(activationEvent);
     assert.equal(activationEvent.source, "invitation-activation");
     assert.equal(activationState.users.find(user => user.id === secretaryId).termsAcceptance.acceptedAt, activationEvent.at);
+    const privacyActivationEvent = activationState.auditLog.find(item => item.type === "privacy.notice.acknowledged" && item.entityId === secretaryId);
+    assert.ok(privacyActivationEvent);
+    assert.equal(privacyActivationEvent.source, "invitation-activation");
+    assert.equal(activationState.users.find(user => user.id === secretaryId).privacyNoticeAcknowledgment.acknowledgedAt, privacyActivationEvent.at);
 
     cookie = null;
     const login = await request("/api/login", {
@@ -459,7 +483,7 @@ describe("Jirani Chama server", () => {
     const treasurerInvitationBody = await json(treasurerInvitation);
     const treasurerActivation = await request("/api/invitations/activate", {
       method: "POST",
-      body: JSON.stringify({ phone: "0712345680", code: treasurerInvitationBody.activationCode, pin: "901234", termsAccepted: true }),
+      body: JSON.stringify({ phone: "0712345680", code: treasurerInvitationBody.activationCode, pin: "901234", termsAccepted: true, privacyNoticeAcknowledged: true }),
     });
     assert.equal(treasurerActivation.status, 201);
     const treasurerId = (await json(treasurerActivation)).user.id;
@@ -475,7 +499,7 @@ describe("Jirani Chama server", () => {
     const secondInvitation = await request("/api/invitations", { method: "POST", write: true, body: JSON.stringify({ name: "Runoff Candidate", phone: "0712345681", email: "runoff@example.test", role: "member" }) });
     assert.equal(secondInvitation.status, 201);
     const secondInvitationBody = await json(secondInvitation);
-    const secondActivation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0712345681", code: secondInvitationBody.activationCode, pin: "678901", termsAccepted: true }) });
+    const secondActivation = await request("/api/invitations/activate", { method: "POST", body: JSON.stringify({ phone: "0712345681", code: secondInvitationBody.activationCode, pin: "678901", termsAccepted: true, privacyNoticeAcknowledged: true }) });
     assert.equal(secondActivation.status, 201);
     const secondCandidateId = (await json(secondActivation)).user.id;
 

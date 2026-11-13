@@ -5,7 +5,10 @@
       language: "Language",
       termsAcceptanceLead: "I have read and agree to the",
       termsAndConditions: "Terms and Conditions",
-      termsDraftMarker: " (working draft).",
+      privacyAcknowledgementLead: "I acknowledge that I have read the",
+      privacyNotice: "Privacy Notice",
+      privacyAcknowledgementNote: "This confirms receipt of the notice; it is not consent to unrelated processing.",
+      policyReviewPrompt: "Before entering your details, review:",
       english: "English",
       swahili: "Kiswahili",
       signOut: "Sign out",
@@ -188,7 +191,10 @@
       language: "Lugha",
       termsAcceptanceLead: "Nimesoma na ninakubali",
       termsAndConditions: "Sheria na Masharti",
-      termsDraftMarker: " (rasimu ya kukaguliwa).",
+      privacyAcknowledgementLead: "Ninakiri kuwa nimesoma",
+      privacyNotice: "Ilani ya Faragha",
+      privacyAcknowledgementNote: "Hii inathibitisha kupokea ilani tu; si ridhaa ya uchakataji usiohusiana.",
+      policyReviewPrompt: "Kabla ya kuingiza maelezo yako, tafadhali kagua:",
       english: "Kiingereza",
       swahili: "Kiswahili",
       signOut: "Ondoka",
@@ -1064,6 +1070,7 @@
   });
 
   const keyedTranslations = {
+    helpGuideLabel: ["Help & Guide", "Mwongozo na msaada"],
     youTab: ["You", "Wewe"], groupTab: ["Group", "Kikundi"], englishOption: ["English", "Kiingereza"],
     getInTouchNav: ["Get in touch", "Wasiliana nasi"], contactSectionLabel: ["CONTACT", "WASILIANA"],
     getInTouchTitle: ["Get in touch", "Wasiliana nasi"],

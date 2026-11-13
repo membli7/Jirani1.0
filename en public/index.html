@@ -65,8 +65,9 @@
      <!-- Mobile nav drawer (cloned into here by JS on narrow viewports) -->
  </header>
  <main class="app-shell" id="app" hidden>
-   <nav class="menu-bar" id="menu-bar" aria-label="Sections" data-i18n-aria-label="sectionsLabel" aria-hidden="false">
+  <nav class="menu-bar" id="menu-bar" aria-label="Sections" data-i18n-aria-label="sectionsLabel" aria-hidden="false">
       <a href="#dashboard" data-panel="dashboard">Dashboard</a>
+      <a href="#help-panel" data-panel="help-panel" data-i18n="helpGuideLabel">Help &amp; Guide</a>
       <a href="#ledger-panel" data-panel="ledger-panel">Ledger</a>
       <a href="#group-contributions-title" data-panel="overview" data-contributions-link data-i18n="contributionsNav">Contributions</a>
       <a href="#payment-panel" data-panel="payment-panel" data-i18n="payment">Record a cash payment</a>
@@ -229,6 +230,9 @@
     </section>
     <section class="panel" id="chat-panel" aria-labelledby="chat-title">
         <div id="react-chat-root"></div>
+    </section>
+    <section class="panel help-guide-panel" id="help-panel" aria-labelledby="help-guide-title">
+        <div id="react-help-guide-root"></div>
     </section>
   </aside></div>
  </main>

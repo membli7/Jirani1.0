@@ -295,9 +295,8 @@ export function LoanRequestPanel() {
 
 export default function LoansPanel() {
   const snapshot = useDashboardSnapshot();
-  const [reviewReasons, setReviewReasons] = useState({});
-  const [reviewActions, setReviewActions] = useState({});
-  const [withdrawalConfirmations, setWithdrawalConfirmations] = useState({});
+  const [reviewRequestExplanations, setReviewRequestExplanations] = useState({});
+  const [reviewFindings, setReviewFindings] = useState({});
   const [busyLoanId, setBusyLoanId] = useState("");
   const [feedback, setFeedback] = useState({ message: "", error: false });
   const writeRequester = useMemo(() => window.chamaWriteRequests.createWriteRequester(), []);
@@ -317,13 +316,17 @@ export default function LoansPanel() {
     return owner;
   }
 
+  function updateReviewFinding(loanId, field, value) {
+    setReviewFindings(current => ({ ...current, [loanId]: { ...(current[loanId] || {}), [field]: value } }));
+  }
+
   async function handleReviewRequest(loan) {
-    const reason = String(reviewReasons[loan.id] || "").trim();
+    const reason = String(reviewRequestExplanations[loan.id] || "").trim();
     setFeedback({ message: "", error: false });
     setBusyLoanId(loan.id);
     try {
       const result = await requestLoanHumanReview(writeRequester, ownerFor(loan.id), loan.id, reason);
-      setReviewReasons(current => ({ ...current, [loan.id]: "" }));
+      setReviewRequestExplanations(current => ({ ...current, [loan.id]: "" }));
       setFeedback({ message: result.message || "Human review requested.", error: false });
       requestDashboardRefresh();
     } catch (error) {
@@ -335,17 +338,21 @@ export default function LoansPanel() {
   }
 
   async function handleHumanReview(loan) {
-    const decision = reviewActions[loan.id] || "confirm";
-    const reason = String(reviewReasons[loan.id] || "").trim();
+    const finding = reviewFindings[loan.id] || {};
+    const outcome = finding.outcome || "upheld";
+    const informationConsidered = String(finding.informationConsidered || "").trim();
+    const reason = String(finding.reason || "").trim();
     setFeedback({ message: "", error: false });
     setBusyLoanId(loan.id);
     try {
       const result = await respondToLoanHumanReview(writeRequester, ownerFor(loan.id), loan.id, {
-        decision,
+        outcome,
+        memberExplanationConsidered: finding.memberExplanationConsidered === true,
+        noConflictOfInterest: finding.noConflictOfInterest === true,
+        informationConsidered,
         reason,
-        ...(decision === "withdraw" ? { confirmNoFundsDisbursed: withdrawalConfirmations[loan.id] === true } : {}),
       });
-      setReviewReasons(current => ({ ...current, [loan.id]: "" }));
+      setReviewFindings(current => ({ ...current, [loan.id]: {} }));
       setFeedback({ message: result.message || "Human review completed.", error: false });
       requestDashboardRefresh();
     } catch (error) {
@@ -390,7 +397,10 @@ export default function LoansPanel() {
             const presentation = loanStatusPresentation(loan.status);
             const steps = Array.isArray(loan.approvalSteps) ? loan.approvalSteps : [];
             const humanReview = loan.humanReview;
-            const action = reviewActions[loan.id] || "confirm";
+            const finding = reviewFindings[loan.id] || {};
+            const outcome = finding.outcome || "upheld";
+            const informationConsidered = String(finding.informationConsidered || "").trim();
+            const writtenReasons = String(finding.reason || "").trim();
             return <article className="loan-card" key={loan.id}>
               <div className="loan-card-heading">
                 <div><h3>{loan.memberName} · {money(loan.amount)}</h3><span className="schedule-sub">{loan.months} month{loan.months === 1 ? "" : "s"} · Requested {formatDate(loan.createdAt)}</span></div>
@@ -441,35 +451,51 @@ export default function LoansPanel() {
                 <button className="mini-btn danger" type="button" disabled={busyLoanId === loan.id} onClick={() => handleCancelLegacy(loan)}>Cancel previous request</button>
               </div>}
               {humanReview && <section className="loan-human-review" aria-label="Human review record">
-                <h4>Human review requested</h4>
-                <p><strong>Member's explanation:</strong> {humanReview.reason}</p>
-                <p className="form-note">Requested {formatDate(humanReview.requestedAt)} at {formatTime(humanReview.requestedAt)}.</p>
-                {humanReview.response && <div className="loan-review-result">
-                  <p><strong>Review recorded by:</strong> {humanReview.response.reviewerName}{humanReview.response.reviewerRole ? ` (${roleName(humanReview.response.reviewerRole)})` : ""} · {formatDate(humanReview.response.reviewedAt)}</p>
-                  <p><strong>Action:</strong> {humanReview.response.decision}</p>
-                  <p><strong>Reason:</strong> {humanReview.response.reason}</p>
-                  {Array.isArray(humanReview.response.reassessmentReasons) && humanReview.response.reassessmentReasons.length > 0 && <ul>{humanReview.response.reassessmentReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
-                </div>}
+                <h4>Human review: {humanReview.status === "completed" ? "Completed" : "Requested"}</h4>
+                {humanReview.status === "requested" && <p className="form-note">A non-conflicted Chama officer should consider your explanation and relevant information and provide a written result within a reasonable period. No fixed response deadline is set here; the result and reasons will appear in this record and your in-app notifications.</p>}
+                {Array.isArray(humanReview.history) && humanReview.history.length > 0 && <ol className="loan-review-history" aria-label="Human review result history">
+                  {humanReview.history.map((event, index) => {
+                    const completed = event.stage === "completed";
+                    const resultLabel = event.outcome === "upheld"
+                      ? "Original automated decision upheld"
+                      : event.outcome === "not_upheld"
+                        ? "Original automated decision not upheld"
+                        : event.outcome ? `Recorded outcome: ${event.outcome}` : "Review requested";
+                    return <li key={event.id || `${loan.id}-review-${index}`}>
+                      <strong>{completed ? resultLabel : "Review requested"}</strong>
+                      <span className="loan-step-meta">{event.actorName || "Chama member"}{event.actorRole ? ` (${roleName(event.actorRole)})` : ""} · {formatDate(event.at)} at {formatTime(event.at)}</span>
+                      {event.informationConsidered && <p><strong>Information considered:</strong> {event.informationConsidered}</p>}
+                      {event.reason && <p><strong>{completed ? "Written reasons" : "Member's explanation"}:</strong> {event.reason}</p>}
+                    </li>;
+                  })}
+                </ol>}
+                {humanReview.response && <p className="form-note">The review finding is separate from the loan's recorded status. It does not approve or fund the loan or change balances, guarantor holds, or accounting.</p>}
               </section>}
               {loan.canRequestHumanReview && <div className="loan-review-actions">
-                <label htmlFor={`loan-review-request-${loan.id}`}>Why should a person review this automatic decision?</label>
-                <textarea id={`loan-review-request-${loan.id}`} minLength="5" maxLength="1000" value={reviewReasons[loan.id] || ""} disabled={busyLoanId === loan.id} onChange={event => setReviewReasons(current => ({ ...current, [loan.id]: event.target.value }))} />
-                <button className="mini-btn" type="button" disabled={busyLoanId === loan.id} onClick={() => handleReviewRequest(loan)}>Request human review</button>
+                <label htmlFor={`loan-review-request-${loan.id}`}>Explain the relevant facts or information you want a person to consider (5 to 1,000 characters)</label>
+                <textarea id={`loan-review-request-${loan.id}`} minLength="5" maxLength="1000" rows="4" value={reviewRequestExplanations[loan.id] || ""} disabled={busyLoanId === loan.id} onChange={event => setReviewRequestExplanations(current => ({ ...current, [loan.id]: event.target.value }))} />
+                <button className="mini-btn" type="button" disabled={busyLoanId === loan.id || String(reviewRequestExplanations[loan.id] || "").trim().length < 5} onClick={() => handleReviewRequest(loan)}>Request human review</button>
               </div>}
               {loan.canReview && <div className="loan-review-actions">
-                <label htmlFor={`loan-review-action-${loan.id}`}>Human-review action</label>
-                <select id={`loan-review-action-${loan.id}`} value={action} disabled={busyLoanId === loan.id} onChange={event => setReviewActions(current => ({ ...current, [loan.id]: event.target.value }))}>
-                  <option value="confirm">Confirm after reviewing the member's explanation</option>
-                  {loan.status === "rejected" && <option value="reassess">Reassess after checking relevant records</option>}
-                  {loan.status === "approved" && <option value="withdraw">Withdraw approval (only if no funds were disbursed)</option>}
+                <label htmlFor={`loan-review-outcome-${loan.id}`}>Independent human-review outcome</label>
+                <select id={`loan-review-outcome-${loan.id}`} value={outcome} disabled={busyLoanId === loan.id} onChange={event => updateReviewFinding(loan.id, "outcome", event.target.value)}>
+                  <option value="upheld">Uphold the original automated decision</option>
+                  <option value="not_upheld">Do not uphold the original automated decision</option>
                 </select>
-                {action === "withdraw" && <label className="loan-review-confirmation" htmlFor={`loan-review-no-disbursement-${loan.id}`}>
-                  <input id={`loan-review-no-disbursement-${loan.id}`} type="checkbox" checked={withdrawalConfirmations[loan.id] === true} disabled={busyLoanId === loan.id} onChange={event => setWithdrawalConfirmations(current => ({ ...current, [loan.id]: event.target.checked }))} />
-                  I confirmed that no funds have been disbursed outside the app.
-                </label>}
-                <label htmlFor={`loan-review-reason-${loan.id}`}>Reviewer reason</label>
-                <textarea id={`loan-review-reason-${loan.id}`} minLength="5" maxLength="1000" value={reviewReasons[loan.id] || ""} disabled={busyLoanId === loan.id} onChange={event => setReviewReasons(current => ({ ...current, [loan.id]: event.target.value }))} />
-                <button className="mini-btn" type="button" disabled={busyLoanId === loan.id || (action === "withdraw" && withdrawalConfirmations[loan.id] !== true)} onClick={() => handleHumanReview(loan)}>Complete human review</button>
+                <p className="form-note">This review result is recorded separately; it does not change the loan's approval or funding status.</p>
+                <label className="loan-review-confirmation" htmlFor={`loan-review-explanation-considered-${loan.id}`}>
+                  <input id={`loan-review-explanation-considered-${loan.id}`} type="checkbox" checked={finding.memberExplanationConsidered === true} disabled={busyLoanId === loan.id} onChange={event => updateReviewFinding(loan.id, "memberExplanationConsidered", event.target.checked)} />
+                  I considered the member's explanation and relevant information.
+                </label>
+                <label className="loan-review-confirmation" htmlFor={`loan-review-conflict-free-${loan.id}`}>
+                  <input id={`loan-review-conflict-free-${loan.id}`} type="checkbox" checked={finding.noConflictOfInterest === true} disabled={busyLoanId === loan.id} onChange={event => updateReviewFinding(loan.id, "noConflictOfInterest", event.target.checked)} />
+                  I confirm that I have no other conflict of interest in this review.
+                </label>
+                <label htmlFor={`loan-review-information-${loan.id}`}>Information considered (5 to 2,000 characters)</label>
+                <textarea id={`loan-review-information-${loan.id}`} minLength="5" maxLength="2000" rows="4" value={finding.informationConsidered || ""} disabled={busyLoanId === loan.id} onChange={event => updateReviewFinding(loan.id, "informationConsidered", event.target.value)} />
+                <label htmlFor={`loan-review-reason-${loan.id}`}>Written reasons for the review outcome (20 to 2,000 characters)</label>
+                <textarea id={`loan-review-reason-${loan.id}`} minLength="20" maxLength="2000" rows="4" value={finding.reason || ""} disabled={busyLoanId === loan.id} onChange={event => updateReviewFinding(loan.id, "reason", event.target.value)} />
+                <button className="mini-btn" type="button" disabled={busyLoanId === loan.id || finding.memberExplanationConsidered !== true || finding.noConflictOfInterest !== true || informationConsidered.length < 5 || informationConsidered.length > 2000 || writtenReasons.length < 20 || writtenReasons.length > 2000} onClick={() => handleHumanReview(loan)}>Record review outcome</button>
               </div>}
             </article>;
           }) : <div className="empty-state">No loan records available.</div>}

@@ -169,6 +169,44 @@ h1 { margin: 0; font-size: clamp(23px, 3vw, 30px); letter-spacing: -.7px; }
 .panel-heading h2 { margin: 0; font-size: 13px; }
 .panel-heading p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
 .panel-link { padding: 0; border: 0; color: var(--green); background: transparent; font-size: 10px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.help-guide-panel { overflow: visible; }
+.help-guide__header { align-items: flex-start; padding: 20px 22px 6px; }
+.help-guide__header h2 { font-size: clamp(21px, 3vw, 27px); letter-spacing: -.45px; line-height: 1.2; }
+.help-guide__header p { max-width: 70ch; margin-top: 8px; font-size: 15px; line-height: 1.6; }
+.help-guide__body { display: grid; gap: 24px; padding: 8px 22px 24px; }
+.help-guide__body h3 { margin: 0; font-size: 18px; line-height: 1.35; }
+.help-guide__body h4 { margin: 14px 0 5px; font-size: 14px; line-height: 1.4; }
+.help-guide__body p, .help-guide__body li { color: var(--ink); font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.help-guide__start { padding: 18px; border: 1px solid #d8e8dc; border-radius: 10px; background: var(--green-soft); }
+.help-guide__start ol, .help-guide__steps { display: grid; gap: 10px; margin: 12px 0 0; padding-left: 23px; }
+.help-guide__topic-index { display: grid; gap: 12px; }
+.help-guide__topic-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.help-guide__topic-list a { display: block; height: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; color: var(--green); background: var(--paper); font-size: 14px; font-weight: 650; line-height: 1.45; text-decoration: none; }
+.help-guide__topic-list a:hover { background: var(--green-soft); text-decoration: underline; text-underline-offset: 3px; }
+.help-guide__topic-list a:focus-visible, .help-guide__back:focus-visible, .help-guide__faq summary:focus-visible, .help-guide__support-email a:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.help-guide__topic { padding: 20px 0; border-top: 1px solid var(--line); scroll-margin-top: 18px; }
+.help-guide__intro { margin: 7px 0 0; color: var(--muted) !important; }
+.help-guide__steps-heading { margin-top: 14px !important; }
+.help-guide__steps { gap: 12px; margin-top: 8px; }
+.help-guide__role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.help-guide__role { padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.help-guide__role h4 { margin: 0; font-size: 15px; }
+.help-guide__role ul { display: grid; gap: 7px; margin: 9px 0 0; padding-left: 20px; }
+.help-guide__note { margin: 15px 0 0; padding: 12px 14px; border-left: 3px solid var(--green); border-radius: 0 8px 8px 0; background: #f7faf7; }
+.help-guide__back { display: inline-block; margin-top: 14px; color: var(--green); font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.help-guide__faq { padding-top: 20px; border-top: 1px solid var(--line); }
+.help-guide__faq-list { margin-top: 8px; }
+.help-guide__faq details { padding: 13px 0; border-bottom: 1px solid var(--line); }
+.help-guide__faq summary { color: var(--ink); cursor: pointer; font-size: 15px; font-weight: 650; line-height: 1.5; text-decoration: underline; text-underline-offset: 3px; }
+.help-guide__faq details p { margin: 9px 0 0; }
+.help-guide__support-email { margin: -8px 0 0; font-size: 15px; }
+.help-guide__support-email a { color: var(--green); font-weight: 650; text-underline-offset: 3px; }
+@media (max-width: 620px) {
+  .help-guide__header { padding: 17px 15px 6px; }
+  .help-guide__body { gap: 20px; padding: 8px 15px 20px; }
+  .help-guide__topic-list, .help-guide__role-grid { grid-template-columns: minmax(0, 1fr); }
+  .help-guide__topic-list a { padding: 12px 13px; }
+}
 .table-wrap { width: 100%; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 th { padding: 10px 13px; border-top: 1px solid #f0f2ef; color: var(--muted); font-size: 9px; font-weight: 600; white-space: nowrap; }

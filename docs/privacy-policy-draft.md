@@ -1,11 +1,12 @@
 # Jirani Chama Privacy Policy
 
-**Status: detailed working draft for review. Do not publish as final until the bracketed facts are verified and completed.** This draft describes the product and code reviewed on 12 November 2026. Production settings, contracts, providers, and data practices may differ and must be checked. This document is not legal advice and cannot guarantee an outcome in a complaint or court case.
+**Status: detailed working draft for review. Do not publish as final until the bracketed facts are verified and completed.** This draft describes the product and code reviewed on 13 November 2026. Production settings, contracts, providers, and data practices may differ and must be checked. This document is not legal advice and cannot guarantee an outcome in a complaint or court case.
 
 **Proposed operator:** [registered legal name and legal form]  
 **Address:** [postal and physical address]  
-**Privacy contact:** 09elim3@gmail.com, currently shown on the public website. Confirm that this mailbox is monitored for rights requests and complaints.  
+**Privacy and service support:** [09elim3@gmail.com](mailto:09elim3@gmail.com), the contact supplied for the service. Before publication, confirm who controls the mailbox, that it is monitored, and that access and handling are suitable for privacy requests.<br>
 **Data Protection Officer:** [name/contact if appointed or required]  
+**ODPC registration status/certificate:** [UNRESOLVED — confirm whether registration is required for each relevant entity and verify actual status. If registered, enter the registered entity and certificate number; if an application is pending, state that it is pending, not registered.]<br>
 **Policy version:** [unique version]  
 **Effective date:** [date after verification and publication]
 
@@ -91,6 +92,25 @@ Data may come from:
 
 If a controller obtains information about you from another person rather than from you, it must provide the required notice within the timeframe and in the manner required by Kenyan law, subject to the exceptions that apply. The Chama and Operator must agree who sends that notice and how they prove it was provided.
 
+### 4.1 Collection notice: fields, requiredness, and non-provision consequences
+
+Before collecting personal data, and insofar as practicable, section 29 of the Data Protection Act requires notice of the fact and purpose of collection, the data subject’s rights, third-party recipients and safeguards, controller/processor contacts and other possible recipients, security measures, whether collection is under a law and whether provision is voluntary or mandatory, and the consequences of not providing requested data. The table maps the current forms and routes reviewed for this draft; it does not establish production settings or every data path.
+
+“Required” below means required by the current form or server route for that task, not that a statute itself requires the field. The reviewed code does not establish that any listed field is mandated by a specific written law. **[CONFIRM for each purpose whether a field is required by a particular law, otherwise whether it is voluntary or needed for the service, and the responsible controller and lawful basis.]**
+
+| Current form or route | Required and optional fields shown by the reviewed app | Purpose and consequence if required information is not provided |
+|---|---|---|
+| Initial Chama and Chairperson setup | Required: Chama name, Chairperson name, Kenyan phone, email, 6–12 digit PIN, monthly deadline day, welfare contribution, late-contribution penalty, loan monthly rate, separate Terms acceptance, and Privacy Notice acknowledgment. The four group settings are prefilled in the form but marked required. Optional in the form: operator bootstrap code, unless the deployment has configured one; the form says it is not saved with the account. | Creates the Chama and Chairperson account, configures group rules, and records the two separate policy choices. Missing or invalid required values or either unchecked choice means setup is rejected and no account or Chama is created. If a bootstrap code is configured, a missing or incorrect code is rejected. Verify its actual production handling. |
+| Invite and activate a Member | Required for the inviter: invitee name, phone, email, and requested role. Required for activation: phone, activation code, new PIN, Terms acceptance, and Privacy Notice acknowledgment. No optional field is shown in these forms. | Creates and verifies an invitation, assigns its proposed role, and activates an account. Missing or invalid invitation fields prevent creation; missing or invalid activation data or either unchecked choice prevents account activation. Invitation delivery uses configured email, or a manually shared code when email is not configured. **[CONFIRM the actual email provider, recipients, countries, and how the invitee receives the section 29 notice before another person enters their details.]** |
+| Sign-in and PIN recovery | Sign-in requires phone and PIN. Recovery requires the account email to request a code, then email, the reset code, and a new PIN to complete the reset. | Authenticates an account or restores access. Missing or invalid sign-in data prevents sign-in; no PIN reset is completed without the required valid recovery data. |
+| Profile update | Required: first name, last name, phone, and email. Optional: nickname, which the app says is shown in group chat. A profile photo is a separate optional upload if chosen. | Maintains account contact and display details. Missing or invalid required fields prevent saving the profile; omitting the nickname or not uploading a photo does not prevent a profile-details update. **[CONFIRM photo processing, storage, provider, and retention details.]** |
+| Contact form | Required: name, email, subject, and message. No optional field is shown. | Responds to a support or contact request. The route sends the message to `09elim3@gmail.com` through configurable SMTP; missing or invalid fields are rejected, and an unavailable mail service can prevent delivery. **[CONFIRM mailbox monitoring, SMTP provider and location, access, and message retention.]** |
+| Loan application and review | Required for a new application: amount, repayment term (the form preselects one month; available terms are 1, 2, 3, or 6 months), and exactly two distinct active guarantors. Required to request one human review: a reason. The officer review form requires an outcome, confirmation that the member’s explanation was considered and that the officer has no conflict, information considered, and written reasons. | Assesses and records an application using the Chama’s saved rules and existing membership, contribution, balance, outstanding-loan, and guarantor records; a review records a post-decision human finding. Missing/invalid fields, no configured policy, or too few eligible guarantors prevents the application; a missing review reason prevents the review request. The current review record does not change the recorded loan status or authorize funding. |
+| Cash contribution, repayment, or fine entry | Required: selected Member, amount, date, type, and note. Optional: receipt reference. A loan must be selected when the type is loan repayment; the method is fixed as cash. | Records an amount attributed to a Member. Missing required fields prevent the entry. This is an in-app record and does not itself transfer or verify money. |
+| Attendance, chat, penalties, dividends, and elections | Attendance requires a meeting date and records present/absent status for active Members; chat requires message text; penalties require a month; dividend calculation requires cycle start/end dates and admin expenses; an election proposal requires an office, date, and 2–20 active Member candidates, while voting requires a candidate choice and a runoff requires a date. | Records meeting, message, penalty, dividend, or election activity. Missing required fields prevent that action; for dividends, a calculation is only a preview and a separate commit is needed before entries are added. **[CONFIRM any additional required/optional fields and omission behavior in all remaining production screens and routes.]** |
+
+The rows above are a working inventory, not a verified exhaustive production data map. **[CONFIRM and document the remaining personal-data inputs, optional fields, purposes, and omission consequences, including officer changes, record corrections, push-notification subscriptions, exports, payment-related routes, flexible record fields, logs, and any production-only forms.]** For information entered about another person, **[CONFIRM who gives that person the required notice before or when their data is collected and how this is evidenced.]** Also complete the unresolved contacts, recipients, locations, security measures, lawful bases, and retention criteria in the sections below before publication.
+
 ## 5. Why data is used and the legal basis
 
 The controller must identify a lawful basis for each purpose before using personal data. The list below explains possible purposes, not a conclusion that a particular basis applies. The controller must document the actual basis and tell people what it is. Consent is only one possible basis and must not be used as a substitute for deciding whether another basis applies.
@@ -106,7 +126,7 @@ The controller must identify a lawful basis for each purpose before using person
 | Respond to a contact or support request | Contact details and the contents of the request | **[Confirm the support controller, purpose, provider, and retention period.]** |
 | Meet legal duties or establish, exercise, or defend a legal claim | Only information relevant to the duty or claim | **[Identify the particular duty or claim and the legal basis. Retain only for the applicable period.]** |
 | Process a future payment or subscription | Payment account/reference and related status only if a live feature is introduced | Not active according to information supplied for this draft. Reassess the legal basis, recipient, CBK/payment classification, and notice before launch. |
-| Record policy acceptance | User/account, policy version, time, and choice if a gate is implemented | No acceptance record was found in the reviewed app. If implemented, document its purpose, basis, access, and retention separately. |
+| Record policy choices | User/account, separate Terms and Privacy Notice fingerprints, timestamps, source, and account/Chama context | For new accounts, the server records Terms acceptance and a separate Privacy Notice acknowledgment. The acknowledgment is not consent to unrelated processing. Existing accounts are not gated at sign-in, and updated-policy re-acknowledgment is not implemented. Set access and retention for these records before publication. |
 
 Do not use group financial information for advertising, unrelated marketing, credit scoring, sale, or an unrelated commercial purpose unless that activity is actually introduced, lawfully assessed, clearly disclosed, and supported by the required choices or other basis. **Confirm whether analytics, marketing, tracking pixels, automated ranking, or model training are present before making a “we do not” statement in the public policy.**
 
@@ -187,7 +207,7 @@ These rights are subject to conditions and exceptions. A request cannot be used 
 
 ### 9.1 How to submit a request
 
-Send a request to **[confirmed privacy email]** or use **[verified in-App privacy request route, if one is implemented]**. The currently published email is `09elim3@gmail.com`; confirm that it is monitored and secure for this purpose before publication.
+Send a request to **[09elim3@gmail.com](mailto:09elim3@gmail.com)**, the service support contact supplied for this App. Confirm that the mailbox is monitored, that the responsible controller can verify requests safely, and that requests are routed to the Chama where the Chama controls the relevant records. There is no in-App privacy-request route confirmed for this draft.
 
 Include:
 
@@ -201,16 +221,15 @@ Do not include your PIN, recovery code, or another person’s unrelated informat
 
 ### 9.2 Response periods
 
-The Data Protection (General) Regulations set different response periods. The current research indicates the following general periods, subject to the exact request, exceptions, and applicable rules:
+The Data Protection (General) Regulations, 2021 set different periods and refusal procedures (regulations 7–12):
 
-- access: within 7 days;
-- correction: generally within 14 days;
-- objection: generally within 14 days;
-- restriction: generally within 14 days;
-- erasure: a response within 14 days, subject to the statutory conditions and exceptions; and
-- portability: generally within 30 days.
+- **Access (regulation 9):** comply within 7 days, subject to the applicable legal conditions and protection of other people’s information.
+- **Rectification (regulation 10):** correct inaccurate, outdated, incomplete, or misleading personal data within 14 days where correction is necessary. If the request is declined, give written reasons within 7 days.
+- **Erasure (regulation 12):** respond within 14 days. Erasure is available only on the statutory grounds and does not apply where a listed exception requires or permits continued processing, including a legal obligation, public task, qualifying archiving/research, or a legal claim. A response is not an unconditional promise to delete every group, financial, or audit record.
+- **Portability (regulation 11):** port within 30 days, subject to the regulation’s conditions and any prescribed fee that lawfully applies; a fee must be reasonable and not exceed the actual cost. If declined, give written reasons within 7 days. Regulation 11 contains no general extension clause, so this draft does not promise an extension unless a separate applicable authority is identified.
+- **Restriction (regulation 7) and objection (regulation 8):** generally act within 14 days, subject to their statutory grounds and exceptions. The objection right is absolute for direct marketing; where another objection is declined, explain the reason and the right to complain to the Data Commissioner.
 
-If the controller needs clarification, cannot meet a request, or refuses it, it must follow the applicable legal procedure, explain the reason, and tell the person how to complain. These time limits must be rechecked against the law and current ODPC guidance before this policy is published.
+These periods do not remove the need to verify the requester and protect another person’s rights, or to explain the applicable legal ground when a request cannot be granted. Regulation 11 itself provides no general portability extension; any different period needs a separately identified current legal authority.
 
 ### 9.3 Complaints
 
@@ -250,11 +269,11 @@ For the legal requirements, read the [Data Protection Act](https://kenyalaw.org/
 
 ## 12. Children’s data
 
-**The Operator must choose and state a clear age and children’s-data policy before publication.** Confirm whether a person under 18 may create an account, become a Member, be listed as a borrower or guarantor, or be named in another group record.
+**The App is not ready to process children’s personal data.** Do not use it to collect or record a child’s personal data—including in accounts, membership, loan or guarantor records, or other group records—until an age-verification and parent/guardian-consent mechanism is designed and implemented, safeguards to protect and advance the child’s rights and best interests are in place, and the assessment is complete with any DPIA required under section 31 completed before processing starts.
 
-If the App processes a child’s personal data, the controller must meet the additional requirements in Kenya’s Data Protection Act, including the applicable parental or guardian consent and child-best-interests safeguards. The Operator and Chama must define how age is established, who obtains and records any required consent, how the child’s rights are handled, and how access is limited. Do not rely on an adult’s general Terms acceptance as a substitute for a required child-specific safeguard.
+Section 33 of the [Data Protection Act, 2019](https://kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31) prohibits processing a child’s personal data unless a parent or guardian has consented and the processing protects and advances the child’s rights and best interests; it also requires appropriate age-verification and consent mechanisms. The mechanism must be determined with regard to the statutory factors, including available technology, the volume and likely proportion of children’s data, and the possibility of harm. Section 31 of the Act requires a DPIA before processing likely to result in high risk to people’s rights and freedoms.
 
-If the service is not designed for children, state the rule plainly and explain what a person should do if a child’s information has already been entered. Do not promise deletion where a lawful retention reason applies; restrict access and assess the request.
+**[UNRESOLVED: confirm the actual age-verification and consent approach, responsible parties, and whether children may use the App.]** This draft does not invent a verification method or claim that minors can safely use the App.
 
 ## 13. Cookies and session technologies
 
@@ -276,9 +295,9 @@ Before submission, the member can request a server-generated estimate for the am
 
 ### 14.2 Requesting human review
 
-The borrower can ask for a human review and provide an explanation. A Chairperson, Secretary, or Treasurer who is not the borrower or a guarantor can review the explanation and related records. The officer may confirm the recorded decision, reassess a rejected application against the original saved Chama rules using checked records, or withdraw an approval only after confirming that no money was disbursed outside the App. The officer’s action, reasons, and outcome are recorded. This is a review after the initial decision, not a vote required before an application is decided.
+The App automatically assesses and records the initial loan decision under the Chama’s configured rules; no Chairperson, Secretary, or Treasurer pre-approves an application. After that decision, the borrower may request human reconsideration and provide an explanation. A non-conflicted Chairperson, Secretary, or Treasurer who is neither the borrower nor a guarantor must consider the explanation and relevant information, then record a reasoned **upheld** or **not upheld** finding and written reasons. The audit record must identify the reviewer and record the evidence or information considered, the reviewer’s reasoning, written reasons, and outcome.
 
-The App does not set a response deadline or guarantee that an officer will see a request immediately. **Before real lending, the Chama/controller must set and communicate a practical response target, monitor incoming requests, provide an escalation route if a reviewer is unavailable or conflicted, and test that members can state their point of view and receive the result.** A human-review button by itself does not establish compliance.
+This is a post-decision review, not officer pre-approval. In the current App, the human-review finding does not itself change the loan status, authorize or reverse funding, or alter accounting records. The App sets no fixed response deadline and does not guarantee immediate review. **[Before real lending, the Chama/controller must decide and communicate any practical response target and escalation route for an unavailable or conflicted reviewer; no response target is currently built into the App.]**
 
 ### 14.3 Kenyan safeguards and assessment
 
@@ -290,13 +309,13 @@ The App does not move or disburse loan funds. A Chama or other actual lender mus
 
 This policy must display a version number and effective date. When the purpose, legal basis, data categories, recipients, transfer, or retention practice changes, the controller must update the notice and provide any notice required by law before or when the change takes effect.
 
-The App currently has no stored Privacy Policy acknowledgment or Terms acceptance record in the reviewed source. If the Operator later asks users to acknowledge receipt of a new privacy notice, the App must distinguish that acknowledgment from consent to optional processing. The acceptance process must identify the version and record the user’s choice; a notice must not say a person accepted it when the App has no such record.
+For new accounts, the App records the accepted Terms version and, separately, acknowledgment of the Privacy Notice version, together with timestamps, source, and account/Chama context. The acknowledgment shows that the notice was presented and acknowledged; it is not consent to all processing or optional uses. The application audit record is not tamper-evident. Existing accounts are not gated at sign-in, and acknowledgment of material notice updates is not implemented.
 
-See the [Terms and Conditions draft](terms-and-conditions-draft.md) for the separate proposed Terms acceptance workflow. The public Terms and Privacy pages are linked from the landing-page footer and are marked as working drafts; neither records acceptance of a final policy.
+See the [Terms and Conditions draft](terms-and-conditions-draft.md) for the separate service agreement. The public Terms and Privacy pages are linked from the landing-page footer and remain marked as working drafts; current new-account choices do not make either draft final or amount to blanket privacy consent.
 
 ## 16. Contact and complaints
 
-For a privacy request or complaint, contact **[confirmed monitored privacy email]**. The public site currently shows `09elim3@gmail.com`; confirm its owner, monitoring, response process, and suitability for sensitive requests. Do not email a PIN, recovery code, or another person’s unnecessary personal information.
+For a privacy request or complaint, contact **[09elim3@gmail.com](mailto:09elim3@gmail.com)**, the service support email supplied for this App. Before publication, confirm the mailbox owner, monitoring, secure handling, and process for forwarding requests to the relevant Chama/controller. Do not email a PIN, recovery code, or another person’s unnecessary personal information.
 
 **Operator:** [registered legal name, legal form, and address]  
 **Privacy contact:** [monitored email and secure request route]  
@@ -310,6 +329,11 @@ You may contact the [Office of the Data Protection Commissioner](https://www.odp
 
 These links provide more detail from Kenyan authorities and legislation. They do not replace this notice or decide which legal rule applies to a particular Chama or processing activity.
 
+- [Constitution of Kenya, 2010, Article 31 (right to privacy)](https://kenyalaw.org/akn/ke/act/2010/constitution)
+- [Constitution of Kenya, 2010, Article 31 (right to privacy)](https://kenyalaw.org/akn/ke/act/2010/constitution)
+- [Constitution of Kenya, 2010, Article 31 (right to privacy)](https://kenyalaw.org/akn/ke/act/2010/constitution)
+- [Constitution of Kenya, 2010, Article 31 (right to privacy)](https://kenyalaw.org/akn/ke/act/2010/constitution)
+- [Constitution of Kenya, 2010, Article 31 (right to privacy)](https://kenyalaw.org/akn/ke/act/2010/constitution)
 - [Kenya Data Protection Act, 2019](https://kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31)
 - [Data Protection (General) Regulations, 2021](https://new.kenyalaw.org/akn/ke/act/ln/2021/263/eng@2022-12-31)
 - [Data Protection (Registration of Data Controllers and Data Processors) Regulations, 2021](https://kenyalaw.org/akn/ke/act/ln/2021/265/eng@2022-12-31)

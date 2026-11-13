@@ -6,6 +6,7 @@ import MemberLoginPage from "./pages/MemberLoginPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
 import ChatPanel from "./components/ChatPanel.jsx";
+import HelpGuide from "./components/HelpGuide.jsx";
 import FinancialOverview from "./components/FinancialOverview.jsx";
 import AttendancePanel from "./components/AttendancePanel.jsx";
 import LoansPanel, { LoanRequestPanel } from "./components/LoansPanel.jsx";
@@ -75,6 +76,9 @@ function LegacyPage({ pageKey }) {
     const chatHost = host.querySelector("#react-chat-root");
     const chatRoot = chatHost ? createRoot(chatHost) : null;
     chatRoot?.render(<ChatPanel />);
+    const helpGuideHost = host.querySelector("#react-help-guide-root");
+    const helpGuideRoot = helpGuideHost ? createRoot(helpGuideHost) : null;
+    helpGuideRoot?.render(<HelpGuide />);
     const dashboardHost = host.querySelector("#react-dashboard-root");
     const financeTarget = host.querySelector("#react-finance-root");
     const dashboardRoot = dashboardHost ? createRoot(dashboardHost) : null;
@@ -148,6 +152,7 @@ function LegacyPage({ pageKey }) {
     return () => {
       mounted = false;
       chatRoot?.unmount();
+      helpGuideRoot?.unmount();
       dashboardRoot?.unmount();
       attendanceRoot?.unmount();
       loanRequestRoot?.unmount();

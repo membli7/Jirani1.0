@@ -202,13 +202,18 @@ export default function MemberLoginPage() {
             </form>
             <form id="activation-form" className="login-card" ref={activationFormRef} onSubmit={handleActivation} hidden={view !== "activate"}>
               <h2>Activate account</h2>
+              <p className="form-note"><span data-i18n="policyReviewPrompt">Before entering your details, review:</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a> · <a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a></p>
               <p className="login-notice" id="activation-notice" role="alert" aria-live="assertive" hidden={!activationNotice}>{activationNotice}</p>
               <label className="field" htmlFor="activate-phone">Phone number<input id="activate-phone" name="phone" type="tel" required /></label>
               <label className="field" htmlFor="activate-code">Activation code<input id="activate-code" name="code" inputMode="numeric" autoComplete="one-time-code" required /></label>
               <label className="field" htmlFor="activate-pin">Choose a 6–12 digit PIN<input id="activate-pin" name="pin" type="password" inputMode="numeric" autoComplete="new-password" minLength={6} maxLength={12} pattern="[0-9]{6,12}" required /></label>
               <label className="terms-acceptance" htmlFor="activate-terms-accepted">
                 <input id="activate-terms-accepted" name="termsAccepted" type="checkbox" value="true" required />
-                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a><span data-i18n="termsDraftMarker"> (working draft).</span></span>
+                <span><span data-i18n="termsAcceptanceLead">I have read and agree to the</span>{" "}<a href="/terms.html" target="_blank" rel="noopener noreferrer" data-i18n="termsAndConditions">Terms and Conditions</a></span>
+              </label>
+              <label className="terms-acceptance" htmlFor="activate-privacy-acknowledged">
+                <input id="activate-privacy-acknowledged" name="privacyNoticeAcknowledged" type="checkbox" value="true" required />
+                <span><span data-i18n="privacyAcknowledgementLead">I acknowledge that I have read the</span>{" "}<a href="/privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="privacyNotice">Privacy Notice</a><br /><span data-i18n="privacyAcknowledgementNote">This confirms receipt of the notice; it is not consent to unrelated processing.</span></span>
               </label>
               <button className="button-primary" type="submit" disabled={busy === "activation"}>{busy === "activation" ? "Activating…" : "Activate"}</button>
               <button className="panel-link" id="show-login" type="button" onClick={() => setView("login")}>Back to sign in</button>

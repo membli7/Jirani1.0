@@ -2,10 +2,10 @@
 
 **Status: working draft for review. Do not publish as final or rely on it as evidence of acceptance.** The bracketed items require the operator’s confirmation. Product statements must be checked against the live deployment and current contracts. This draft is not a legal opinion and cannot guarantee that a dispute or claim will not arise.
 
-**Draft date:** 12 November 2026
+**Draft date:** 13 November 2026
 **Proposed operator:** [registered legal name, legal form, and country of establishment]  
 **Registered or principal address:** [postal and physical address]  
-**Legal notices and complaints:** 09elim3@gmail.com, currently shown on the public website. Confirm that this inbox is monitored and provide any required postal contact.
+**Support and privacy requests:** [09elim3@gmail.com](mailto:09elim3@gmail.com) (confirm monitoring and secure handling before publication). **Postal/legal-notice contact:** [postal address and delivery instructions].
 
 ## Contents
 
@@ -44,7 +44,7 @@ Jirani Chama is intended to help savings groups keep digital records and manage 
 
 A record in Jirani Chama is information entered or actioned by a user. It is not, by itself, independent confirmation from a bank, mobile-money provider, borrower, lender, or other third party that money moved or an event occurred. The group and its members must check entries against their own source records.
 
-The application currently has no recorded Terms acceptance step. This draft cannot be described as accepted by any user until an affirmative, version-specific acceptance process is implemented and the server retains reliable evidence of it.
+During new Chama setup and invited-member activation, the App requires separate, affirmative choices: acceptance of these Terms and acknowledgment that the user has read the Privacy Notice. The server records the two file-version fingerprints, timestamps, source, and Chama/account context in existing account metadata and application audit events. These records are not tamper-evident. Existing accounts are not gated at sign-in, and re-acceptance after a policy update is not implemented. These working drafts are not final or approved legal text.
 
 ## 2. Definitions
 
@@ -85,7 +85,7 @@ The App applies server-side role and workflow rules to some actions. The App’s
 
 The Chairperson configures each Chama’s eligibility policy; the App supplies no universal numeric thresholds. When rules are configured, each application is assessed immediately without a Chairperson or Treasurer vote. The first configured amount tier that covers the requested principal sets that tier’s minimum active-membership period and minimum recorded share-capital contributions. The requested amount must also fit within both (a) the configured percentage of the Chama’s recorded balance and (b) the configured percentage of the borrower’s recorded share-capital contributions after existing principal exposure is deducted. The borrower must select exactly two distinct active guarantors, whose combined unpledged share capital must cover the request. A request passing every check is recorded as approved; otherwise it is rejected with reasons. The decision record stores the policy version and eligibility inputs. Chairperson, Secretary, and Treasurer accounts can inspect the Chama’s loan records, but this access is not a vote or approval step for a new request. The reviewed App allows only the Chairperson to change the eligibility policy.
 
-The borrower may ask for one human review and give an explanation. A non-conflicted Chairperson, Secretary, or Treasurer may confirm the recorded decision, reassess a rejected application against the original saved policy after checking the relevant records, or withdraw an approval only after confirming that no money was disbursed outside the App. The officer’s action, reasons, and outcome are recorded. The App has no configured response deadline or guaranteed alert to a reviewer; the Chama must set and communicate a practical response target and escalation route before real lending.
+The borrower may request one post-decision human review and give an explanation. A Chairperson, Secretary, or Treasurer who is not the borrower or a guarantor can respond. The current review form requires the officer to confirm that the member’s explanation and relevant information were considered, that the officer has no conflict, to record information considered and written reasons, and to select an outcome of “upheld” or “not upheld.” The App records the review and notification but does not change the recorded loan status or authorize funds. This review is not a vote or manual pre-approval for a new application. The App has no configured response deadline or guaranteed alert to a reviewer; do not imply a fixed response time, and assess the process against any applicable statutory requirement before real lending.
 
 For a new application, the App supports loan terms of 1, 2, 3, or 6 months and uses a reducing-balance monthly-interest model. Each Chama’s monthly rate is stored separately and is included in a server-generated estimate shown before submission, including estimated interest, total payable, and the installment amounts and due dates. The estimate uses the amount, term, current Chama rate, and current server calculation; it is not a binding offer, does not reserve funds, and does not confirm an external transfer. An approved record stores the rate and repayment schedule used for that decision. Repayments are applied to interest before principal under the reviewed product rule. This build has no officer/member screen for changing the rate after Chama setup. Before any rate is changed outside setup, the Chama must authorize it and the product must provide a controlled, auditable change process; otherwise new applications should not be made on a rate that has changed without notice. Because the App neither transfers funds nor records the actual off-app disbursement date, do not treat the approval record or projected schedule alone as proof that a loan was advanced or as a complete loan agreement. Before money is advanced, the actual lender must confirm the amount and date advanced, rate and method, total amount payable, due dates, fees, guarantor obligations and release, and consequences of late payment or default.
 
@@ -126,6 +126,10 @@ The Chama must make its own decision about who should have access to its records
 Use only the recovery flow available in the App. The Operator or the responsible Chama may ask for information reasonably needed to verify a request, but should not ask a User to disclose their PIN. A recovery code should be shared only through the method shown in the live App.
 
 **Complete before publication:** identify the monitored support channel, recovery methods actually in service, normal response targets, and the escalation route for a locked or compromised account. Do not promise email or SMS delivery unless it is configured and working.
+
+### 6.3 Children’s data
+
+The product choice for this draft is use by minors only with a parent or guardian. The current App has no age-verification or parent/guardian-consent flow, so these Terms do not represent minors as currently supported. **[RELEASE BLOCKER: do not onboard minors or collect identifiable child data until age verification, parent/guardian consent, best-interests safeguards, and the required DPIA are implemented and tested. Confirm the permitted scope of minor use and the verification method before release; see section 12 of the Privacy Policy draft.]** General Terms acceptance is not child-specific consent.
 
 ## 7. User and Chama responsibilities
 
@@ -174,7 +178,9 @@ A CSV or other export can contain personal and financial information. The User w
 
 The Privacy Policy describes the information handled by the App, the purposes and legal bases, who can receive it, how long it is kept, and how a person can exercise their rights. The Privacy Policy is a separate notice. Accepting these Terms is not blanket consent to all processing.
 
-For group records, the Chama may determine the purposes and means of processing and the Operator may act on the Chama’s documented instructions. The Operator may have a separate role for account administration, platform security, or support. The actual role must be determined for each purpose, not selected simply by wording in this agreement.
+Nothing in these Terms removes statutory data-protection rights or promises unconditional deletion. The Privacy Policy explains the separate response periods, conditions, and exceptions for each right; it does not promise a general extension to the 30-day portability period unless a separate applicable legal authority is identified.
+
+For group records, the Chama may determine the purposes and means of processing and the Operator may act on the Chama’s documented instructions. The actual role must be determined for each purpose, not selected simply by wording in this agreement.
 
 Read the [Privacy Policy draft](privacy-policy-draft.md). A public Privacy page is linked from the landing-page footer and is explicitly marked as a working draft. It does not complete the missing facts or record acceptance of a final notice.
 
@@ -221,7 +227,7 @@ The Operator must not use a blanket clause to disclaim its own unlawful conduct,
 
 ## 16. Complaints and dispute handling
 
-For a service complaint, send a written message to **09elim3@gmail.com** after confirming that the address is monitored. Include the account or Chama name, the date and time of the event, the screen or record involved, and what outcome you seek. Do not include a PIN, activation code, recovery code, or another person’s unrelated personal information.
+For app support, a service complaint, or a privacy request, write to **[09elim3@gmail.com](mailto:09elim3@gmail.com)**. The Operator must confirm that this inbox is monitored and suitable for sensitive requests before publication. Include the account or Chama name, the date and time of the event, the screen or record involved, and the outcome you seek. Do not include a PIN, activation code, recovery code, or another person’s unrelated personal information.
 
 A complaint about a Chama’s contribution, loan, approval, penalty, attendance, or other group decision should also be sent to the Chama’s authorized contact. The Operator can investigate how the App handled data or a request but cannot decide the merits of a group’s underlying financial agreement unless it has separately agreed to do so.
 
@@ -237,22 +243,21 @@ These Terms are intended to be governed by the laws of Kenya. Disputes remain su
 
 Every published version must have an effective date and a unique version identifier. The Operator must preserve an unaltered copy of each version presented to users and be able to retrieve the version associated with a particular acceptance.
 
-When the acceptance flow is implemented, the server should record at least the user/account identifier, relevant Chama or role where applicable, policy version, acceptance time in a defined timezone or UTC, and the event’s source. The record must be protected against unauthorized editing, included in an auditable process, and retained under the Privacy Policy’s retention schedule. Do not collect extra device or network data solely for acceptance evidence unless there is a documented need and lawful basis.
+The current server-side record stores separate SHA-256 fingerprints for the Terms and Privacy Notice, an ISO-8601 UTC time for each choice, the source, and the account/Chama context in existing JSON-backed account metadata and audit history. This is application-level evidence and is not tamper-evident. The current code does not archive prior policy files, so the Operator must keep an approved, retrievable copy of every published version and define a retention period before production. Do not collect extra device or network data solely for acceptance evidence unless there is a documented need and lawful basis.
 
-A user must actively select an unchecked acceptance control after being given access to the document. A privacy notice acknowledgment, if used, must be separate from Terms acceptance. Neither control is blanket consent to unrelated processing. A person who declines Terms must not be recorded as having accepted them.
+For new accounts, the App presents separate unchecked controls linked to these Terms and the Privacy Notice before account creation. It rejects the request unless the user actively accepts the Terms and separately acknowledges reading the Privacy Notice. That acknowledgment records notice delivery; it is not consent to all processing or to unrelated purposes. A person who declines the Terms must not be recorded as having accepted them. Existing accounts are not currently gated at sign-in, and the App does not yet require renewed choices after a policy change.
 
-**Current status:** no in-app Terms acceptance or server-side acceptance record was found in the reviewed source. This clause is a proposed requirement, not a description of current functionality.
+**Current status:** new Chama setup and invited-member activation require separate Terms acceptance and Privacy Notice acknowledgment. The server validates both choices and records each version fingerprint, timestamp, source, and account/Chama context in existing JSON-backed account metadata and audit history, without a relational schema migration. Existing-user sign-in and re-acceptance after policy changes are not implemented. The records are not tamper-evident. This draft remains incomplete and unapproved.
 
 ## 19. Operator and legal notices
 
 Operator: **[registered legal name and legal form]**  
 Address: **[postal and physical address]**  
-General contact: **[monitored email and telephone, if applicable]**  
-Privacy contact: **[confirmed monitored privacy address]**  
+General support and privacy requests: **[confirm 09elim3@gmail.com is monitored and suitable]**<br>
 Security contact: **[monitored security address]**  
 Legal notices: **[postal and electronic delivery instructions]**
 
-The currently published email address is **09elim3@gmail.com**. Confirm whether it is suitable for each of these uses before publication.
+The support contact supplied for the service is **[09elim3@gmail.com](mailto:09elim3@gmail.com)**. The Operator’s legal identity, address, mailbox access, monitoring, and legal-notice delivery process must be confirmed before publication.
 
 ## Publication checklist
 

@@ -34,6 +34,28 @@ test("all existing interactive URLs have a built React mount and local JavaScrip
   }
 });
 
+test("the dashboard exposes an accessible bilingual Help & Guide for core chama tasks", () => {
+  const dashboard = fs.readFileSync(path.join(sourceRoot, "..", "index.html"), "utf8");
+  const localeSource = fs.readFileSync(path.join(sourceRoot, "..", "i18n.js"), "utf8");
+  const app = readSource("src/App.jsx");
+  const guide = readSource("src/components/HelpGuide.jsx");
+
+  assert.match(dashboard, /href="#help-panel" data-panel="help-panel" data-i18n="helpGuideLabel"/);
+  assert.match(dashboard, /id="help-panel"[\s\S]*id="react-help-guide-root"/);
+  assert.match(app, /import HelpGuide from "\.\/components\/HelpGuide\.jsx"/);
+  assert.match(app, /helpGuideRoot\?\.render\(<HelpGuide \/>/);
+  assert.match(app, /helpGuideRoot\?\.unmount\(\)/);
+  assert.match(guide, /<nav id="help-topics" aria-label=\{copy\.topicsLabel\}>/);
+  assert.match(guide, /lang=\{language\}/);
+  assert.match(guide, /href="#help-topics"/);
+  assert.match(guide, /mailto:09elim3@gmail\.com/);
+  assert.match(localeSource, /helpGuideLabel:\s*\["Help & Guide", "Mwongozo na msaada"\]/);
+
+  for (const topicId of ["help-account", "help-navigation", "help-roles", "help-contributions", "help-loans", "help-attendance", "help-elections", "help-financial-tools", "help-chat", "help-profile-security", "help-support"]) {
+    assert.equal((guide.match(new RegExp(`id: "${topicId}"`, "g")) || []).length, 2, `${topicId} needs English and Kiswahili content`);
+  }
+});
+
 test("the English/Kiswahili switch is reversible, persistent, mobile-visible, and keeps chat content intact", () => {
   const localeSource = fs.readFileSync(path.join(sourceRoot, "..", "i18n.js"), "utf8");
   const landing = readSource("src/pages/LandingPage.jsx");
@@ -228,6 +250,11 @@ test("React owns dashboard finance, attendance, cash entry, leadership, loans, l
   assert.match(loans, /requestLoanEstimate\(/);
   assert.match(loans, /loan\.canRequestHumanReview/);
   assert.match(loans, /loan\.canReview/);
+  assert.match(loans, /loan-review-history/);
+  assert.match(loans, /Information considered/);
+  assert.match(loans, /no other conflict of interest/);
+  assert.match(loans, /Written reasons for the review outcome/);
+  assert.doesNotMatch(loans, /reassess|withdraw|confirmNoFundsDisbursed/);
   assert.match(loans, /Projected repayment schedule/);
   assert.doesNotMatch(loans, /recordLoanDecision|decideLoans/);
   assert.match(loanActions, /path: "\/api\/loans"/);
@@ -596,11 +623,29 @@ test("React loan helpers preserve supported terms and the automatic-decision, po
   assert.equal(request.validate(responseResult), true);
   assert.throws(() => requestLoanHumanReview(writeRequester, reviewOwner, loanId, "no"), /5 to 1,000/);
 
-  responseResult = { data: { id: loanId, humanReview: { status: "completed" } } };
-  assert.strictEqual(await respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { decision: "reassess", reason: "Checked the recorded receipt." }), responseResult);
+  responseResult = { data: { id: loanId, humanReview: { status: "completed", response: { outcome: "not_upheld" } } } };
+  const reviewPayload = {
+    outcome: "not_upheld",
+    memberExplanationConsidered: true,
+    noConflictOfInterest: true,
+    informationConsidered: "  Member explanation, original decision record, and receipt details.  ",
+    reason: "  The reviewed information supports a different conclusion from the automated decision.  ",
+  };
+  assert.strictEqual(await respondToLoanHumanReview(writeRequester, reviewOwner, loanId, reviewPayload), responseResult);
   assert.equal(request.path, "/api/loans/loan%2F2/reviews");
-  assert.deepEqual(request.body, { decision: "reassess", reason: "Checked the recorded receipt." });
+  assert.deepEqual(request.body, {
+    outcome: "not_upheld",
+    memberExplanationConsidered: true,
+    noConflictOfInterest: true,
+    informationConsidered: "Member explanation, original decision record, and receipt details.",
+    reason: "The reviewed information supports a different conclusion from the automated decision.",
+  });
   assert.equal(request.validate(responseResult), true);
+  assert.throws(() => respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { ...reviewPayload, outcome: "reassess" }), /upheld/);
+  assert.throws(() => respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { ...reviewPayload, memberExplanationConsidered: false }), /considered/);
+  assert.throws(() => respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { ...reviewPayload, noConflictOfInterest: false }), /conflict of interest/);
+  assert.throws(() => respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { ...reviewPayload, informationConsidered: "no" }), /5 to 2,000/);
+  assert.throws(() => respondToLoanHumanReview(writeRequester, reviewOwner, loanId, { ...reviewPayload, reason: "Short." }), /20 to 2,000/);
 
   responseResult = { data: { id: loanId, status: "cancelled" } };
   assert.strictEqual(await cancelLegacyLoanRequest(writeRequester, reviewOwner, loanId), responseResult);
