@@ -878,6 +878,28 @@ test("React leadership actions preserve bootstrap routes and validate officer as
   assert.equal(requests.length, 2);
 });
 
+test("re-election approval UI shows local deadlines and only aggregate/private-viewer ballot information", () => {
+  const panel = readSource("src/components/ReElectionApprovalPanel.jsx");
+  const actions = readSource("src/electionActions.mjs");
+  const domain = fs.readFileSync(path.join(appRoot, "leadership-elections.js"), "utf8");
+  const translations = fs.readFileSync(path.join(appRoot, "..", "en public", "i18n.js"), "utf8");
+
+  assert.match(panel, /Intl\.DateTimeFormat\("en-GB", \{ dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZone: "Africa\/Nairobi" \}\)/);
+  assert.match(panel, /approval\.deadlineAt/);
+  assert.match(panel, /approval\.yesVotes/);
+  assert.match(panel, /approval\.noVotes/);
+  assert.match(panel, /approval\.hasVoted/);
+  assert.match(panel, /approval\.canVote/);
+  assert.match(panel, /approval\.canSchedule/);
+  assert.match(panel, /approval\.privacyNotice/);
+  assert.doesNotMatch(panel, /approval\.ballots|eligibleVoterIds|voterToken/);
+  assert.match(actions, /path: "\/api\/leadership-election-approvals"/);
+  assert.match(actions, /\/api\/leadership-election-approvals\/\$\{encodeURIComponent\(approvalId\)\}\/vote/);
+  assert.match(actions, /\/api\/leadership-election-approvals\/\$\{encodeURIComponent\(approvalId\)\}\/schedule/);
+  assert.match(domain, /The application operator may be able to access stored ballot records; this ballot is not operator-anonymous\./);
+  assert.match(translations, /"Re-election requests": "Maombi ya uchaguzi upya"/);
+});
+
 test("React invitation action preserves the existing response contract and verifies the server idempotency key", async () => {
   const helperUrl = pathToFileURL(path.join(sourceRoot, "src", "invitationActions.mjs")).href;
   const { createInvitation } = await import(helperUrl);

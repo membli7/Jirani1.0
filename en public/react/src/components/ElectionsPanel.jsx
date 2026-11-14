@@ -6,6 +6,7 @@ import {
   submitElectionDecision,
 } from "../electionActions.mjs";
 import { requestDashboardRefresh } from "../loanActions.mjs";
+import ReElectionApprovalPanel from "./ReElectionApprovalPanel.jsx";
 
 function useDashboardSnapshot() {
   const [snapshot, setSnapshot] = useState(null);
@@ -84,6 +85,7 @@ export default function ElectionsPanel() {
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState({ text: "", error: false });
   const elections = Array.isArray(snapshot?.leadershipElections) ? snapshot.leadershipElections : [];
+  const reElectionApprovals = Array.isArray(snapshot?.leadershipReElectionApprovals) ? snapshot.leadershipReElectionApprovals : [];
   const notifications = Array.isArray(snapshot?.notifications) ? snapshot.notifications : [];
   const members = Array.isArray(snapshot?.members) ? snapshot.members : [];
   const candidates = members.filter(member => member.status === "active" && member.role === "member");
@@ -201,6 +203,7 @@ export default function ElectionsPanel() {
       <h2 id="leadership-elections-title">{t("Leadership elections")}</h2>
       <p>{t("The Chairperson or Secretary schedules candidates and a date. Eligible chama accounts can cast one secret vote on that date only, from midnight to 11:59 p.m. Nairobi time. The highest vote count wins and takes office when voting closes; a tie requires a scheduled runoff.")}</p>
     </div></div>
+    <ReElectionApprovalPanel snapshot={snapshot} approvals={reElectionApprovals} candidates={candidates} />
     {canPropose && <form id="election-proposal-form" className="form-body" onSubmit={handleProposal}>
       <h3>{t("Schedule an election")}</h3>
       <label className="field" htmlFor="election-date">{t("Election date")}<input id="election-date" name="scheduledDate" type="date" min={today} required disabled={Boolean(busy)} /></label>

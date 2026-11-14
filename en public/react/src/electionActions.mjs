@@ -52,3 +52,40 @@ export function scheduleElectionRunoff(writeRequester, owner, electionId, schedu
     validate: response => typeof response?.data?.id === "string" && response.data.scheduledDate === scheduledDate,
   });
 }
+
+export function requestReElectionApproval(writeRequester, owner) {
+  return writeRequester.submit({
+    owner,
+    path: "/api/leadership-election-approvals",
+    method: "POST",
+    body: {},
+    validate: response => typeof response?.data?.id === "string" && response.data.status === "voting" && offices.has(response.data.role),
+  });
+}
+
+export function castReElectionApprovalVote(writeRequester, owner, approvalId, choice) {
+  if (!approvalId || !["yes", "no"].includes(choice)) throw new TypeError("Choose Yes or No for this approval ballot.");
+  return writeRequester.submit({
+    owner,
+    path: `/api/leadership-election-approvals/${encodeURIComponent(approvalId)}/vote`,
+    method: "POST",
+    body: { choice },
+    validate: response => response?.data?.id === approvalId,
+  });
+}
+
+export function scheduleApprovedReElection(writeRequester, owner, approvalId, proposal) {
+  const candidateIds = Array.isArray(proposal?.candidateIds) ? proposal.candidateIds.map(String) : [];
+  if (!approvalId || !/^\d{4}-\d{2}-\d{2}$/.test(String(proposal?.scheduledDate || ""))
+    || candidateIds.length < 2 || candidateIds.length > 20
+    || candidateIds.some(id => !id) || new Set(candidateIds).size !== candidateIds.length) {
+    throw new TypeError("Choose an election date and 2 to 20 different active Member candidates.");
+  }
+  return writeRequester.submit({
+    owner,
+    path: `/api/leadership-election-approvals/${encodeURIComponent(approvalId)}/schedule`,
+    method: "POST",
+    body: { candidateIds, scheduledDate: proposal.scheduledDate },
+    validate: response => typeof response?.data?.id === "string" && response.data.reElection === true,
+  });
+}

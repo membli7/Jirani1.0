@@ -26,7 +26,7 @@ const { getC2bSubscriptionConfig, isTrustedCallbackIp, parseC2bPayment } = requi
 const { createOneTimeCodeVerifier } = require("./security/one-time-code");
 const { appendJsonEmailCapture } = require("./security/email-log");
 const { hasReceiptReferenceConflict, parseReceiptReference } = require("./security/receipt-references");
-const { addNotifications, applyDueElections, applyScheduledElections, electionWindow, electionView, isElection, resultFor } = require("./leadership-elections");
+const { addNotifications, applyDueElections, applyDueReElectionApprovals, applyScheduledElections, createScheduledReElection, electionWindow, electionView, isElection, isReElectionApproval, reElectionApprovalView, resultFor } = require("./leadership-elections");
 const { connectEventClients, createEventDelivery } = require("./event-delivery");
 const { loadAppEnv } = require("./config/env");
 const { MAX_LOAN_AMOUNT_KES, evaluateLoanEligibility, validateLoanPolicy } = require("./loan-policy");
@@ -348,6 +348,11 @@ function hasAdultEligibilityDeclaration(value) { return value === true || value 
 function electionVoterToken(election, user) {
   return crypto.createHmac("sha256", SESSION_SECRET)
     .update(`leadership-election:${election.chamaId}:${election.id}:${user.id}`)
+    .digest("hex");
+}
+function reElectionApprovalVoterToken(approval, user) {
+  return crypto.createHmac("sha256", SESSION_SECRET)
+    .update(`leadership-re-election-approval:${approval.chamaId}:${approval.id}:${user.id}`)
     .digest("hex");
 }
 function displayPhone(phone, includeFull = false) {
@@ -875,7 +880,12 @@ async function commit(req, res, next, updated, status, body, storedBody = body, 
 async function processDueLeadershipElections() {
   return withSerializedWrite(async () => {
     const updated = structuredClone(state);
-    const completed = [...applyDueElections(updated), ...applyScheduledElections(updated)];
+    const timestamp = Date.now();
+    const completed = [
+      ...applyDueElections(updated, timestamp),
+      ...applyDueReElectionApprovals(updated, timestamp, (approval, userId) => reElectionApprovalVoterToken(approval, { id: userId })),
+      ...applyScheduledElections(updated, timestamp),
+    ];
     if (!completed.length) return 0;
     await persist(updated);
     for (const chamaId of new Set(completed.map(item => item.chamaId))) publishMemberUpdate(chamaId);
@@ -914,7 +924,11 @@ function scheduleNotificationReminderCheck(retryDelayMs) {
 }
 function scheduleLeadershipElectionCheck(retryDelayMs) {
   if (leadershipElectionTimer) clearTimeout(leadershipElectionTimer);
-  const nextAt = Math.min(...state.leadershipChanges.filter(isElection).flatMap(item => {
+  const nextAt = Math.min(...state.leadershipChanges.filter(item => isElection(item) || isReElectionApproval(item)).flatMap(item => {
+    if (isReElectionApproval(item)) {
+      const deadline = Date.parse(item.deadlineAt);
+      return item.status === "voting" && Number.isFinite(deadline) ? [deadline] : [];
+    }
     if (item.status === "verified" && Number.isFinite(Date.parse(item.activationAt))) return [Date.parse(item.activationAt)];
     const window = electionWindow(item.scheduledDate);
     if (!window) return [];
@@ -1090,6 +1104,7 @@ function permissionsFor(user, usersInChama = scopeToChama(state.users, user.cham
     proposeLeadership: user.role === "chairperson",
     bootstrapLeadership: user.role === "chairperson" && !anotherOfficer && !priorLeadershipChange,
     proposeLeadershipElection: ["chairperson", "secretary"].includes(user.role),
+    requestReElection: ["chairperson", "secretary", "treasurer"].includes(user.role),
     acceptLeadershipElection: user.role === "chairperson",
     closeLeadershipElection: user.role === "chairperson",
     verifyLeadershipElection: user.role === "chairperson",
@@ -1161,11 +1176,15 @@ function dashboardFor(user) {
           })
       : [],
     leadershipChanges: ["chairperson", "secretary"].includes(user.role)
-      ? scopeToChama(state.leadershipChanges, chamaId).filter(change => !isElection(change))
+      ? scopeToChama(state.leadershipChanges, chamaId).filter(change => !isElection(change) && !isReElectionApproval(change))
       : [],
     leadershipElections: scopeToChama(state.leadershipChanges, chamaId)
       .filter(isElection)
       .map(election => electionView(election, user, usersInChama, electionVoterToken(election, user))),
+    leadershipReElectionApprovals: scopeToChama(state.leadershipChanges, chamaId)
+      .filter(isReElectionApproval)
+      .map(approval => reElectionApprovalView(approval, user, usersInChama, reElectionApprovalVoterToken(approval, user),
+        (approval.eligibleVoterIds || []).map(userId => reElectionApprovalVoterToken(approval, { id: userId })))),
     notifications: scopeToChama(state.messages, chamaId, item => item.recipientId ? item.chamaId : null)
       .filter(item => item.type === "notification" && item.recipientId === user.id)
       .slice(-50)
@@ -2671,19 +2690,129 @@ function activeElectionFor(chamaId) {
 function electionById(id, chamaId) {
   return scopeToChama(state.leadershipChanges, chamaId).find(item => isElection(item) && item.id === id);
 }
+function activeElectionForRole(chamaId, role, records = state.leadershipChanges) {
+  return scopeToChama(records, chamaId).find(item => isElection(item) && item.role === role && activeElectionStatuses.has(item.status));
+}
+function reElectionApprovalById(id, chamaId, records = state.leadershipChanges) {
+  return scopeToChama(records, chamaId).find(item => isReElectionApproval(item) && item.id === id);
+}
+function openReElectionApprovalFor(chamaId, role, records = state.leadershipChanges) {
+  return scopeToChama(records, chamaId).find(item => isReElectionApproval(item) && item.role === role &&
+    (item.status === "voting" || (item.status === "approved" && !item.electionId)));
+}
 function activeGroupMembers(chamaId) {
   return scopeToChama(state.users, chamaId).filter(item => item.status === "active");
 }
 function safeElectionView(election, viewer) {
   return electionView(election, viewer, scopeToChama(state.users, election.chamaId), electionVoterToken(election, viewer));
 }
+function safeReElectionApprovalView(approval, viewer, users = scopeToChama(state.users, approval.chamaId)) {
+  const eligibleTokens = new Set((approval.eligibleVoterIds || []).map(userId => reElectionApprovalVoterToken(approval, { id: userId })));
+  return reElectionApprovalView(approval, viewer, users, reElectionApprovalVoterToken(approval, viewer), eligibleTokens);
+}
 app.get("/api/leadership-elections", requireAuth, requirePinChanged, async (req, res, next) => {
   try {
     await processDueLeadershipElections();
     const data = scopeToChama(state.leadershipChanges, req.user.chamaId).filter(isElection).map(item => safeElectionView(item, req.user));
-    return res.json({ data, notifications: dashboardFor(req.user).notifications });
+    const reElectionApprovals = scopeToChama(state.leadershipChanges, req.user.chamaId).filter(isReElectionApproval)
+      .map(item => safeReElectionApprovalView(item, req.user));
+    return res.json({ data, reElectionApprovals, notifications: dashboardFor(req.user).notifications });
   } catch (error) { return next(error); }
 });
+app.post("/api/leadership-election-approvals", requireAuth, requirePinChanged, requireActiveSubscription, idempotent((req, res, next) => {
+  const leader = state.users.find(item => item.id === req.user.id && item.chamaId === req.user.chamaId && item.status === "active");
+  if (!leader || !["chairperson", "secretary", "treasurer"].includes(leader.role)) {
+    return res.status(403).json({ message: "Only a current Chairperson, Secretary, or Treasurer can request re-election for their own position." });
+  }
+  const role = leader.role;
+  const updated = structuredClone(state);
+  const resolved = applyDueReElectionApprovals(updated, Date.now(), (approval, userId) => reElectionApprovalVoterToken(approval, { id: userId }));
+  if (activeElectionForRole(req.user.chamaId, role, updated.leadershipChanges) || openReElectionApprovalFor(req.user.chamaId, role, updated.leadershipChanges)) {
+    const body = { message: "A re-election approval request or election is already open for this position." };
+    if (resolved.length) return commit(req, res, next, updated, 409, body, undefined, () => publishMemberUpdate(req.user.chamaId));
+    return res.status(409).json(body);
+  }
+  const eligibleVoterIds = [...new Set(activeGroupMembers(req.user.chamaId).map(member => member.id))];
+  if (!eligibleVoterIds.length) return res.status(409).json({ message: "At least one active member is required to open an approval ballot." });
+  const openedAt = now();
+  const approval = {
+    id: newId(), type: "re-election-approval", role, status: "voting",
+    requestedBy: leader.id, openedAt,
+    deadlineAt: new Date(Date.parse(openedAt) + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    eligibleVoterIds, ballots: [], chamaId: req.user.chamaId,
+  };
+  updated.leadershipChanges.push(approval);
+  updated.auditLog.push(auditEntry("leadership.re-election-approval.opened", approval.id, leader, { role, eligibleMembers: eligibleVoterIds.length }));
+  addNotifications(updated, approval, `A private seven-day approval ballot to reopen the ${role} election is now open.` , openedAt);
+  const data = safeReElectionApprovalView(approval, leader, scopeToChama(updated.users, req.user.chamaId));
+  return commit(req, res, next, updated, 201, { message: `The seven-day ${role} re-election approval ballot is open.`, data }, undefined, () => {
+    scheduleLeadershipElectionCheck();
+    publishMemberUpdate(req.user.chamaId);
+  });
+}));
+app.post("/api/leadership-election-approvals/:id/vote", requireAuth, requirePinChanged, requireActiveSubscription, idempotent((req, res, next) => {
+  const updated = structuredClone(state);
+  const resolved = applyDueReElectionApprovals(updated, Date.now(), (approval, userId) => reElectionApprovalVoterToken(approval, { id: userId }));
+  const approval = reElectionApprovalById(req.params.id, req.user.chamaId, updated.leadershipChanges);
+  if (!approval) return res.status(404).json({ message: "Re-election approval ballot not found." });
+  if (approval.status !== "voting") {
+    const body = { message: "This approval ballot is closed." };
+    if (resolved.includes(approval)) return commit(req, res, next, updated, 409, body, undefined, () => publishMemberUpdate(req.user.chamaId));
+    return res.status(409).json(body);
+  }
+  const voter = updated.users.find(item => item.id === req.user.id && item.chamaId === req.user.chamaId && item.status === "active");
+  if (!voter || !(approval.eligibleVoterIds || []).includes(voter.id)) return res.status(403).json({ message: "Only active members who were eligible when this ballot opened may vote." });
+  const choice = clean(req.body?.choice).toLowerCase();
+  if (!["yes", "no"].includes(choice)) return res.status(400).json({ message: "Choose Yes or No." });
+  const voterToken = reElectionApprovalVoterToken(approval, voter);
+  if ((approval.ballots || []).some(ballot => ballot.voterToken === voterToken)) return res.status(409).json({ message: "You have already voted in this approval ballot." });
+  approval.ballots.push({ voterToken, choice, at: now() });
+  const eligibleTokens = new Set((approval.eligibleVoterIds || []).map(userId => reElectionApprovalVoterToken(approval, { id: userId })));
+  const data = reElectionApprovalView(approval, voter, scopeToChama(updated.users, req.user.chamaId), voterToken, eligibleTokens);
+  return commit(req, res, next, updated, 200, { message: "Your private Yes/No ballot has been recorded.", data }, undefined, () => publishMemberUpdate(req.user.chamaId));
+}));
+app.post("/api/leadership-election-approvals/:id/schedule", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
+  const updated = structuredClone(state);
+  const resolved = applyDueReElectionApprovals(updated, Date.now(), (approval, userId) => reElectionApprovalVoterToken(approval, { id: userId }));
+  const publishResolved = () => {
+    for (const chamaId of new Set(resolved.map(item => item.chamaId))) publishMemberUpdate(chamaId);
+  };
+  const respond = (status, body) => {
+    if (!resolved.length) return res.status(status).json(body);
+    return commit(req, res, next, updated, status, body, undefined, () => {
+      scheduleLeadershipElectionCheck();
+      publishResolved();
+    });
+  };
+  const approval = reElectionApprovalById(req.params.id, req.user.chamaId, updated.leadershipChanges);
+  if (!approval) return respond(404, { message: "Re-election approval request not found." });
+  if (approval.status !== "approved" || approval.electionId) return respond(409, { message: "Only a passed approval ballot without an election already scheduled can open this re-election." });
+  if (activeElectionFor(req.user.chamaId)) return respond(409, { message: "Another leadership election is already in progress for this chama." });
+  const scheduledDate = clean(req.body?.scheduledDate);
+  const rawCandidateIds = Array.isArray(req.body?.candidateIds) ? req.body.candidateIds : [];
+  const candidateIds = [...new Set(rawCandidateIds.map(clean).filter(Boolean))];
+  if (!validMeetingDate(scheduledDate) || scheduledDate < todayInNairobi()) return respond(400, { message: "Choose today or a future date for the re-election." });
+  if (candidateIds.length < 2 || candidateIds.length > 20 || candidateIds.length !== rawCandidateIds.length) return respond(400, { message: "Select 2 to 20 different active Members as candidates." });
+  for (const id of candidateIds) if (state.users.some(item => item.id === id && item.chamaId !== req.user.chamaId)) return respond(404, { message: "One or more candidates are not active members of this chama." });
+  const members = activeGroupMembers(req.user.chamaId);
+  const candidates = candidateIds.map(id => members.find(item => item.id === id && item.role === "member"));
+  if (candidates.some(item => !item)) return respond(400, { message: "Every candidate must be an active Member of this chama." });
+  const savedApproval = reElectionApprovalById(approval.id, req.user.chamaId, updated.leadershipChanges);
+  const at = now();
+  const election = createScheduledReElection(updated, savedApproval, {
+    id: newId(), candidateIds, candidateNames: candidates, scheduledDate, scheduledBy: req.user.id, at,
+  });
+  updated.auditLog.push(auditEntry("leadership.election.re-election-scheduled", election.id, req.user, {
+    role: election.role, approvalId: savedApproval.id, candidateCount: candidateIds.length, scheduledDate,
+  }));
+  addNotifications(updated, election, `The approved ${election.role} re-election has been scheduled for ${scheduledDate}.`, at);
+  applyScheduledElections(updated);
+  return commit(req, res, next, updated, 201, { message: `The approved ${election.role} re-election is scheduled for ${scheduledDate}.`, data: safeElectionView(election, req.user) }, undefined, () => {
+    scheduleLeadershipElectionCheck();
+    publishResolved();
+    publishMemberUpdate(req.user.chamaId);
+  });
+}));
 app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), requireActiveSubscription, idempotent((req, res, next) => {
   const role = clean(req.body?.role);
   const scheduledDate = clean(req.body?.scheduledDate);
@@ -2692,6 +2821,7 @@ app.post("/api/leadership-elections", requireAuth, requirePinChanged, requireRol
   if (!["chairperson", "secretary", "treasurer"].includes(role)) return res.status(400).json({ message: "Choose Chairperson, Secretary, or Treasurer for this election." });
   if (!validMeetingDate(scheduledDate) || scheduledDate < todayInNairobi()) return res.status(400).json({ message: "Choose today or a future date for the election." });
   if (candidateIds.length < 2 || candidateIds.length > 20 || candidateIds.length !== rawCandidateIds.length) return res.status(400).json({ message: "Select 2 to 20 different active members as candidates." });
+  if (openReElectionApprovalFor(req.user.chamaId, role)) return res.status(409).json({ message: "Use the re-election request flow for this position while its approval is open or awaiting scheduling." });
   if (activeElectionFor(req.user.chamaId)) return res.status(409).json({ message: "Another leadership election is already in progress for this chama." });
   for (const id of candidateIds) if (state.users.some(item => item.id === id && item.chamaId !== req.user.chamaId)) return res.status(404).json({ message: "One or more candidates are not active members of this chama." });
   const members = activeGroupMembers(req.user.chamaId);
@@ -2867,7 +2997,7 @@ app.post("/api/leadership-changes/:id/revoke", requireAuth, requirePinChanged, r
   updated.auditLog.push(revocation);
   return commit(req, res, next, updated, 200, { message: "Leadership role revoked.", data: record, history: revocation });
 }));
-app.get("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId).filter(item => !isElection(item)) }));
+app.get("/api/leadership-changes", requireAuth, requirePinChanged, requireRole("chairperson", "secretary"), (req, res) => res.json({ data: scopeToChama(state.leadershipChanges, req.user.chamaId).filter(item => !isElection(item) && !isReElectionApproval(item)) }));
 app.get("/api/audit-log", requireAuth, requirePinChanged, requireRole("chairperson", "treasurer"), (req, res) => {
   const userChamas = new Map(state.users.map(user => [user.id, user.chamaId]));
   const data = scopeToChama(state.auditLog, req.user.chamaId, entry =>

@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { promisify } = require("node:util");
@@ -14,7 +15,29 @@ let server;
 let baseUrl;
 let tempDir;
 let cookie;
-const testPort = 20000 + (process.pid % 10000);
+let testPort;
+let testClockFile;
+
+async function reserveLoopbackPort() {
+  const probe = net.createServer();
+  await new Promise((resolve, reject) => {
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", resolve);
+  });
+  const address = probe.address();
+  assert.equal(address.address, "127.0.0.1");
+  await new Promise((resolve, reject) => {
+    probe.close(error => error ? reject(error) : resolve());
+  });
+  return address.port;
+}
+
+function isolatedProcessEnv() {
+  const allowedKeys = ["PATH", "SystemRoot", "WINDIR", "TEMP", "TMP"];
+  return Object.fromEntries(allowedKeys
+    .filter(key => typeof process.env[key] === "string")
+    .map(key => [key, process.env[key]]));
+}
 
 function request(route, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -31,35 +54,72 @@ async function json(response) {
   return response.json();
 }
 
-function todayInNairobi() {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+async function loginWithPin(phone, pin) {
+  cookie = null;
+  const response = await request("/api/login", { method: "POST", body: JSON.stringify({ phone, pin }) });
+  assert.equal(response.status, 200);
+  cookie = response.headers.getSetCookie?.()[0]?.split(";")[0] || response.headers.get("set-cookie")?.split(";")[0];
+  assert.ok(cookie, "login should establish a session cookie");
+  return cookie;
+}
+
+function setServerTime(timestamp) {
+  const value = typeof timestamp === "number" ? timestamp : Date.parse(timestamp);
+  assert.ok(Number.isFinite(value), "test clock must be set to a valid timestamp");
+  fs.writeFileSync(testClockFile, String(value), "utf8");
+  return value;
+}
+
+function todayInNairobi(timestamp = Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(timestamp));
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
 }
 
 before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "jirani-chama-test-"));
+  testPort = await reserveLoopbackPort();
+  testClockFile = path.join(tempDir, "clock.txt");
+  fs.writeFileSync(testClockFile, String(Date.now()), "utf8");
+  const testClockPreload = path.join(tempDir, "test-clock.cjs");
+  fs.writeFileSync(testClockPreload, [
+    "const fs = require('node:fs');",
+    "const NativeDate = Date;",
+    `const clockFile = ${JSON.stringify(testClockFile)};`,
+    "class TestDate extends NativeDate {",
+    "  constructor(...args) { super(...(args.length ? args : [Number(fs.readFileSync(clockFile, 'utf8'))])); }",
+    "  static now() { return Number(fs.readFileSync(clockFile, 'utf8')); }",
+    "}",
+    "globalThis.Date = TestDate;",
+  ].join("\n"), "utf8");
   const initialState = { version: 2, users: [], transactions: [], loans: [], payouts: [], invitations: [], leadershipChanges: [], pendingMpesas: [], idempotency: {}, registers: [], auditLog: [] };
   fs.writeFileSync(path.join(tempDir, "data.json"), `\uFEFF${JSON.stringify(initialState)}`, "utf8");
-  server = execFile(process.execPath, ["server.js"], {
+  server = execFile(process.execPath, ["--require", testClockPreload, "server.js"], {
     cwd: path.join(__dirname, ".."),
     env: {
-      ...process.env,
+      ...isolatedProcessEnv(),
       NODE_ENV: "test",
       DATA_BACKEND: "json",
       PORT: String(testPort),
+      APP_BIND_HOST: "127.0.0.1",
       SESSION_SECRET: "integration-test-session-secret",
+      REDIS_URL: "",
+      SESSION_STORE: "memory",
+      PIN_RECOVERY_TEST_REDIS_URL: "",
       CHAMA_DATA_FILE: path.join(tempDir, "data.json"),
       CHAMA_PROFILE_ICON_DIR: path.join(tempDir, "profile-icons"),
       CHAMA_PROFILE_DETAILS_FILE: path.join(tempDir, "profile-details.json"),
+      CHAMA_PUSH_SUBSCRIPTIONS_FILE: path.join(tempDir, "push-subscriptions.json"),
       AFRICASTALKING_USERNAME: "",
       AFRICASTALKING_API_KEY: "",
     },
   });
 
   let output = "";
+  let stderr = "";
   baseUrl = `http://127.0.0.1:${testPort}`;
   server.stdout.on("data", chunk => { output += chunk; });
+  server.stderr.on("data", chunk => { stderr += chunk; });
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Server did not start. Output: ${output}`)), 5000);
     const onData = () => {
@@ -72,17 +132,22 @@ before(async () => {
     server.once("error", reject);
     server.once("exit", code => reject(new Error(`Server exited with code ${code}. Output: ${output}`)));
   });
+  let probeDetails = "";
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      if ((await fetch(`${baseUrl}/api/health`)).ok) return;
-    } catch {}
+      const response = await fetch(`${baseUrl}/api/health/live`);
+      if (response.ok) return;
+      probeDetails = `HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`;
+    } catch (error) {
+      probeDetails = `${error.name}: ${error.message}${error.cause?.code ? ` (${error.cause.code})` : ""}`;
+    }
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  throw new Error(`Server did not accept connections. Output: ${output}`);
+  throw new Error(`Server did not respond to its loopback liveness probe. Output: ${output}. Stderr: ${stderr}. Probe: ${probeDetails}`);
 });
 
 after(async () => {
-  if (server && !server.killed) {
+  if (server && server.exitCode === null && server.signalCode === null) {
     server.kill("SIGTERM");
     await new Promise(resolve => server.once("exit", resolve));
   }
@@ -532,6 +597,142 @@ describe("Jirani Chama server", () => {
     assert.equal(secondActivation.status, 201);
     const secondCandidateId = (await json(secondActivation)).user.id;
 
+    const activateMember = async (name, phone, email, pin) => {
+      const invitation = await request("/api/invitations", {
+        method: "POST", write: true, body: JSON.stringify({ name, phone, email, role: "member" }),
+      });
+      assert.equal(invitation.status, 201);
+      const invitationBody = await json(invitation);
+      const activation = await request("/api/invitations/activate", {
+        method: "POST",
+        body: JSON.stringify({ phone, code: invitationBody.activationCode, pin, termsAccepted: true, privacyNoticeAcknowledged: true, ageConfirmed: true }),
+      });
+      assert.equal(activation.status, 201);
+      return (await json(activation)).user.id;
+    };
+    const extraVoterId = await activateMember("Extra Approval Voter", "0712345683", "extra-voter@example.test", "135790");
+    const edgeVoterId = await activateMember("Deadline Voter", "0712345684", "deadline-voter@example.test", "112233");
+    const treasurerCookie = await loginWithPin("0712345680", "901234");
+    const secondCookie = await loginWithPin("0712345681", "678901");
+    const extraCookie = await loginWithPin("0712345683", "135790");
+    const edgeCookie = await loginWithPin("0712345684", "112233");
+
+    cookie = chairCookie;
+    const chairApprovalResponse = await request("/api/leadership-election-approvals", {
+      method: "POST", write: true, body: JSON.stringify({ role: "treasurer" }),
+    });
+    assert.equal(chairApprovalResponse.status, 201);
+    const chairApproval = (await json(chairApprovalResponse)).data;
+    const approvalId = chairApproval.id;
+    assert.equal(chairApproval.role, "chairperson", "the API must bind a request to the authenticated leader's own office");
+    assert.equal(Date.parse(chairApproval.deadlineAt) - Date.parse(chairApproval.openedAt), 7 * 24 * 60 * 60 * 1000);
+    assert.equal(chairApproval.eligibleMembers, 6);
+    for (const privateField of ["requestedBy", "eligibleVoterIds", "ballots", "voterToken"]) assert.equal(Object.hasOwn(chairApproval, privateField), false);
+    assert.match(chairApproval.privacyNotice, /application operator may be able to access/);
+    assert.equal((await request("/api/leadership-election-approvals/missing-approval/vote", {
+      method: "POST", write: true, body: JSON.stringify({ choice: "yes" }),
+    })).status, 404, "a missing approval request should return not found without changing state");
+
+    cookie = secondCookie;
+    assert.equal((await request("/api/leadership-election-approvals", { method: "POST", write: true, body: JSON.stringify({ role: "chairperson" }) })).status, 403,
+      "an ordinary member cannot request a re-election even if the body names an office");
+    cookie = secretaryCookie;
+    const secretaryApprovalResponse = await request("/api/leadership-election-approvals", {
+      method: "POST", write: true, body: JSON.stringify({ role: "treasurer" }),
+    });
+    assert.equal(secretaryApprovalResponse.status, 201, "different positions may have separate open approval requests");
+    const secretaryApproval = (await json(secretaryApprovalResponse)).data;
+    assert.equal(secretaryApproval.role, "secretary");
+    assert.equal(secretaryApproval.deadlineAt, chairApproval.deadlineAt, "the isolated test clock gives both ballots the same exact boundary");
+    cookie = chairCookie;
+    assert.equal((await request("/api/leadership-election-approvals", { method: "POST", write: true, body: JSON.stringify({ role: "secretary" }) })).status, 409,
+      "only one open request is allowed for the same position");
+    assert.equal((await request(`/api/leadership-election-approvals/${approvalId}/schedule`, {
+      method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId], scheduledDate: todayInNairobi() }),
+    })).status, 409, "an election cannot be scheduled before the approval ballot passes at its deadline");
+    assert.equal((await request("/api/leadership-elections", {
+      method: "POST", write: true,
+      body: JSON.stringify({ role: "chairperson", candidateIds: [treasurerId, secondCandidateId], scheduledDate: todayInNairobi() }),
+    })).status, 409, "the standard schedule route cannot bypass an open role-specific approval ballot");
+
+    const lateInvitation = await request("/api/invitations", {
+      method: "POST", write: true,
+      body: JSON.stringify({ name: "Late Approval Voter", phone: "0712345682", email: "late-voter@example.test", role: "member" }),
+    });
+    assert.equal(lateInvitation.status, 201);
+    const lateInvitationBody = await json(lateInvitation);
+    const lateActivation = await request("/api/invitations/activate", {
+      method: "POST", body: JSON.stringify({ phone: "0712345682", code: lateInvitationBody.activationCode, pin: "246810", termsAccepted: true, privacyNoticeAcknowledged: true, ageConfirmed: true }),
+    });
+    assert.equal(lateActivation.status, 201);
+    const lateVoterId = (await json(lateActivation)).user.id;
+    const lateCookie = await loginWithPin("0712345682", "246810");
+    cookie = lateCookie;
+    assert.equal((await request(`/api/leadership-election-approvals/${approvalId}/vote`, { method: "POST", write: true, body: JSON.stringify({ choice: "yes" }) })).status, 403,
+      "a member added after opening is excluded from the frozen voter list");
+
+    const castApprovalVote = (voterCookie, choice, targetApprovalId = approvalId) => {
+      cookie = voterCookie;
+      return request(`/api/leadership-election-approvals/${targetApprovalId}/vote`, { method: "POST", write: true, body: JSON.stringify({ choice }) });
+    };
+    assert.equal((await castApprovalVote(chairCookie, "no")).status, 200);
+    assert.equal((await castApprovalVote(secretaryCookie, "no")).status, 200);
+    assert.equal((await castApprovalVote(treasurerCookie, "yes")).status, 200);
+    cookie = extraCookie;
+    const concurrentApprovalVotes = await Promise.all([
+      request(`/api/leadership-election-approvals/${approvalId}/vote`, { method: "POST", write: true, body: JSON.stringify({ choice: "yes" }) }),
+      request(`/api/leadership-election-approvals/${approvalId}/vote`, { method: "POST", write: true, body: JSON.stringify({ choice: "yes" }) }),
+    ]);
+    assert.deepEqual(concurrentApprovalVotes.map(response => response.status).sort(), [200, 409],
+      "concurrent duplicate submissions must record exactly one choice");
+    assert.equal((await castApprovalVote(chairCookie, "yes", secretaryApproval.id)).status, 200);
+    assert.equal((await castApprovalVote(secretaryCookie, "yes", secretaryApproval.id)).status, 200);
+    assert.equal((await castApprovalVote(treasurerCookie, "yes", secretaryApproval.id)).status, 200);
+    assert.equal((await castApprovalVote(secondCookie, "no", secretaryApproval.id)).status, 200);
+    assert.equal((await castApprovalVote(extraCookie, "yes", secretaryApproval.id)).status, 200);
+
+    cookie = chairCookie;
+    const chairApprovalView = (await json(await request("/api/leadership-elections"))).reElectionApprovals.find(item => item.id === approvalId);
+    assert.equal(chairApprovalView.hasVoted, true);
+    assert.equal(chairApprovalView.status, "voting", "an approval ballot remains open before its deadline");
+    assert.equal(chairApprovalView.eligibleMembers, 6, "the denominator must remain frozen after a seventh member joins");
+    assert.equal(chairApprovalView.threshold, 4);
+    assert.equal(chairApprovalView.votesCast, 4);
+    assert.equal(chairApprovalView.yesVotes, 2);
+    assert.equal(chairApprovalView.noVotes, 2);
+    assert.equal(chairApprovalView.unvoted, 2);
+    for (const privateField of ["requestedBy", "eligibleVoterIds", "ballots", "voterToken", "choice"]) assert.equal(Object.hasOwn(chairApprovalView, privateField), false);
+    cookie = secretaryCookie;
+    const secretaryApprovalView = (await json(await request("/api/leadership-elections"))).reElectionApprovals.find(item => item.id === secretaryApproval.id);
+    assert.equal(secretaryApprovalView.hasVoted, true, "an officer sees only their own voted status");
+    assert.equal(secretaryApprovalView.eligibleMembers, 6);
+    assert.equal(secretaryApprovalView.threshold, 4);
+    assert.equal(secretaryApprovalView.votesCast, 5);
+    assert.equal(secretaryApprovalView.yesVotes, 4);
+    assert.equal(secretaryApprovalView.noVotes, 1);
+    assert.equal(secretaryApprovalView.unvoted, 1);
+    assert.equal(secretaryApprovalView.status, "voting", "reaching the Yes threshold does not close a ballot early");
+    assert.equal(secretaryApprovalView.result, null);
+    cookie = secondCookie;
+    const memberApprovalView = (await json(await request("/api/dashboard"))).leadershipReElectionApprovals.find(item => item.id === approvalId);
+    assert.equal(memberApprovalView.hasVoted, false, "a member sees only their own voted status");
+    assert.equal(memberApprovalView.eligible, true);
+    assert.equal(memberApprovalView.canVote, true);
+    assert.equal(memberApprovalView.yesVotes, chairApprovalView.yesVotes);
+    cookie = lateCookie;
+    const lateApprovalView = (await json(await request("/api/leadership-elections"))).reElectionApprovals.find(item => item.id === approvalId);
+    assert.equal(lateApprovalView.eligibleMembers, 6);
+    assert.equal(lateApprovalView.eligible, false);
+    assert.equal(lateApprovalView.canVote, false);
+    assert.equal(lateApprovalView.hasVoted, false);
+    assert.equal(lateApprovalView.votesCast, 4);
+    cookie = chairCookie;
+    const legacyLeadershipView = await json(await request("/api/leadership-changes"));
+    assert.ok(legacyLeadershipView.data.every(item => item.type !== "election" && item.type !== "re-election-approval"),
+      "the legacy leadership endpoint must not reveal raw election or approval-ballot records");
+    const voteAudit = (await json(await request("/api/audit-log"))).data.filter(item => item.type === "leadership.re-election-approval.vote-cast");
+    assert.equal(voteAudit.length, 0, "officer-visible audit timelines must not expose per-vote timing or identity");
+
     cookie = chairCookie;
     const scheduledByChair = await request("/api/leadership-elections", { method: "POST", write: true, body: JSON.stringify({ role: "treasurer", candidateIds: [treasurerId, secondCandidateId], scheduledDate: todayInNairobi() }) });
     assert.equal(scheduledByChair.status, 201);
@@ -550,14 +751,8 @@ describe("Jirani Chama server", () => {
       return request(`/api/leadership-elections/${electionId}/vote`, { method: "POST", write: true, body: JSON.stringify({ candidateId }) });
     };
     await castVote(chairCookie, treasurerId);
-    await castVote(secretaryCookie, secondCandidateId);
-    const treasurerLogin = await request("/api/login", { method: "POST", body: JSON.stringify({ phone: "0712345680", pin: "901234" }) });
-    const treasurerCookie = treasurerLogin.headers.getSetCookie?.()[0]?.split(";")[0] || treasurerLogin.headers.get("set-cookie")?.split(";")[0];
-    assert.equal(treasurerLogin.status, 200);
+    await castVote(secretaryCookie, treasurerId);
     await castVote(treasurerCookie, treasurerId);
-    const secondLogin = await request("/api/login", { method: "POST", body: JSON.stringify({ phone: "0712345681", pin: "678901" }) });
-    const secondCookie = secondLogin.headers.getSetCookie?.()[0]?.split(";")[0] || secondLogin.headers.get("set-cookie")?.split(";")[0];
-    assert.equal(secondLogin.status, 200);
     assert.equal((await castVote(secondCookie, secondCandidateId)).status, 200);
     assert.equal((await castVote(secondCookie, treasurerId)).status, 409);
     cookie = secondCookie;
@@ -568,9 +763,6 @@ describe("Jirani Chama server", () => {
     assert.equal(votingElection.votesCast, 4);
     assert.equal(votingElection.result, null);
     cookie = chairCookie;
-    const legacyLeadershipView = await json(await request("/api/leadership-changes"));
-    assert.ok(legacyLeadershipView.data.every(item => item.type !== "election"), "the legacy leadership endpoint must not reveal raw secret ballots");
-    cookie = secondCookie;
     assert.equal(JSON.stringify(votingElection).includes("voterToken"), false);
     cookie = chairCookie;
     assert.equal((await request(`/api/leadership-elections/${electionId}/close`, { method: "POST", write: true, body: JSON.stringify({}) })).status, 409);
@@ -580,6 +772,133 @@ describe("Jirani Chama server", () => {
     assert.equal((await json(await request("/api/leadership-elections"))).data.find(item => item.id === electionId).result, null);
     const privateMessages = await json(await request("/api/messages"));
     assert.ok(privateMessages.data.every(message => !message.recipientId || message.recipientId === secondCandidateId));
+
+    const approvalDeadline = Date.parse(chairApproval.deadlineAt);
+    setServerTime(approvalDeadline - 1);
+    const chairBeforeDeadlineCookie = await loginWithPin("0712345678", "123456");
+    cookie = chairBeforeDeadlineCookie;
+    const preDeadlineList = await json(await request("/api/leadership-elections"));
+    const preDeadlineChair = preDeadlineList.reElectionApprovals.find(item => item.id === approvalId);
+    const preDeadlineSecretary = preDeadlineList.reElectionApprovals.find(item => item.id === secretaryApproval.id);
+    assert.equal(preDeadlineChair.status, "voting");
+    assert.equal(preDeadlineChair.unvoted, 2);
+    assert.equal(preDeadlineSecretary.status, "voting", "a threshold-reaching ballot remains open until its exact deadline");
+    assert.equal(preDeadlineSecretary.yesVotes, preDeadlineSecretary.threshold);
+    assert.equal(preDeadlineSecretary.result, null);
+    const regularElectionAfterDay = preDeadlineList.data.find(item => item.id === electionId);
+    assert.equal(regularElectionAfterDay.status, "completed");
+    assert.equal(regularElectionAfterDay.result.winnerId, treasurerId, "the existing election flow should still activate its role-specific winner");
+
+    const secondBeforeDeadlineCookie = await loginWithPin("0712345681", "678901");
+    assert.equal((await castApprovalVote(secondBeforeDeadlineCookie, "yes")).status, 200,
+      "an eligible member may cast a valid vote one millisecond before the deadline");
+    const chairBeforeExactDeadlineCookie = await loginWithPin("0712345678", "123456");
+    cookie = chairBeforeExactDeadlineCookie;
+    const beforeExactList = await json(await request("/api/leadership-elections"));
+    const chairBeforeExact = beforeExactList.reElectionApprovals.find(item => item.id === approvalId);
+    assert.equal(chairBeforeExact.status, "voting");
+    assert.equal(chairBeforeExact.yesVotes, 3);
+    assert.equal(chairBeforeExact.noVotes, 2);
+    assert.equal(chairBeforeExact.votesCast, 5);
+    assert.equal(chairBeforeExact.unvoted, 1);
+
+    const scheduledDate = todayInNairobi(approvalDeadline);
+    setServerTime(approvalDeadline);
+    const chairAtDeadlineCookie = await loginWithPin("0712345678", "123456");
+    const treasurerAtDeadlineCookie = await loginWithPin("0712345680", "901234");
+    cookie = treasurerAtDeadlineCookie;
+    assert.equal((await request(`/api/leadership-election-approvals/${secretaryApproval.id}/schedule`, {
+      method: "POST", write: true,
+      body: JSON.stringify({ candidateIds: [secondCandidateId, lateVoterId], scheduledDate }),
+    })).status, 403, "the Treasurer cannot schedule the replacement election");
+    cookie = chairAtDeadlineCookie;
+    const failedDeadlineSchedule = await request(`/api/leadership-election-approvals/${approvalId}/schedule`, {
+      method: "POST", write: true,
+      body: JSON.stringify({ candidateIds: [secondCandidateId, lateVoterId], scheduledDate }),
+    });
+    assert.equal(failedDeadlineSchedule.status, 409, "a failed ballot is resolved and cannot schedule when the first request arrives at its deadline");
+    const edgeAtDeadlineCookie = await loginWithPin("0712345684", "112233");
+    const exactDeadlineVote = await castApprovalVote(edgeAtDeadlineCookie, "yes");
+    assert.equal(exactDeadlineVote.status, 409, "the ballot closes at the deadline and rejects a vote arriving at that instant");
+    assert.match((await json(exactDeadlineVote)).message, /closed/i);
+    cookie = chairAtDeadlineCookie;
+    const scheduledReElectionResponse = await request(`/api/leadership-election-approvals/${secretaryApproval.id}/schedule`, {
+      method: "POST", write: true,
+      body: JSON.stringify({ candidateIds: [secondCandidateId, lateVoterId], scheduledDate }),
+    });
+    assert.equal(scheduledReElectionResponse.status, 201, "a passed ballot may schedule its role-specific election at the boundary");
+    const scheduledReElection = (await json(scheduledReElectionResponse)).data;
+    assert.equal(scheduledReElection.role, "secretary");
+    assert.equal(scheduledReElection.reElection, true);
+    assert.equal(scheduledReElection.scheduledDate, scheduledDate);
+    assert.equal(scheduledReElection.status, "voting");
+
+    const atDeadlineList = await json(await request("/api/leadership-elections"));
+    const failedChairApproval = atDeadlineList.reElectionApprovals.find(item => item.id === approvalId);
+    const passedSecretaryApproval = atDeadlineList.reElectionApprovals.find(item => item.id === secretaryApproval.id);
+    assert.equal(failedChairApproval.status, "failed");
+    assert.equal(failedChairApproval.closedAt, chairApproval.deadlineAt);
+    assert.deepEqual(failedChairApproval.result, { yesVotes: 3, noVotes: 2, votesCast: 5, abstentions: 1, threshold: 4, passed: false });
+    assert.equal(passedSecretaryApproval.status, "approved");
+    assert.equal(passedSecretaryApproval.closedAt, secretaryApproval.deadlineAt);
+    assert.deepEqual(passedSecretaryApproval.result, { yesVotes: 4, noVotes: 1, votesCast: 5, abstentions: 1, threshold: 4, passed: true });
+
+    setServerTime(approvalDeadline + 1);
+    cookie = edgeAtDeadlineCookie;
+    assert.equal((await request(`/api/leadership-election-approvals/${secretaryApproval.id}/vote`, {
+      method: "POST", write: true, body: JSON.stringify({ choice: "yes" }),
+    })).status, 409, "an unvoted member cannot add a ballot one millisecond after closure");
+    const chairAfterDeadlineCookie = await loginWithPin("0712345678", "123456");
+    cookie = chairAfterDeadlineCookie;
+    const afterDeadlineList = await json(await request("/api/leadership-elections"));
+    assert.equal(afterDeadlineList.reElectionApprovals.find(item => item.id === approvalId).status, "failed");
+    assert.equal(afterDeadlineList.reElectionApprovals.find(item => item.id === secretaryApproval.id).status, "approved");
+    const closeAudit = (await json(await request("/api/audit-log"))).data.filter(item => item.type === "leadership.re-election-approval.closed");
+    assert.equal(closeAudit.length, 2, "each approval closes once and only aggregate closure records enter the officer-visible audit log");
+
+    const beforeReplacementDashboard = await json(await request("/api/dashboard"));
+    const roleOf = (userId, members) => members.find(member => member.id === userId)?.role;
+    assert.equal(roleOf(chairUserId, beforeReplacementDashboard.members), "chairperson");
+    assert.equal(roleOf(secretaryId, beforeReplacementDashboard.members), "secretary", "the incumbent remains in office while the replacement election is active");
+    assert.equal(roleOf(treasurerId, beforeReplacementDashboard.members), "treasurer", "the unrelated Treasurer office remains unchanged");
+
+    const secretaryAtReplacementCookie = await loginWithPin("0712345679", "567890");
+    const treasurerAtReplacementCookie = await loginWithPin("0712345680", "901234");
+    const secondAtReplacementCookie = await loginWithPin("0712345681", "678901");
+    const lateAtReplacementCookie = await loginWithPin("0712345682", "246810");
+    const castReplacementVote = async (voterCookie, candidateId) => {
+      cookie = voterCookie;
+      return request(`/api/leadership-elections/${scheduledReElection.id}/vote`, { method: "POST", write: true, body: JSON.stringify({ candidateId }) });
+    };
+    const chairAtReplacementCookie = chairAfterDeadlineCookie;
+    assert.equal((await castReplacementVote(chairAtReplacementCookie, lateVoterId)).status, 200);
+    assert.equal((await castReplacementVote(secretaryAtReplacementCookie, secondCandidateId)).status, 200);
+    assert.equal((await castReplacementVote(treasurerAtReplacementCookie, lateVoterId)).status, 200);
+    assert.equal((await castReplacementVote(secondAtReplacementCookie, secondCandidateId)).status, 200);
+    assert.equal((await castReplacementVote(lateAtReplacementCookie, lateVoterId)).status, 200);
+    setServerTime(Date.parse(`${scheduledDate}T21:00:00.001Z`));
+    const chairAfterReplacementCookie = await loginWithPin("0712345678", "123456");
+    const treasurerAfterReplacementCookie = await loginWithPin("0712345680", "901234");
+    cookie = chairAfterReplacementCookie;
+    const completedList = await json(await request("/api/leadership-elections"));
+    const completedReElection = completedList.data.find(item => item.id === scheduledReElection.id);
+    assert.equal(completedReElection.status, "completed");
+    assert.equal(completedReElection.result.winnerId, lateVoterId);
+    const afterReplacementDashboard = await json(await request("/api/dashboard"));
+    assert.equal(roleOf(chairUserId, afterReplacementDashboard.members), "chairperson");
+    assert.equal(roleOf(treasurerId, afterReplacementDashboard.members), "treasurer");
+    assert.equal(roleOf(extraVoterId, afterReplacementDashboard.members), "member");
+    assert.equal(roleOf(edgeVoterId, afterReplacementDashboard.members), "member");
+    assert.equal(roleOf(lateVoterId, afterReplacementDashboard.members), "secretary");
+    assert.equal(roleOf(secretaryId, afterReplacementDashboard.members), "member");
+    cookie = treasurerAfterReplacementCookie;
+    const treasurerOwnRequest = await request("/api/leadership-election-approvals", {
+      method: "POST", write: true, body: JSON.stringify({ role: "chairperson" }),
+    });
+    assert.equal(treasurerOwnRequest.status, 201);
+    assert.equal((await json(treasurerOwnRequest)).data.role, "treasurer",
+      "the request body cannot change a Treasurer's own-position re-election request");
+    cookie = chairAfterReplacementCookie;
   });
 
   test("exports transactions and expires the session after logout", async () => {
